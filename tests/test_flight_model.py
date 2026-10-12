@@ -79,3 +79,52 @@ def test_afterburner_burns_more_fuel():
         a.step(DT, ca)
         b.step(DT, cb)
     assert (2500 - b.fuel) > 2.5 * (2500 - a.fuel)
+
+
+def test_service_ceiling_is_about_16_km():
+    fm = make(alt=9000.0, speed=280.0)
+    fm.fuel = 3200.0
+    c = Controls(1.1)
+    for _ in range(int(400 / DT)):
+        target_vs = (fm.speed - 300.0) * 2.0           # climb while keeping ~M1
+        c.pitch = max(-1.0, min(1.0, (target_vs - fm.vel.z) * 0.01))
+        fm.step(DT, c)
+    assert 14500.0 < fm.pos.z < 17500.0
+
+
+def test_no_supercruise_with_missiles():
+    fm = make(alt=9000.0, speed=300.0)
+    fm.fuel = 3200.0
+    c = Controls(1.0)
+    for _ in range(int(200 / DT)):
+        hold_altitude(fm, c, 9000.0)
+        fm.step(DT, c)
+    assert fm.mach < 1.03
+
+
+def test_engine_spools_up_like_a_real_turbofan():
+    fm = make()
+    fm.engine = 0.0
+    c = Controls(1.0)
+    t = 0.0
+    while fm.engine < 0.99:
+        fm.step(DT, c)
+        t += DT
+    assert 3.0 < t < 5.5          # idle -> military power
+    c.throttle = 1.1
+    t = 0.0
+    while fm.engine < 1.099:
+        fm.step(DT, c)
+        t += DT
+    assert 1.0 < t < 2.0          # afterburner light-off to max
+
+
+def test_g_onset_is_rate_limited():
+    fm = make(speed=260.0)
+    c = Controls(1.0)
+    c.pitch = 1.0
+    t = 0.0
+    while fm.g_load < 8.5 and t < 3.0:
+        fm.step(DT, c)
+        t += DT
+    assert 0.7 < t < 1.5

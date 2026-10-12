@@ -18,7 +18,7 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
 ## Telepítés és indítás
 
-Python 3.9+ kell.
+Python 3.9+ kell (Panda3D + numpy).
 
 ```bash
 pip install -r requirements.txt
@@ -95,14 +95,49 @@ A célpont flare-jei elcsalhatják a rakétát; az AIM-9M IRCCM-je ~65% eséllye
   közel nulla radiális sebességű célokat – kiesel a lockból. Közben szórj **chaffot** (X).
 * Hőkövető ellen: **flare** (X), vedd vissza a gázt az utánégetőről, és fordulj élesen.
 
+## Térkép
+
+![Térkép](docs/map.png)
+
+102 × 102 km-es sziget, 100 m-es felbontású domborzattal (az első indításkor ~10 s alatt generálódik,
+utána a gyorsítótárból azonnal betölt):
+
+* **észak:** hosszú, havas hegylánc, 3000–4400 m-es csúcsokkal
+* **kelet:** nagy, különálló hegytömb (~3200 m)
+* **nyugat és közép:** közepes, erdős hegyek (1000–2000 m), völgyek, egy tó
+* **dél:** dombok és kisebb hegyek (200–900 m) – itt indulsz, észak felé
+* körben tagolt partvonal, a szigeten túl nyílt tenger
+
+![Hegyek](docs/screenshot_mountains.png)
+
 ## Repülésmodell
 
-* F110-GE-129 hajtómű (76 kN / 132 kN utánégetővel), magasság- és Mach-függő tolóerő, üzemanyag-fogyasztás.
-* Fly-by-wire (FLCS): a botkormány **G-t** kér (semleges = 1 G, max **9 G**, min −3 G), **25°-os
-  AoA limiter**, ~270°/s orsózás. A gép nem törik el, de a nagy G-s fordulókban **energiát veszít**.
-* Mach-függő felhajtóerő és hullámellenállás: ~1500 km/h tengerszinten, ~Mach 1,9 11 km-en.
-* A rakéták valódi pontszerű testek: hajtóanyag-fázisok, ellenállás, a manőverezés lassítja őket,
-  alacsony sebességen nem tudnak élesen fordulni.
+Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a modellben:
+
+| | Modell | Valódi F-16C |
+|---|---|---|
+| Végsebesség tengerszinten (utánégető) | 1455 km/h, M1,19 | ~M1,2 |
+| Végsebesség 11 km-en | 2007 km/h, M1,89 | M1,8–2,0 (rakétákkal) |
+| Katonai teljesítmény, 9 km | M1,0 | nem tud szuperszonikusan cirkálni |
+| Gyorsulás 300→600 csomó, tengerszint | 16 s | |
+| Emelkedés 10 km-re | ~80 s | ~1,5 perc |
+| Plafon | ~16 km | 15,2 km (50 000 ft) |
+| Tartós forduló alacsonyan | 9 G, ~21°/s | 18–21°/s |
+| G-felépülés 1→8,5 G | ~1 s | ~9 G/s |
+| Hajtómű: alapjárat → katonai | ~4 s | ~4 s |
+| Utánégető begyújtás → max | ~1,5 s | 1–2 s |
+
+* **Légkör:** ISA 0–32 km (sűrűség, hangsebesség) – fent kevesebb a felhajtóerő és a tolóerő,
+  11 km felett a tolóerő gyorsabban csökken, ezért kb. 16 km a plafon.
+* **Hajtómű:** valósághű, késleltetett felpörgés (alapjáraton lassú), magasság- és Mach-függő tolóerő,
+  üzemanyag-fogyasztás (utánégetővel ~8 kg/s!).
+* **Fly-by-wire (FLCS):** a botkormány **G-t** kér (semleges = 1 G, max **9 G**, min −3 G),
+  a G-felépülés ~10 G/s-ra korlátozott, **25°-os AoA-limiter**, ~270°/s orsózás.
+  A nagy G-s forduló **energiát (sebességet) emészt**, lassan nem tudsz 9 G-t húzni (sarok-sebesség ~750 km/h).
+* **Aerodinamika:** Mach-függő felhajtóerő, transzonikus ellenállás-növekedés M0,88-tól, indukált ellenállás.
+* **Egeres irányítás:** az "instruktor" a **repülési pályát** (sebességvektort) viszi a fehér körre,
+  gravitáció-kompenzációval: vízszintes célnál tartja a magasságot, oldalra mutatva koordinált,
+  helyesen bedöntött fordulót repül, mögötted lévő célnál vízszintes fordulót választ.
 
 Minden adat egy helyen van: `dogfight/sim/specs.py` – itt lehet hangolni.
 
@@ -125,7 +160,7 @@ dogfight/
     guns.py             gépágyú, ballisztika, találat-doboz, előretartás
     aircraft.py, world.py, terrain.py, signatures.py, countermeasures.py
   ai/                   AI pilóta + közös "instruktor" (irány -> kormánymozdulatok)
-  render/               procedurális F-16 és rakéta modellek, terep, ég, felhők, effektek
+  render/               procedurális F-16 és rakéta modellek, terep (LOD), ég, felhők, effektek
   ui/                   HUD, radar B-scope, RWR, súgó
 tests/                  pytest tesztek a szimulációhoz
 ```

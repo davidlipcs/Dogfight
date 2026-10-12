@@ -24,9 +24,14 @@ K_BETA = 3.0           # 1/s, sideslip correction (yaw damper / coordination)
 TAU_PITCH = 0.06       # s, actuator lag
 TAU_ROLL = 0.09
 TAU_YAW = 0.12
-SPOOL_UP = 1.4         # s engine spool time constant
-SPOOL_DOWN = 0.9
+# F110-GE-129 spool: idle -> military ~4 s, afterburner light-off and zones ~1.5 s
+SPOOL_UP_CORE = 0.30   # throttle units / s at high rpm (slower near idle)
+SPOOL_DOWN_CORE = 0.40
+SPOOL_UP_AB = 0.07     # 0.1 throttle units (min -> max AB) in ~1.5 s
+SPOOL_DOWN_AB = 0.25
+RHO_TROPOPAUSE = 0.36392
 MAX_AB = 1.1           # throttle above 1.0 = afterburner (War Thunder style "110 %")
+G_ONSET = 10.0         # G/s, FLCS limit on how fast the commanded load factor may change
 
 
 class Controls:
@@ -56,6 +61,7 @@ class FlightModel:
         self.store_mass = 0.0
         self.store_cd = 0.0
         self.engine = 0.85          # spooled engine setting 0..1.1
+        self.nz_cmd = 1.0           # load factor the FLCS currently commands (onset limited)
         # Telemetry (read by HUD / AI / sensors)
         self.alpha = 0.0            # rad
         self.beta = 0.0             # rad
@@ -112,14 +118,32 @@ class FlightModel:
         spec = self.spec
         if self.fuel <= 0.0:
             return 0.0
-        lapse = (rho / RHO0) ** 0.75
+        # thrust lapse: ~sigma^0.75 in the troposphere, faster above 11 km
+        if rho >= RHO_TROPOPAUSE:
+            lapse = (rho / RHO0) ** 0.75
+        else:
+            lapse = (RHO_TROPOPAUSE / RHO0) ** 0.75 * (rho / RHO_TROPOPAUSE) ** 1.25
         dry_setting = min(setting, 1.0)
-        dry = spec.thrust_dry * (0.06 + 0.94 * dry_setting ** 1.6) * lapse * (1.0 + 0.08 * mach)
+        dry = spec.thrust_dry * (0.06 + 0.94 * dry_setting ** 1.6) * lapse * (1.0 + 0.02 * mach)
         if setting <= 1.0:
             return dry
         ab_frac = clamp((setting - 1.0) / (MAX_AB - 1.0), 0.0, 1.0)
         full_ab = spec.thrust_ab * lapse * (1.0 + 0.3 * mach)
         return dry + (full_ab - dry) * ab_frac
+
+    def _spool(self, target, dt):
+        """Rate limited engine response (no instant thrust like in arcade games)."""
+        e = self.engine
+        if target > e:
+            if e < 1.0:
+                rate = SPOOL_UP_CORE * (0.45 + 0.55 * e)       # sluggish near idle
+                e = min(e + rate * dt, min(target, 1.0))
+            elif self.fuel > 0.0:
+                e = min(e + SPOOL_UP_AB * dt, target)
+        elif target < e:
+            rate = SPOOL_DOWN_AB if e > 1.0 else SPOOL_DOWN_CORE
+            e = max(e - rate * dt, target)
+        self.engine = e
 
     def _fuel_flow(self, thrust):
         spec = self.spec
@@ -147,9 +171,7 @@ class FlightModel:
         mass = self.mass
 
         # ---- engine
-        target = clamp(controls.throttle, 0.0, MAX_AB)
-        tau = SPOOL_UP if target > self.engine else SPOOL_DOWN
-        self.engine += (target - self.engine) * min(1.0, dt / tau)
+        self._spool(clamp(controls.throttle, 0.0, MAX_AB), dt)
         thrust = self.thrust_at(self.engine, rho, mach)
         self.fuel = max(0.0, self.fuel - self._fuel_flow(thrust) * dt)
 
@@ -176,6 +198,9 @@ class FlightModel:
             nz_cmd = 1.0 + stick * (spec.g_max - 1.0)
         else:
             nz_cmd = 1.0 + stick * (1.0 - spec.g_min)
+        step = G_ONSET * dt
+        self.nz_cmd += clamp(nz_cmd - self.nz_cmd, -step, step)
+        nz_cmd = self.nz_cmd
         cla_eff = spec.cl_alpha * interp_table(CLA_MACH, mach)
         if qbar > 1.0:
             alpha_req = nz_cmd * mass * G / (qbar * area * cla_eff)
