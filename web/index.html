@@ -63,6 +63,7 @@
   button:hover { filter: brightness(1.12); }
   button:focus-visible { outline: 2px solid var(--hud); outline-offset: 2px; }
   #menuerr { color: var(--caution); font-size: 13px; }
+  #download { color: var(--caution); text-decoration: underline; text-underline-offset: 3px; }
   .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 22px; }
   .keys h3 { margin: 0 0 6px; font: 600 12px var(--mono); letter-spacing: 0.14em; color: var(--hud); text-transform: uppercase; }
   .keys dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13.5px; }
@@ -124,6 +125,7 @@
       <button id="start-air">Indulás a levegőben</button>
     </div>
     <div id="menuerr"></div>
+    <a id="download" class="hint" href="dogfight-offline.html" download="Dogfight-F16.html" hidden>⤓ Letöltés egy fájlban (internet nélkül is megy, dupla kattintással indul)</a>
     <div class="hint">Kattintás után az egér a játékhoz kötődik · Esc = elengedés · H = súgó</div>
   </div>
 </div>

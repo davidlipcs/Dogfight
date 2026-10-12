@@ -399,6 +399,9 @@ class Game {
 }
 
 // ----------------------------------------------------------------- loading
+// the offline single-file build (tools/build_offline.py) carries every asset inline as a data: URI
+const assetUrl = (name) => (window.DOGFIGHT_ASSETS && window.DOGFIGHT_ASSETS[name]) || `assets/${name}`;
+
 async function fetchJSON(url, onDone) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
@@ -416,9 +419,9 @@ async function boot() {
   let assets;
   try {
     const [f16, terrain, viper, aggressor, terrainTex, cockpitTex] = await Promise.all([
-      fetchJSON('assets/f16.json', tick), fetchJSON('assets/terrain.json', tick),
-      loadTexture('assets/livery_viper.jpg', tick), loadTexture('assets/livery_aggressor.jpg', tick),
-      loadTexture('assets/terrain_color.jpg', tick), loadTexture('assets/cockpit.png', tick)]);
+      fetchJSON(assetUrl('f16.json'), tick), fetchJSON(assetUrl('terrain.json'), tick),
+      loadTexture(assetUrl('livery_viper.jpg'), tick), loadTexture(assetUrl('livery_aggressor.jpg'), tick),
+      loadTexture(assetUrl('terrain_color.jpg'), tick), loadTexture(assetUrl('cockpit.png'), tick)]);
     assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex };
   } catch (e) {
     status.textContent = 'Betöltési hiba: ' + e.message; console.error(e); return;
@@ -426,6 +429,8 @@ async function boot() {
   status.textContent = 'Kész!';
   $('loading').hidden = true;
   $('menu').hidden = false;
+  // offer the one-file offline copy where a plain download link works (GitHub Pages or a local server)
+  if (!window.DOGFIGHT_ASSETS && /github\.io$|^localhost$|^127\./.test(location.hostname)) $('download').hidden = false;
   const start = (airStart) => {
     const difficulty = document.querySelector('input[name=diff]:checked').value;
     const enemies = Number($('enemies').value);

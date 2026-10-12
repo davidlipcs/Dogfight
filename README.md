@@ -6,6 +6,11 @@
 >
 > Telepítés nélkül, bármelyik gépről (iskolában is): nyisd meg a linket Chrome-ban, és kattints a
 > „Felszállás a kifutóról” gombra. Minden a GitHubról töltődik be (kb. 10 MB), külső oldal nem kell hozzá.
+> **Letöltés:** [Dogfight-F16.html](https://davidlipcs.github.io/Dogfight/web/dogfight-offline.html) – az egész játék
+> egyetlen fájlban (kb. 14 MB). Mentsd el (jobb klikk → *Hivatkozás mentése másként*, vagy a játék menüjében a
+> „Letöltés egy fájlban” link), és dupla kattintással megnyílik Chrome-ban – internet sem kell hozzá.
+> Újragenerálás: `python tools/build_offline.py` (Node.js kell hozzá).
+>
 > A kódja a [`web/`](web/) mappában van (Three.js), ugyanaz a repülésmodell, radar, rakéták és AI,
 > JavaScriptre átírva; a gépet és a terepet a `tools/export_web_assets.py` exportálja a Python változatból.
 
