@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dogfight F-16 Viper</title>
 <meta name="description" content="F-16C légiharc szimulátor a böngészőben">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -69,7 +74,9 @@
   .hint { font: 12px var(--mono); color: var(--muted); }
   @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 </style>
-
+<style>[hidden]{display:none!important} body{margin:0}</style>
+</head>
+<body>
 <canvas id="view" tabindex="0"></canvas>
 <canvas id="hud"></canvas>
 <div id="fps"></div>
@@ -179,5 +186,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script src="js/three.min.js"></script>
 <script type="module" src="js/game.js"></script>
+</body>
+</html>

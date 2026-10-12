@@ -1,13 +1,13 @@
 # Dogfight – F-16C légiharc (War Thunder stílusban)
 
-3D légiharc-játék **Pythonban**, a [Panda3D](https://www.panda3d.org/) motorral (nem HTML/böngészős).
+3D légiharc-játék **Pythonban**, a [Panda3D](https://www.panda3d.org/) motorral – és ugyanez a böngészőben is játszható (lásd lent).
 
-> **Csak ki akarod próbálni?** Van böngészős (Chrome) változat is, telepítés nélkül:
-> **https://claude.ai/artifact/KAfUJ7Wu7RVBsrRqSdVNGE** – kattints a „Felszállás a kifutóról” gombra.
+> ## ▶ Játék a böngészőben: **https://davidlipcs.github.io/Dogfight/**
+>
+> Telepítés nélkül, bármelyik gépről (iskolában is): nyisd meg a linket Chrome-ban, és kattints a
+> „Felszállás a kifutóról” gombra. Minden a GitHubról töltődik be (kb. 10 MB), külső oldal nem kell hozzá.
 > A kódja a [`web/`](web/) mappában van (Three.js), ugyanaz a repülésmodell, radar, rakéták és AI,
 > JavaScriptre átírva; a gépet és a terepet a `tools/export_web_assets.py` exportálja a Python változatból.
-Első lépésként csak az **F-16C Block 50** van benne, a War Thunderből ismert fegyverekkel és
-lockolási mechanikával:
 
 | Fegyver | Típus | Mit tud |
 |---|---|---|
