@@ -21,6 +21,7 @@ import tempfile
 import numpy as np
 
 from ..mathutil import clamp
+from .airfield import HOME_BASE, Airfield
 
 SEA_LEVEL = 0.0
 CACHE_VERSION = 4
@@ -177,6 +178,9 @@ class Terrain:
         self.half = size * 0.5
         self.seed = seed
         self.grid = self._load_or_generate(cache)
+        self.airfield = Airfield(*HOME_BASE)
+        if abs(HOME_BASE[0]) < self.half - 4000.0 and abs(HOME_BASE[1]) < self.half - 4000.0:
+            self.airfield.flatten(self.grid, self.half, self.cell)
         self.max_height = float(self.grid.max())
         self._rows = self.grid.tolist()       # plain lists: much faster scalar lookups
 
@@ -186,7 +190,7 @@ class Terrain:
                             % (CACHE_VERSION, self.seed, n, int(self.size)))
         if cache and os.path.exists(path):
             try:
-                grid = np.load(path)
+                grid = np.load(path).copy()
                 if grid.shape == (n, n):
                     return grid
             except (OSError, ValueError):
@@ -232,6 +236,12 @@ class Terrain:
             if z < self.max_height and z < self.height(a.x + dx * t, a.y + dy * t):
                 return False
         return True
+
+    def slope(self, x, y, d=6.0):
+        """Ground slope (rad) at a point."""
+        gx = (self.height(x + d, y) - self.height(x - d, y)) / (2 * d)
+        gy = (self.height(x, y + d) - self.height(x, y - d)) / (2 * d)
+        return math.atan(math.hypot(gx, gy))
 
     def clamp_inside(self, x, y, margin=8000.0):
         lim = self.half - margin

@@ -91,6 +91,14 @@ def steer_towards(fm, direction, controls, max_g_frac=1.0, precision=1.0):
     # rudder for the last couple of degrees (gun tracking)
     fine = 1.0 - smoothstep(1.0 * DEG, 4.0 * DEG, off)
     controls.yaw = clamp(math.atan2(d.dot(side), d.dot(path)) * 5.0 * precision, -1.0, 1.0) * fine
+
+    if fm.on_ground:
+        # taxi / take-off roll: wings stay level, steer the nose wheel towards the aim heading
+        heading_err = _wrap(math.atan2(d.x, d.y) - math.atan2(fwd.x, fwd.y))
+        controls.roll = 0.0
+        controls.yaw = clamp(heading_err * 3.0, -1.0, 1.0)
+        climb = math.asin(clamp(d.z, -1.0, 1.0))
+        controls.pitch = clamp(climb * 4.0, 0.0, 1.0)      # aim above the horizon = rotate
     return off
 
 

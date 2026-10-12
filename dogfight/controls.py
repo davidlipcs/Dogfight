@@ -80,6 +80,7 @@ class InputReader:
         if self.ctrl:
             c.throttle = max(0.0, c.throttle - THROTTLE_RATE * dt)
         c.airbrake = self.key("b")
+        c.brakes = self.key("b") and ac.on_ground
         ac.trigger = self.left_mouse
         ac.cm_hold = self.key("x")
         cam.set_free_look(self.key("c") or self.right_mouse)

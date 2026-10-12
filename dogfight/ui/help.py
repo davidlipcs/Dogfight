@@ -10,9 +10,17 @@ REPÜLÉS (War Thunder "egeres célzás")
   W / S ........... magassági kormány felülbírálás
   A / D ........... orsózás   Q / E: oldalkormány
   Shift / Ctrl .... gáz fel / le (100% felett: UTÁNÉGETŐ)
-  B (tartva) ...... légfék
+  B (tartva) ...... földön kerékfék, levegőben légfék
+  G ............... futómű ki / be
   C vagy jobb egér  szabad körülnézés
   Z (tartva) ...... zoom      V: kabin / külső nézet
+
+FELSZÁLLÁS ÉS LESZÁLLÁS
+  Shift-tel told a gázt 100% fölé (utánégető), ~280 km/h-nál
+  emeld meg az egeret (vagy W) -> elemelkedik. Utána G.
+  Leszállás: G (futómű ki), ~270 km/h, lassú süllyedés
+  (< 4 m/s!), szárnyak vízszintesen, földön B = fék.
+  A bázison megállva: újrafegyverzés, tankolás, javítás.
 
 FEGYVEREK
   Bal egér ........ M61A1 gépágyú
@@ -50,7 +58,7 @@ class HelpOverlay:
         cm = CardMaker("bg")
         cm.setFrame(-0.95, 0.95, -0.92, 0.92)
         bg = self.root.attachNewNode(cm.generate())
-        bg.setColor(0.02, 0.04, 0.03, 0.82)
+        bg.setColor(0.02, 0.04, 0.03, 0.9)
         bg.setTransparency(TransparencyAttrib.MAlpha)
         text = TextNode("help")
         text.setFont(fonts.mono)
@@ -58,9 +66,9 @@ class HelpOverlay:
         text.setTextColor(0.75, 1.0, 0.8, 1.0)
         text.setAlign(TextNode.ALeft)
         np = self.root.attachNewNode(text)
-        np.setScale(0.036)
-        np.setPos(-0.9, 0, 0.84)
-        self.root.setBin("fixed", 100)
+        np.setScale(0.031)
+        np.setPos(-0.9, 0, 0.86)
+        self.root.setBin("gui-popup", 50)
         self.visible = True
 
     def toggle(self):

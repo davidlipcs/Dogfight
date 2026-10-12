@@ -9,6 +9,7 @@ from panda3d.core import (AmbientLight, CardMaker, ColorBlendAttrib, Directional
 from ..mathutil import smoothstep
 from .effects import puffy_texture, soft_texture
 from .meshbuilder import MeshBuilder
+from .airfield import build_airfield
 from .terrain_mesh import build_terrain_node
 
 HORIZON = (0.72, 0.81, 0.90)
@@ -22,12 +23,13 @@ def _mix(a, b, t):
 
 
 class Environment:
-    def __init__(self, base, terrain, cloud_count=70, seed=5):
+    def __init__(self, base, terrain, cloud_count=70, seed=5, models=None):
         self.base = base
         self.root = base.render.attachNewNode("environment")
         self._lights(base)
         self._fog(base)
         self.terrain_np = self._terrain(terrain)
+        self.airfield_np = build_airfield(base, terrain.airfield, models) if hasattr(terrain, "airfield") else None
         self.sea_np = self._sea()
         self.sky_np = self._sky(base)
         self.clouds_np = self._clouds(terrain, cloud_count, seed)

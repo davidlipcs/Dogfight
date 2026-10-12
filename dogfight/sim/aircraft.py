@@ -146,7 +146,16 @@ class Aircraft:
         if self.crashed:
             return
         if self.alive:
-            self.fm.step(dt, self.controls)
+            self.fm.step(dt, self.controls, world.terrain)
+            event = self.fm.contact_event
+            if event == "crash":
+                self.crash(world, self.fm.crash_reason)
+                return
+            if event == "tailstrike":
+                world.emit("message", to=self, text="FAROKÜTÉS!", level="bad")
+                self.take_damage(30.0, None, "tailstrike", world)
+            elif event == "touchdown" and self.fm.sink_rate > 3.0:
+                world.emit("message", to=self, text="KEMÉNY LANDOLÁS", level="warn")
             self.gun.update(dt, self, self.trigger, world)
             self._cm_timer -= dt
             if self.cm_hold:
@@ -158,9 +167,15 @@ class Aircraft:
             wreck.roll = 0.9
             self.fm.step(dt, wreck)
             self.gun.firing = False
-        ground = world.terrain.height(self.pos.x, self.pos.y)
-        if self.pos.z <= ground + 1.5:
-            self.crash(world)
+            if self.pos.z <= world.terrain.height(self.pos.x, self.pos.y) + 1.5:
+                self.crash(world)
+
+    @property
+    def on_ground(self):
+        return self.fm.on_ground
+
+    def toggle_gear(self):
+        return self.fm.set_gear(not self.fm.gear_down)
 
     def sensor_step(self, dt, world):
         if not self.alive:
@@ -276,11 +291,13 @@ class Aircraft:
             killer.kills += 1
         world.emit("kill", victim=self, killer=killer, weapon=weapon)
 
-    def crash(self, world):
+    def crash(self, world, reason=""):
         if self.crashed:
             return
         if self.alive:
             recent = self.last_attacker if world.time - self.last_hit_time < 30.0 else None
+            if reason:
+                world.emit("message", to=self, text="BALESET: " + reason, level="bad")
             self.kill(world, recent, "crash")
         self.crashed = True
         self.fm.vel = Vec3(0, 0, 0)

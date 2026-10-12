@@ -25,6 +25,8 @@ class AircraftVisual:
             node.reparentTo(self.root)
             node.setPos(st.mount)
             self.stores[st.number] = node
+        self.gear = models.gear()
+        self.gear.reparentTo(self.root)
         self.flame = models.flame()
         self.flame.reparentTo(self.root)
         self.flame.setPos(NOZZLE)
@@ -46,6 +48,12 @@ class AircraftVisual:
                     node.show()
                 else:
                     node.hide()
+        gear = ac.fm.gear_pos
+        if gear < 0.03:
+            self.gear.hide()
+        else:
+            self.gear.show()
+            self.gear.setScale(1.0, 1.0, gear)        # simple "fold up into the belly" animation
         engine = ac.engine_setting
         if ac.alive and engine > 1.0:
             ab = (engine - 1.0) / 0.1

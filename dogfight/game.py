@@ -11,6 +11,7 @@ from .camera import FlightCamera
 from .controls import InputReader, PlayerPilot
 from .mathutil import safe_normalized
 from .render.environment import Environment
+from .render.models import ModelLibrary
 from .render.scene import SceneRenderer
 from .sim.aircraft import Aircraft
 from .sim.specs import F16C, IR
@@ -21,7 +22,10 @@ from .ui.help import HelpOverlay
 from .ui.hud import HUD
 
 PLAYER_START = Vec3(0.0, -26000.0, 4500.0)
+TAKEOFF_HINT = "FELSZÁLLÁS: Shift = gáz (100% felett utánégető)  ·  ~280 km/h-nál emeld az egeret  ·  G = futómű"
 WAVE_DELAY = 5.0
+FIRST_WAVE_DELAY = 25.0    # s of flying after take-off before the first bandits show up
+REARM_TIME = 6.0           # s standing still on the base to rearm / refuel / repair
 MAX_ENEMIES = 6
 
 
@@ -33,7 +37,8 @@ class GameState:
         self.banner = ""
         self.sub_banner = ""
         self.paused = True
-        self.wave_timer = 1.0
+        self.wave_timer = FIRST_WAVE_DELAY
+        self.rearm_timer = 0.0
         self.wave_active = False
 
 
@@ -78,9 +83,10 @@ class DogfightApp:
         self.rng = random.Random(options.seed)
         self.fonts = Fonts(base.loader)
         self.terrain = Terrain()
-        self.environment = Environment(base, self.terrain, cloud_count=options.clouds)
+        self.models = ModelLibrary()
+        self.environment = Environment(base, self.terrain, cloud_count=options.clouds, models=self.models)
         self.world = World(self.terrain, seed=options.seed)
-        self.scene = SceneRenderer(base, self.world)
+        self.scene = SceneRenderer(base, self.world, self.models)
         self.cam = FlightCamera(base, self.terrain, sensitivity=options.sensitivity, invert_y=options.invert_y)
         self.hud = HUD(base, self.fonts)
         self.help = HelpOverlay(base, self.fonts)
@@ -100,11 +106,24 @@ class DogfightApp:
     def spawn_player(self, position=None, heading=0.0):
         if self.player is not None and self.player in self.world.aircraft:
             self.world.aircraft.remove(self.player)
-        pos = Vec3(position if position is not None else PLAYER_START)
-        pos.z = max(pos.z, self.terrain.height(pos.x, pos.y) + 1500.0)
-        ac = Aircraft(F16C, "Te (Viper 1)", "blue", pos, heading, 250.0, loadout=self.options.loadout,
+        air_start = self.options.air_start or position is not None
+        field = self.terrain.airfield
+        if air_start:
+            pos = Vec3(position if position is not None else PLAYER_START)
+            pos.z = max(pos.z, self.terrain.height(pos.x, pos.y) + 1500.0)
+            speed = 250.0
+        else:
+            x, y, heading = field.start_position()
+            pos = Vec3(x, y, 0.0)
+            speed = 0.0
+        ac = Aircraft(F16C, "Te (Viper 1)", "blue", pos, heading, speed, loadout=self.options.loadout,
                       rng=self.rng, is_player=True, livery="viper")
-        ac.controls.throttle = 0.95
+        if air_start:
+            ac.controls.throttle = 0.95
+        else:
+            ac.fm.place_on_ground(pos.x, pos.y, self.terrain.height(pos.x, pos.y), heading)
+            ac.controls.throttle = 0.0
+            self.state.sub_banner = TAKEOFF_HINT
         self.world.add_aircraft(ac)
         self.player = ac
         self.pilot = PlayerPilot(ac)
@@ -152,6 +171,7 @@ class DogfightApp:
         b.accept("p", self._toggle_pause)
         b.accept("escape", self._escape)
         b.accept("enter", self._respawn)
+        b.accept("g", self._gear)
 
     def _can_act(self):
         return not self.state.paused and self.player is not None and self.player.alive
@@ -185,6 +205,15 @@ class DogfightApp:
                 "acm": ("ACM MÓD - célt az orr elé!", "warn"), "search": ("RADAR KERESÉS", "info")}.get(result)
         if text:
             self.hud.message(*text, duration=1.6)
+
+    def _gear(self):
+        if not self._can_act():
+            return
+        p = self.player
+        if p.toggle_gear():
+            self.hud.message("FUTÓMŰ %s" % ("KI" if p.fm.gear_down else "BE"), "info", 1.5)
+        else:
+            self.hud.message("A földön nem húzható be a futómű", "warn", 1.5)
 
     def _cycle_target(self):
         if self._can_act():
@@ -223,21 +252,10 @@ class DogfightApp:
 
     def _respawn(self):
         if self.player is not None and not self.player.alive:
-            enemies = self.enemies_alive()
-            start = Vec3(PLAYER_START)
-            heading = 0.0
-            if enemies:
-                cx = sum(e.pos.x for e in enemies) / len(enemies)
-                cy = sum(e.pos.y for e in enemies) / len(enemies)
-                away = safe_normalized(Vec3(-cx, -cy, 0.0))
-                if away.length() < 0.5:
-                    away = Vec3(0, -1, 0)
-                sx, sy = self.terrain.clamp_inside(cx + away.x * 35000.0, cy + away.y * 35000.0, 9000.0)
-                start = Vec3(sx, sy, 4500.0)
-                heading = math.degrees(math.atan2(cx - sx, cy - sy))
-            self.spawn_player(start, heading)
             self.state.banner = ""
             self.state.sub_banner = ""
+            self.state.rearm_timer = 0.0
+            self.spawn_player()
 
     def quit(self):
         self.sounds.stop_all()
@@ -294,6 +312,10 @@ class DogfightApp:
             st.banner, st.sub_banner = "SZÜNET", "P: folytatás   Esc: kilépés   H: súgó"
         elif st.banner == "SZÜNET":
             st.banner = st.sub_banner = ""
+        if self.help.visible:
+            self.hud.root.hide()
+        else:
+            self.hud.root.show()
         self.hud.update(dt, self.player, self.world, self.cam, st)
         self.sounds.update(self.player, paused=st.paused)
         return task.cont
@@ -312,20 +334,41 @@ class DogfightApp:
 
     def _game_flow(self, dt):
         st = self.state
+        p = self.player
+        if not p.alive:
+            return
+        field = self.terrain.airfield
+        airborne = not p.on_ground and p.pos.z - self.terrain.height(p.pos.x, p.pos.y) > 150.0
+        if st.sub_banner == TAKEOFF_HINT and airborne:
+            st.sub_banner = ""
+            self.hud.message("SIKERES FELSZÁLLÁS - húzd be a futóművet (G)", "good", 4.0)
+
         if st.wave_active and not self.enemies_alive():
             st.wave_active = False
             st.wave_timer = WAVE_DELAY
-            if self.player.alive:
-                self.hud.message("HULLÁM TELJESÍTVE - újrafegyverzés", "good", 4.0)
-        if not st.wave_active:
+            self.hud.message("HULLÁM TELJESÍTVE - leszállhatsz a bázison újrafegyverezni", "good", 5.0)
+        if not st.wave_active and airborne:
             st.wave_timer -= dt
-            if st.wave_timer <= 0.0 and self.player.alive:
-                if st.wave > 0:
-                    self.player.rearm()
-                    self.player.hp = self.player.spec.hp
-                    self.player.burning = False
-                    self.player.fm.fuel = self.player.spec.internal_fuel
+            if st.wave_timer <= 0.0:
                 self.spawn_wave()
+
+        # rearm / refuel / repair while standing on the base
+        needs_service = (p.hp < p.spec.hp or p.fm.fuel < p.spec.internal_fuel * 0.95 or p.gun.ammo < p.spec.gun.ammo
+                         or any(not st_.loaded for st_ in p.stations) or p.flares < p.spec.countermeasures.flares)
+        if p.on_ground and p.speed < 1.0 and needs_service and field.on_paved(p.pos.x, p.pos.y):
+            st.rearm_timer += dt
+            if st.rearm_timer >= REARM_TIME:
+                st.rearm_timer = -1e9          # once per stop
+                p.rearm()
+                p.hp = p.spec.hp
+                p.burning = False
+                p.fm.fuel = p.spec.internal_fuel
+                self.hud.message("ÚJRAFEGYVERZÉS, TANKOLÁS, JAVÍTÁS KÉSZ", "good", 4.0, key="service")
+            elif st.rearm_timer > 0.5:
+                self.hud.message("Kiszolgálás... %d s" % (REARM_TIME - st.rearm_timer + 1), "info", 0.3,
+                                 key="service")
+        else:
+            st.rearm_timer = 0.0
 
     def run(self):
         self.base.run()

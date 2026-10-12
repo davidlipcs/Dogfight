@@ -33,6 +33,7 @@ python main.py --fullscreen --size 1920x1080
 python main.py --loadout amraam                  # 4 AMRAAM
 python main.py --sensitivity 0.06 --invert-y     # egér beállítások
 python main.py --clouds 20 --no-aa               # gyengébb gépre
+python main.py --air-start                       # levegőben indulás, felszállás nélkül
 ```
 
 ## Irányítás
@@ -42,7 +43,8 @@ python main.py --clouds 20 --no-aa               # gyengébb gépre
 | **Egér** | War Thunder-féle egeres célzás: a gép a fehér kör felé repül |
 | W / S, A / D, Q / E | magassági, csűrő, oldalkormány kézi felülbírálása |
 | Shift / Ctrl | gáz fel / le (100% felett **utánégető**) |
-| B (tartva) | légfék |
+| **G** | futómű ki / be |
+| B (tartva) | a földön **kerékfék**, a levegőben légfék |
 | C vagy jobb egérgomb (tartva) | szabad körülnézés |
 | Z (tartva) | zoom |
 | V | kabin (HUD) / külső nézet |
@@ -58,6 +60,30 @@ python main.py --clouds 20 --no-aa               # gyengébb gépre
 | H vagy F1 | súgó (szünetelteti a játékot) |
 | P | szünet, Esc: kilépés (szünetben) |
 | Enter | újraéledés, ha lelőttek |
+
+## Felszállás és leszállás
+
+![Felszállás előtt](docs/screenshot_runway.png)
+
+A játék a **Viper Base** légibázis 36-os pályájának elején kezdődik (3000 × 45 m-es pálya
+ICAO-jelzésekkel, gurulóút, betonfedezékek, irányítótorony, parkoló F-16-osok, pálya- és
+megközelítési fények). Az ellenség csak a felszállás után érkezik.
+
+**Felszállás**
+1. **Shift**-tel told fel a gázt 100% fölé (utánégető). A hajtómű pár másodperc alatt pörög fel.
+2. ~**250–280 km/h**-nál emeld meg az egeret (vagy nyomd a **W**-t): a gép felemeli az orrát.
+   Vigyázz, 13° felett a farok a betonhoz ér (farokütés)!
+3. ~**320 km/h** körül elemelkedik (utánégetővel kb. 450 m nekifutás, katonai teljesítménnyel kb. 700 m).
+4. **G** = futómű be. Kiengedett futóművel ne menj 550 km/h fölé (GEAR SPEED).
+
+![Elemelkedés](docs/screenshot_takeoff.png)
+
+**Leszállás**
+1. **G** = futómű ki (4 s, a HUD-on `GEAR DOWN`). A fékszárnyak a futóművel együtt lejönnek.
+2. Közelíts ~**270 km/h**-val, lassú süllyedéssel, vízszintes szárnyakkal.
+3. Földet érés: süllyedés **< 4 m/s**, bedöntés < 12°. Különben eltörik a futómű / leér a szárnyvég.
+4. A földön **B** = kerékfék (a gép kb. 700 m alatt áll meg), az egérrel/Q-E-vel kormányzol (orrkerék).
+5. A bázis betonján **megállva** 6 s alatt újrafegyvereznek, tankolnak és megjavítanak.
 
 ## Hogyan működik a lockolás? (mint a War Thunderben)
 
@@ -125,6 +151,9 @@ Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a mod
 | Tartós forduló alacsonyan | 9 G, ~21°/s | 18–21°/s |
 | G-felépülés 1→8,5 G | ~1 s | ~9 G/s |
 | Hajtómű: alapjárat → katonai | ~4 s | ~4 s |
+| Felszállás utánégetővel | 450 m, 179 kt | ~450 m, 150–180 kt |
+| Felszállás katonai teljesítménnyel | 700 m, 163 kt | |
+| Leszállás (földet érés / kifutás fékkel) | 241 km/h / ~710 m | ~240–270 km/h / 750–1000 m |
 | Utánégető begyújtás → max | ~1,5 s | 1–2 s |
 
 * **Légkör:** ISA 0–32 km (sűrűség, hangsebesség) – fent kevesebb a felhajtóerő és a tolóerő,
@@ -134,6 +163,9 @@ Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a mod
 * **Fly-by-wire (FLCS):** a botkormány **G-t** kér (semleges = 1 G, max **9 G**, min −3 G),
   a G-felépülés ~10 G/s-ra korlátozott, **25°-os AoA-limiter**, ~270°/s orsózás.
   A nagy G-s forduló **energiát (sebességet) emészt**, lassan nem tudsz 9 G-t húzni (sarok-sebesség ~750 km/h).
+* **Futómű és földi fizika:** gördülési ellenállás (beton / fű), kerékfék, orrkerék-kormányzás,
+  elforgatás csak elég légsebességnél, farokütés, kemény / ferde / futómű nélküli földet érés = baleset,
+  a futómű a földön nem húzható be, kiengedve ellenállást ad, a fékszárnyak ~240 csomó felett felhúzódnak.
 * **Aerodinamika:** Mach-függő felhajtóerő, transzonikus ellenállás-növekedés M0,88-tól, indukált ellenállás.
 * **Egeres irányítás:** az "instruktor" a **repülési pályát** (sebességvektort) viszi a fehér körre,
   gravitáció-kompenzációval: vízszintes célnál tartja a magasságot, oldalra mutatva koordinált,
@@ -152,7 +184,8 @@ dogfight/
   audio.py              kódból generált hangok (growl, lock-hang, RWR, ágyú, hajtómű)
   sim/                  szimuláció (megjelenítés nélkül, tesztelhető)
     specs.py            F-16C, AIM-9M, AIM-120A, M61A1, APG-68 adatai
-    flight_model.py     aerodinamika + FLCS
+    flight_model.py     aerodinamika + FLCS + futómű és földi fizika
+    airfield.py         légibázis: pálya, gurulóút, kiszolgálás
     missile.py          rakéták, arányos rávezetés, datalink, pitbull, DLZ
     radar.py            SRCH / ACM / STT, Doppler-notch, chaff
     ir_seeker.py        IR keresőfej, flare-ek, IRCCM
@@ -160,7 +193,7 @@ dogfight/
     guns.py             gépágyú, ballisztika, találat-doboz, előretartás
     aircraft.py, world.py, terrain.py, signatures.py, countermeasures.py
   ai/                   AI pilóta + közös "instruktor" (irány -> kormánymozdulatok)
-  render/               procedurális F-16 és rakéta modellek, terep (LOD), ég, felhők, effektek
+  render/               procedurális F-16 (futóművel) és rakéta modellek, terep (LOD), reptér, ég, effektek
   ui/                   HUD, radar B-scope, RWR, súgó
 tests/                  pytest tesztek a szimulációhoz
 ```

@@ -197,6 +197,29 @@ def build_missile(key):
     return mb.build("missile_" + key)
 
 
+def _wheel(mb, x, y, z, radius, width, color=(0.10, 0.10, 0.11, 1.0)):
+    rings = []
+    for dx in (-width * 0.5, width * 0.5):
+        ring = ellipse_ring(0.0, radius, 0.0, radius, segments=12)
+        rings.append([Vec3(x + dx, y + p.x, z + p.z) for p in ring])
+    mb.loft(rings, color, cap_front=(0.35, 0.35, 0.36, 1.0), cap_back=(0.35, 0.35, 0.36, 1.0))
+
+
+def build_gear():
+    """Landing gear (main gear + nose gear), wheels touching z = -2.05."""
+    mb = MeshBuilder()
+    leg = (0.78, 0.79, 0.80, 1.0)
+    for side in (-1.0, 1.0):
+        box(mb, (side * 1.05, -1.0, -1.12), (0.07, 0.07, 0.58), leg)          # strut
+        box(mb, (side * 0.8, -1.25, -0.95), (0.25, 0.04, 0.03), leg)          # drag brace
+        box(mb, (side * 1.25, -0.95, -0.95), (0.03, 0.5, 0.4), (0.60, 0.63, 0.66, 1.0))  # gear door
+        _wheel(mb, side * 1.12, -1.0, -1.70, 0.35, 0.22)
+    box(mb, (0.0, 3.3, -1.52), (0.05, 0.05, 0.28), leg)                       # nose strut
+    _wheel(mb, 0.0, 3.3, -1.80, 0.25, 0.14)
+    box(mb, (0.0, 3.3, -1.75), (0.13, 0.1, 0.02), leg)                        # landing light / fork
+    return mb.build("gear")
+
+
 def build_flame():
     """Afterburner plume along -Y, unit length (scaled at runtime)."""
     mb = MeshBuilder()
@@ -239,6 +262,9 @@ class ModelLibrary:
 
     def missile(self, key):
         return self._get(("missile", key), lambda: build_missile(key)).copyTo(NodePath("m"))
+
+    def gear(self):
+        return self._get(("gear",), build_gear).copyTo(NodePath("gear"))
 
     def flame(self):
         return self._get(("flame",), build_flame).copyTo(NodePath("flame"))

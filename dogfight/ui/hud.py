@@ -41,12 +41,16 @@ class HUD:
         self._dlz_timer = 0.0
 
     # --------------------------------------------------------------- events
-    def message(self, text, kind="info", duration=2.5):
+    def message(self, text, kind="info", duration=2.5, key=None):
+        """Show a message; messages with the same ``key`` (or text) replace each other."""
+        key = key or text
         for m in self.messages:
-            if m[0] == text:
+            if m[3] == key:
+                m[0] = text
+                m[1] = MESSAGE_COLORS.get(kind, WHITE)
                 m[2] = duration
                 return
-        self.messages.append([text, MESSAGE_COLORS.get(kind, WHITE), duration])
+        self.messages.append([text, MESSAGE_COLORS.get(kind, WHITE), duration, key])
         self.messages = self.messages[-4:]
 
     def handle_event(self, kind, data, player):
@@ -316,8 +320,19 @@ class HUD:
         aoa_col = AMBER if fm.alpha / DEG > 20 else GREEN
         L.text("AoA %5.1f" % (fm.alpha / DEG), x, y - 0.20, aoa_col)
         L.text("THR  %s" % thr_text, x, y - 0.25, AMBER if thr > 1.0 else GREEN)
-        if ac.controls.airbrake:
-            L.text("SPD BRK", x, y - 0.30, AMBER)
+        gear = fm.gear_pos
+        if gear > 0.98:
+            L.text("GEAR DOWN", x, y - 0.30, GREEN)
+        elif gear > 0.02:
+            L.text("GEAR %s" % ("↓" if fm.gear_down else "↑"), x, y - 0.30, AMBER)
+        else:
+            L.text("GEAR UP", x, y - 0.30, DIM)
+        if ac.on_ground:
+            L.text("GS  %5d km/h" % (ac.speed * 3.6), x, y - 0.35, GREEN)
+            if ac.controls.brakes:
+                L.text("BRAKES", x, y - 0.40, AMBER)
+        elif ac.controls.airbrake:
+            L.text("SPD BRK", x, y - 0.35, AMBER)
 
         x = 0.52
         terrain_h = world.terrain.height(ac.pos.x, ac.pos.y)
@@ -375,7 +390,8 @@ class HUD:
         blink = int(self.time * 4) % 2 == 0
         ahead = ac.pos + ac.vel * 4.0
         terrain = world.terrain
-        if (ahead.z < terrain.height(ahead.x, ahead.y) + 60.0
+        if not ac.on_ground and ac.fm.gear_pos < 0.5 and (
+                ahead.z < terrain.height(ahead.x, ahead.y) + 60.0
                 or (ac.pos.z - terrain.height(ac.pos.x, ac.pos.y) < 150.0 and ac.vel.z < -15.0)):
             if blink:
                 T.text("PULL UP", 0.0, y, RED, align=TextNode.ACenter)
@@ -387,14 +403,22 @@ class HUD:
         elif ac.rwr.max_level == 2:
             T.text("RADAR LOCK", 0.0, y, AMBER, scale=0.045, align=TextNode.ACenter)
             y -= 0.07
-        if ac.fm.ias < 70.0:
+        if ac.fm.ias < 70.0 and not ac.on_ground:
             T.text("SPEED LOW", 0.0, y, AMBER, scale=0.045, align=TextNode.ACenter)
+            y -= 0.07
+        agl = ac.pos.z - terrain.height(ac.pos.x, ac.pos.y)
+        if (not ac.on_ground and ac.fm.gear_pos < 0.98 and agl < 300.0 and ac.fm.ias < 95.0
+                and ac.vel.z < -2.0 and blink):
+            T.text("FUTÓMŰ!", 0.0, y, RED, scale=0.05, align=TextNode.ACenter)
+            y -= 0.07
+        if ac.fm.gear_pos > 0.02 and ac.fm.ias > 155.0 and blink:
+            T.text("GEAR SPEED", 0.0, y, AMBER, scale=0.045, align=TextNode.ACenter)
             y -= 0.07
         if 0 < ac.fm.fuel < 400.0:
             T.text("BINGO FUEL", 0.0, y, AMBER, scale=0.045, align=TextNode.ACenter)
         # messages
         my = 0.33
-        for text, color, _ in self.messages:
+        for text, color, _, _ in self.messages:
             self.labels.text(text, 0.0, my, color, scale=0.042, align=TextNode.ACenter)
             my -= 0.05
 
@@ -423,4 +447,5 @@ class HUD:
         if game.banner:
             self.titles.text(game.banner, 0.0, 0.12, WHITE, scale=0.08, align=TextNode.ACenter)
         if game.sub_banner:
-            self.labels.text(game.sub_banner, 0.0, 0.03, WHITE, scale=0.045, align=TextNode.ACenter)
+            y = 0.03 if game.banner else 0.62
+            self.labels.text(game.sub_banner, 0.0, y, WHITE, scale=0.04, align=TextNode.ACenter)

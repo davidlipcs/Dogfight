@@ -27,6 +27,9 @@ class FlatTerrain:
     def clamp_inside(self, x, y, margin=0.0):
         return x, y
 
+    def slope(self, x, y, d=6.0):
+        return 0.0
+
 
 @pytest.fixture
 def world():

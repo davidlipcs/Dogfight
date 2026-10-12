@@ -33,11 +33,26 @@ RHO_TROPOPAUSE = 0.36392
 MAX_AB = 1.1           # throttle above 1.0 = afterburner (War Thunder style "110 %")
 G_ONSET = 10.0         # G/s, FLCS limit on how fast the commanded load factor may change
 
+# Landing gear
+GEAR_HEIGHT = 2.05     # m from the centre of gravity down to the bottom of the wheels
+GEAR_TIME = 4.0        # s to extend / retract
+GEAR_CD = 0.022        # drag of the extended gear
+FLAP_CL = 0.22         # trailing edge flaps drop with the gear handle (F-16 FLCS)
+FLAP_CD = 0.012
+MU_ROLL_PAVED = 0.02
+MU_ROLL_GRASS = 0.07
+MU_BRAKE = 0.45        # anti-skid wheel brakes
+MAX_SINK = 4.2         # m/s, harder than this breaks the gear
+MAX_TOUCH_BANK = 12.0  # deg, a wing tip hits the runway beyond this
+TAIL_STRIKE = 13.0     # deg of pitch on the ground
+ROTATE_IAS = 60.0      # m/s (~215 km/h), below this the stabilator can't lift the nose
+NWS_RATE = 0.45        # rad/s nose wheel steering at taxi speed
+
 
 class Controls:
     """Normalised pilot inputs, all in [-1, 1] except throttle [0, 1.1]."""
 
-    __slots__ = ("pitch", "roll", "yaw", "throttle", "airbrake")
+    __slots__ = ("pitch", "roll", "yaw", "throttle", "airbrake", "brakes")
 
     def __init__(self, throttle=0.85):
         self.pitch = 0.0
@@ -45,6 +60,7 @@ class Controls:
         self.yaw = 0.0
         self.throttle = throttle
         self.airbrake = False
+        self.brakes = False
 
 
 class FlightModel:
@@ -72,6 +88,35 @@ class FlightModel:
         self.g_load = 1.0
         self.thrust = 0.0
         self.accel = Vec3(0, 0, 0)  # total acceleration incl. gravity
+        # Landing gear / ground
+        self.gear_down = False      # gear handle
+        self.gear_pos = 0.0         # 0 = up and locked, 1 = down and locked
+        self.on_ground = False
+        self.ground_pitch = 0.0     # rad, attitude while the wheels are on the ground
+        self.contact_event = None   # "touchdown" | "crash" (set for one step)
+        self.crash_reason = ""
+        self.sink_rate = 0.0        # m/s at the last touchdown
+
+    def place_on_ground(self, x, y, ground_z, heading_deg):
+        """Park the aircraft: gear down, wheels on the ground, engine idle."""
+        self.pos = Vec3(x, y, ground_z + GEAR_HEIGHT)
+        self.vel = Vec3(0, 0, 0)
+        self.quat = Quat()
+        self.quat.setHpr((-heading_deg, 0.0, 0.0))
+        self.omega = Vec3(0, 0, 0)
+        self.gear_down = True
+        self.gear_pos = 1.0
+        self.on_ground = True
+        self.ground_pitch = 0.0
+        self.engine = 0.0
+        self.nz_cmd = 1.0
+
+    def set_gear(self, down):
+        """Gear handle; returns False if the weight-on-wheels switch blocks it."""
+        if not down and self.on_ground:
+            return False
+        self.gear_down = down
+        return True
 
     # ------------------------------------------------------------------ helpers
     @property
@@ -124,7 +169,7 @@ class FlightModel:
         else:
             lapse = (RHO_TROPOPAUSE / RHO0) ** 0.75 * (rho / RHO_TROPOPAUSE) ** 1.25
         dry_setting = min(setting, 1.0)
-        dry = spec.thrust_dry * (0.06 + 0.94 * dry_setting ** 1.6) * lapse * (1.0 + 0.02 * mach)
+        dry = spec.thrust_dry * (0.04 + 0.96 * dry_setting ** 1.6) * lapse * (1.0 + 0.02 * mach)
         if setting <= 1.0:
             return dry
         ab_frac = clamp((setting - 1.0) / (MAX_AB - 1.0), 0.0, 1.0)
@@ -153,7 +198,7 @@ class FlightModel:
         return thrust * sfc * self.fuel_mult
 
     # --------------------------------------------------------------------- step
-    def step(self, dt, controls):
+    def step(self, dt, controls, terrain=None):
         spec = self.spec
         fwd = self.quat.getForward()
         up = self.quat.getUp()
@@ -173,16 +218,23 @@ class FlightModel:
         # ---- engine
         self._spool(clamp(controls.throttle, 0.0, MAX_AB), dt)
         thrust = self.thrust_at(self.engine, rho, mach)
+        self.thrust = thrust
         self.fuel = max(0.0, self.fuel - self._fuel_flow(thrust) * dt)
 
         # ---- aerodynamics (stability axes)
         cl = self.lift_coefficient(alpha, mach)
+        flaps = 0.0
+        # trailing edge flaps: down with the gear handle, blown up again above ~240 kt
+        flaps = self.gear_pos * clamp((125.0 - speed * math.sqrt(rho / RHO0)) / 25.0, 0.0, 1.0)
+        if flaps > 0.0:
+            cl += FLAP_CL * flaps * (1.0 if alpha > -0.05 else 0.0)
         lift_dir = safe_normalized(right.cross(vhat), up)
         side_dir = vhat.cross(lift_dir)
         cd = (spec.cd0 + interp_table(spec.wave_drag, mach) + spec.k_induced * cl * cl
               + self.store_cd + 0.8 * math.sin(alpha) ** 2)
         if controls.airbrake:
             cd += spec.airbrake_cd
+        cd += GEAR_CD * self.gear_pos + FLAP_CD * flaps
         area = spec.wing_area
         lift = qbar * area * cl
         side = -qbar * area * 1.1 * beta
@@ -191,6 +243,21 @@ class FlightModel:
         aero = lift_dir * lift + side_dir * side - vhat * drag
         force = aero + fwd * thrust
         acc = force / mass + Vec3(0, 0, -G)
+
+        # ---- landing gear
+        target = 1.0 if self.gear_down else 0.0
+        self.gear_pos += clamp(target - self.gear_pos, -dt / GEAR_TIME, dt / GEAR_TIME)
+        self.contact_event = None
+        if terrain is not None:
+            ground_z = terrain.height(self.pos.x, self.pos.y)
+            if self.on_ground:
+                self._ground_step(dt, controls, acc, ground_z, terrain, force, mass, alpha, mach, rho, qbar, speed)
+                return
+            if self.pos.z - ground_z <= GEAR_HEIGHT:
+                if self._touchdown(ground_z, terrain):
+                    self._ground_step(dt, controls, acc, ground_z, terrain, force, mass, alpha, mach, rho, qbar,
+                                      speed)
+                return
 
         # ---- FLCS: pitch (G command with AoA limiter)
         stick = clamp(controls.pitch, -1.0, 1.0)
@@ -246,3 +313,103 @@ class FlightModel:
         self.thrust = thrust
         self.accel = acc
         self.g_load = (force / mass).dot(up) / G
+
+    # ------------------------------------------------------------------ ground
+    def _touchdown(self, ground_z, terrain):
+        """Wheels (or something else) just reached the ground. True = rolling on."""
+        fwd = self.quat.getForward()
+        pitch = math.degrees(math.asin(clamp(fwd.z, -1.0, 1.0)))
+        right = self.quat.getRight()
+        bank = math.degrees(math.atan2(-right.z, self.quat.getUp().z))
+        self.sink_rate = max(0.0, -self.vel.z)
+        reason = ""
+        if self.gear_pos < 0.98:
+            reason = "futómű nélkül értél földet" if self.gear_pos < 0.1 else "a futómű nem volt kint"
+        elif self.sink_rate > MAX_SINK:
+            reason = "túl kemény földetérés (%.1f m/s)" % self.sink_rate
+        elif abs(bank) > MAX_TOUCH_BANK:
+            reason = "szárnyvéggel értél földet"
+        elif pitch < -3.0:
+            reason = "orral értél földet"
+        elif pitch > TAIL_STRIKE + 7.0:
+            reason = "farokkal értél földet"
+        elif terrain.slope(self.pos.x, self.pos.y) > math.radians(6.0):
+            reason = "egyenetlen terep"
+        if reason:
+            self.contact_event = "crash"
+            self.crash_reason = reason
+            self.pos.z = ground_z + 1.0
+            return False
+        self.on_ground = True
+        self.contact_event = "tailstrike" if pitch > TAIL_STRIKE + 2.0 else "touchdown"
+        self.ground_pitch = math.radians(max(0.0, pitch))
+        self.omega = Vec3(0, 0, 0)
+        self.nz_cmd = 1.0
+        self.pos.z = ground_z + GEAR_HEIGHT
+        self.vel.z = 0.0
+        return True
+
+    def _ground_step(self, dt, controls, acc, ground_z, terrain, force, mass, alpha, mach, rho, qbar, speed):
+        fwd = self.quat.getForward()
+        heading = math.atan2(fwd.x, fwd.y)
+        h_dir = Vec3(math.sin(heading), math.cos(heading), 0.0)
+        h_right = Vec3(h_dir.y, -h_dir.x, 0.0)
+
+        # normal force carries whatever lift does not
+        normal = 0.0
+        if acc.z < 0.0:
+            normal = -acc.z
+            acc.z = 0.0
+        paved = terrain.airfield.on_paved(self.pos.x, self.pos.y) if hasattr(terrain, "airfield") else True
+        mu = (MU_ROLL_PAVED if paved else MU_ROLL_GRASS) + (MU_BRAKE if controls.brakes else 0.0)
+        u = self.vel.dot(h_dir)
+        w = self.vel.dot(h_right)
+        if abs(u) > 1e-3:
+            decel = min(mu * normal, abs(u) / dt)
+            acc -= h_dir * math.copysign(decel, u)
+        elif normal > 0.0:
+            # standing still: friction holds the aircraft unless thrust wins
+            along = acc.dot(h_dir)
+            hold = mu * normal
+            acc -= h_dir * (along if abs(along) <= hold else math.copysign(hold, along))
+        side_grip = 0.8 * normal
+        acc -= h_right * clamp(w / max(dt, 0.02), -side_grip, side_grip)
+
+        # steering: nose wheel at taxi speed, rudder at high speed
+        gs = max(abs(u), 0.1)
+        nws = NWS_RATE * min(1.0, 8.0 / gs) if self.ground_pitch < math.radians(2.0) else 0.0
+        yaw_rate = clamp(controls.yaw, -1.0, 1.0) * (nws + 0.03 * min(gs / 60.0, 1.0)) * (1.0 if gs > 0.3 else 0.0)
+
+        # rotation: the stabilator can lift the nose only with enough airflow
+        ias = speed * math.sqrt(rho / RHO0)
+        authority = clamp((ias - ROTATE_IAS) / 12.0, 0.0, 1.0)
+        stick = clamp(controls.pitch, -1.0, 1.0)
+        pitch_rate = stick * math.radians(7.0) * authority if stick > 0.0 else 0.0
+        if pitch_rate <= 0.0:
+            pitch_rate = -math.radians(3.5)          # nose wheel comes down
+        self.ground_pitch = clamp(self.ground_pitch + pitch_rate * dt, 0.0, math.radians(TAIL_STRIKE))
+
+        self.vel += acc * dt
+        self.pos += self.vel * dt
+        heading += yaw_rate * dt
+        self.quat = Quat()
+        self.quat.setHpr((-math.degrees(heading), math.degrees(self.ground_pitch), 0.0))
+        self.omega = Vec3(math.copysign(abs(pitch_rate), pitch_rate) if self.ground_pitch > 0.0 else 0.0, 0.0, 0.0)
+
+        new_ground = terrain.height(self.pos.x, self.pos.y)
+        if normal == 0.0 and self.vel.z > 0.0:
+            # lift exceeds weight: the struts extend and the wheels leave the ground
+            if self.pos.z > new_ground + GEAR_HEIGHT + 0.3:
+                self.on_ground = False               # airborne!
+        else:
+            self.pos.z = new_ground + GEAR_HEIGHT
+            self.vel.z = 0.0
+
+        self.alpha = alpha
+        self.beta = 0.0
+        self.mach = mach
+        self.rho = rho
+        self.qbar = qbar
+        self.ias = speed * math.sqrt(rho / RHO0)
+        self.accel = acc
+        self.g_load = (force / mass).dot(self.quat.getUp()) / G + (normal / G)

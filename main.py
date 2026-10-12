@@ -11,6 +11,7 @@ def parse_args(argv=None):
                    help="default: 4x AIM-9M + 2x AIM-120A, amraam: 4x AIM-120A + 2x AIM-9M, fox2: 6x AIM-9M")
     p.add_argument("--size", type=lambda s: tuple(int(v) for v in s.lower().split("x")), default=(1600, 900),
                    help="ablakméret, pl. 1920x1080")
+    p.add_argument("--air-start", action="store_true", help="levegőben indulás (felszállás nélkül)")
     p.add_argument("--fullscreen", action="store_true", help="teljes képernyő")
     p.add_argument("--sensitivity", type=float, default=0.09, help="egér érzékenység (fok / pixel)")
     p.add_argument("--invert-y", action="store_true", help="fordított egér Y tengely")
