@@ -3,13 +3,15 @@
 import base64
 import json
 import os
+import shutil
 import sys
 
 import numpy as np
-from panda3d.core import Filename, GeomVertexReader, NodePath, PNMImage, Texture
+from panda3d.core import Filename, GeomVertexReader, PNMImage, Texture
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dogfight.render.cockpit import EYE, TEXTURE_PATH  # noqa: E402
 from dogfight.render.f16_model import build_detailed_f16, livery_texture  # noqa: E402
 from dogfight.render.models import build_gear, build_missile  # noqa: E402
 from dogfight.render.terrain_mesh import terrain_colors, terrain_normals  # noqa: E402
@@ -80,7 +82,8 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     g = build_detailed_f16()
     model = dict(skin=geometry(g["skin"]), plain=geometry(g["plain"]), glass=geometry(g["glass"]),
-                 lights=geometry(g["lights"]), gear=geometry(build_gear()), parts=[],
+                 lights=geometry(g["lights"]), cockpit=geometry(g["cockpit"]), screens=geometry(g["screens"]),
+                 eye=[EYE.x, EYE.y, EYE.z], gear=geometry(build_gear()), parts=[],
                  missiles={k: geometry(build_missile(k)) for k in ("AIM-9M", "AIM-120A")})
     for part in g["parts"]:
         q = part["quat"]
@@ -91,6 +94,7 @@ def main():
         json.dump(model, f, separators=(",", ":"))
     for livery in ("viper", "aggressor"):
         save_texture(livery_texture(livery), os.path.join(OUT, "livery_%s.jpg" % livery))
+    shutil.copyfile(TEXTURE_PATH, os.path.join(OUT, "cockpit.png"))
 
     terrain = Terrain()
     grid = terrain.grid

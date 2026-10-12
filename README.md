@@ -33,7 +33,11 @@ Részletes, valódi méretekből kódból épített F-16C Block 50 (nem kell hoz
 * **mozgó kormányfelületek:** a stabilizátorok húzásra és orsózásra, a flaperonok orsózásra
   és fékszárnyként, az oldalkormány, a belépőél-orrsegédszárny az állásszöggel, és a fúvóka melletti
   kagyló-légfékek (B) – mind valódi csuklótengely körül, korlátozott sebességgel mozognak
-* **kabin:** tükröződő, aranyszínű kabintető, alatta ACES II katapultülés és pilóta
+* **kabin:** magas, enyhén aranyszínű buborék-kabintető kerettel és visszapillantó tükrökkel; alatta valódi
+  kabinkád: 30°-ban hátradöntött ACES II katapultülés (sárga-fekete katapultfogantyú, hevederek),
+  oldalkonzolok kapcsolókkal, oldalsó botkormány és gázkar, műszerfal két világító MFD-vel (radar és
+  fegyverállapot), DED kijelző, ICP billentyűzet, tartalék műszerek, takaróernyő és HUD. A kabinnézetben (V)
+  a saját gép külön, közeli renderelési menetben rajzolódik, így a műszerfal nem vágódik le
   (sisak, napellenző, oxigénmaszk, kezek)
 * **festés:** a valódi F-16 háromszínű szürke sémája (sötét gerinc, középszürke oldalak és szárnyak,
   világos has), panelvonalak, szegecsek, árnyékolás a csatlakozásoknál, koromnyomok,

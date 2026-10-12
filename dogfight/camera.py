@@ -14,7 +14,7 @@ from .mathutil import DEG, UP, clamp, quat_axis_angle, quat_look
 
 CHASE_DISTANCE = 26.0
 CHASE_HEIGHT = 5.5
-COCKPIT_EYE = Vec3(0.0, 3.6, 1.15)
+COCKPIT_EYE = Vec3(0.0, 2.40, 1.10)      # design eye point of the cockpit (render/cockpit.py EYE)
 
 
 class FlightCamera:

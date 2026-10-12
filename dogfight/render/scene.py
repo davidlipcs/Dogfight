@@ -2,7 +2,8 @@
 
 import math
 
-from panda3d.core import CardMaker, ColorBlendAttrib, LineSegs, NodePath, TransparencyAttrib, Vec3
+from panda3d.core import (BitMask32, Camera, CardMaker, ColorBlendAttrib, LineSegs, NodePath, PerspectiveLens,
+                          TransparencyAttrib, Vec3)
 
 from ..mathutil import quat_look
 from ..sim.guns import GUN_OFFSET
@@ -16,12 +17,16 @@ NAV_LIGHTS = ((Vec3(-0.62, 2.0, -0.78), (1.0, 0.15, 0.1, 1.0)), (Vec3(0.62, 2.0,
               (Vec3(0.0, -6.70, 3.74), (1.0, 1.0, 0.95, 1.0)))
 STROBE = Vec3(0.0, -5.85, 3.80)
 NOZZLE = Vec3(0.0, -7.45, 0.07)
+MAIN_MASK = BitMask32.bit(0)
+COCKPIT_MASK = BitMask32.bit(1)
 
 
 class AircraftVisual:
     def __init__(self, parent, ac, models, glow=None):
         self.ac = ac
-        self.root = parent.attachNewNode("aircraft")
+        self.layer = parent.attachNewNode("aircraft_layer")     # camera masks live here (cockpit pass)
+        self.in_cockpit_pass = False
+        self.root = self.layer.attachNewNode("aircraft")
         self.body = models.aircraft(ac.livery)
         self.body.reparentTo(self.root)
         self.surfaces = ControlSurfaces(self.body)
@@ -94,8 +99,20 @@ class AircraftVisual:
         else:
             self.flame.hide()
 
+    def set_cockpit_pass(self, on):
+        """Draw this aircraft only in the near cockpit pass (own aircraft in cockpit view)."""
+        if on == self.in_cockpit_pass:
+            return
+        self.in_cockpit_pass = on
+        if on:
+            self.layer.hide(MAIN_MASK)
+            self.layer.showThrough(COCKPIT_MASK)
+        else:
+            self.layer.show(MAIN_MASK)
+            self.layer.hide(COCKPIT_MASK)
+
     def destroy(self):
-        self.root.removeNode()
+        self.layer.removeNode()
 
 
 class MissileVisual:
@@ -128,8 +145,30 @@ class SceneRenderer:
         self.aircraft = {}
         self.missiles = {}
         self.tracers = None
-        self.hide_player = False
+        self.cockpit_view = False
         self._time = 0.0
+        self._setup_cockpit_pass(base)
+
+    def _setup_cockpit_pass(self, base):
+        """A second display region draws the own aircraft (cockpit) with a near plane of a few centimetres
+        after clearing depth, so the instrument panel is not clipped by the main camera's near plane."""
+        self.base = base
+        self.cockpit_region = None
+        if base.win is None:
+            return
+        base.cam.node().setCameraMask(MAIN_MASK)
+        base.render.hide(COCKPIT_MASK)
+        self.cockpit_lens = PerspectiveLens()
+        self.cockpit_lens.setNearFar(0.03, 400.0)
+        cam = Camera("cockpit_cam", self.cockpit_lens)
+        cam.setCameraMask(COCKPIT_MASK)
+        cam_np = base.camera.attachNewNode(cam)
+        dr = base.win.makeDisplayRegion()
+        dr.setSort(5)
+        dr.setClearDepthActive(True)
+        dr.setCamera(cam_np)
+        dr.setActive(False)
+        self.cockpit_region = dr
 
     @staticmethod
     def _glow_card(texture):
@@ -199,6 +238,10 @@ class SceneRenderer:
     def update(self, dt, player=None):
         self._time += dt
         world = self.world
+        if self.cockpit_region is not None:
+            self.cockpit_region.setActive(self.cockpit_view)
+            if self.cockpit_view:
+                self.cockpit_lens.setFov(self.base.camLens.getFov())
         # aircraft
         present = set()
         for ac in world.aircraft:
@@ -206,9 +249,10 @@ class SceneRenderer:
             vis = self.aircraft.get(ac)
             if vis is None:
                 vis = self.aircraft[ac] = AircraftVisual(self.root, ac, self.models, self.glow)
-            visible = not (self.hide_player and ac is player)
-            vis.update(dt, visible, self._time)
-            self._aircraft_effects(ac, dt, vis, visible)
+            own_cockpit = self.cockpit_view and ac is player
+            vis.set_cockpit_pass(own_cockpit)
+            vis.update(dt, True, self._time)
+            self._aircraft_effects(ac, dt, vis, not own_cockpit)
         for ac in [a for a in self.aircraft if a not in present]:
             self.aircraft.pop(ac).destroy()
 

@@ -12,7 +12,7 @@ import { Sounds } from './audio.js';
 const PLAYER_START = V(0, -26000, 4500);
 const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift = gáz (100% felett utánégető)  ·  ~280 km/h-nál emeld az egeret  ·  G = futómű';
 const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, REARM_TIME = 6, MAX_ENEMIES = 6, THROTTLE_RATE = 0.55;
-const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5, COCKPIT_EYE = V(0, 3.6, 1.15);
+const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5;
 const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look down -Z with +Y up
 
 const $ = (id) => document.getElementById(id);
@@ -20,7 +20,7 @@ const $ = (id) => document.getElementById(id);
 // ------------------------------------------------------------------ camera
 class FlightCamera {
   constructor(camera, terrain) {
-    this.camera = camera; this.terrain = terrain;
+    this.camera = camera; this.terrain = terrain; this.eye = V(0, 2.4, 1.1);
     this.sensitivity = 0.09; this.invertY = false;
     this.aim = new THREE.Quaternion(); this.look = new THREE.Quaternion();
     this.freeLook = false; this.cockpit = false; this.position = V(); this.fov = 70; this.phase = 0; this.zoom = 0;
@@ -48,7 +48,7 @@ class FlightCamera {
     if (this.freeLook) this.look = FlightCamera.level(this.look, dt);
     if (!ac) return;
     const view = this.freeLook ? this.look : this.aim;
-    if (this.cockpit && ac.alive) this.position = add(ac.pos, xform(ac.quat, COCKPIT_EYE));
+    if (this.cockpit && ac.alive) this.position = add(ac.pos, xform(ac.quat, this.eye));
     else {
       const dist = ac.alive ? CHASE_DISTANCE : 70;
       this.position = add(sub(ac.pos, mul(fwdOf(view), dist)), mul(upOf(view), CHASE_HEIGHT));
@@ -124,9 +124,10 @@ class Game {
     this.terrain = new Terrain(assets.terrain);
     this.world = new World(this.terrain, Math.floor(Math.random() * 1e9));
     this.rnd = this.world.rnd;
-    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex });
+    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex, cockpit: assets.cockpitTex });
     this.view = new SceneView(this.renderer, this.models, this.terrain, this.world);
     this.cam = new FlightCamera(this.view.camera, this.terrain);
+    if (this.models.eye) this.cam.eye = V(...this.models.eye);
     this.hud = new HUD($('hud'));
     this.sounds = new Sounds(0.7);
     this.input = new Input(canvas);
@@ -320,9 +321,9 @@ class Game {
     }
     const sdt = st.paused ? 0 : dt;
     this.cam.update(sdt, this.player);
-    this.view.hidePlayer = this.cam.cockpit && this.player.alive;
+    this.view.cockpitView = this.cam.cockpit && this.player.alive;
     this.view.update(sdt, this.player);
-    this.renderer.render(this.view.scene, this.view.camera);
+    this.view.render();
     this.hud.update(dt, this.player, this.world, this.view.camera, this.cam, st);
     this.sounds.update(this.player, st.paused);
     this.fpsAcc += dt; this.fpsN++;
@@ -381,14 +382,14 @@ async function boot() {
   const status = $('status'), bar = $('bar');
   if (!THREE) { status.textContent = 'A three.js nem töltődött be - ellenőrizd az internetkapcsolatot.'; return; }
   let done = 0;
-  const tick = () => { done++; bar.style.width = `${done / 5 * 100}%`; };
+  const tick = () => { done++; bar.style.width = `${done / 6 * 100}%`; };
   let assets;
   try {
-    const [f16, terrain, viper, aggressor, terrainTex] = await Promise.all([
+    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex] = await Promise.all([
       fetchJSON('assets/f16.json', tick), fetchJSON('assets/terrain.json', tick),
       loadTexture('assets/livery_viper.jpg', tick), loadTexture('assets/livery_aggressor.jpg', tick),
-      loadTexture('assets/terrain_color.jpg', tick)]);
-    assets = { f16, terrain, viper, aggressor, terrainTex };
+      loadTexture('assets/terrain_color.jpg', tick), loadTexture('assets/cockpit.png', tick)]);
+    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex };
   } catch (e) {
     status.textContent = 'Betöltési hiba: ' + e.message; console.error(e); return;
   }

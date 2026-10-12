@@ -6,7 +6,8 @@ without missiles), so no external 3D files are needed:
 * blended wing-body fuselage lofted from smooth (Catmull-Rom) cross sections
 * NACA 4 % airfoils on wing, stabilators and fin
 * chin intake with lip and a dark duct you can look into
-* bubble canopy (transparent, gold tint) with frame, ACES II seat and pilot
+* tall bubble canopy (light gold tint) with frame, bow and mirrors over a real cockpit tub:
+  ACES II seat, consoles, instrument panel with MFDs, glareshield and HUD (see cockpit.py)
 * convergent-divergent nozzle with petals and flame holder
 * pitot, AoA probes, IFF "bird slicer" antennas, blade antennas, gun port
 * painted texture: two-tone grey (or aggressor camouflage), panel lines,
@@ -49,10 +50,12 @@ FUSELAGE = (
     (3.80, 0.79, -0.52, 0.58, 0.10, 1.95),
     (4.60, 0.72, -0.48, 0.58, 0.09, 2.00),
     (5.30, 0.65, -0.42, 0.52, 0.09, 2.00),
-    (6.00, 0.56, -0.33, 0.44, 0.10, 2.00),
-    (6.80, 0.42, -0.18, 0.30, 0.11, 2.00),
-    (7.50, 0.27, -0.03, 0.15, 0.12, 2.00),
-    (8.05, 0.12, 0.12, 0.004, 0.12, 2.00),
+    (6.00, 0.57, -0.34, 0.45, 0.10, 2.00),
+    (6.60, 0.50, -0.25, 0.38, 0.11, 2.00),      # radome: ogive, not a cone
+    (7.15, 0.41, -0.14, 0.29, 0.12, 2.00),
+    (7.60, 0.31, -0.04, 0.19, 0.13, 2.00),
+    (7.92, 0.22, 0.04, 0.095, 0.13, 2.00),
+    (8.08, 0.14, 0.12, 0.004, 0.13, 2.00),
 )
 
 INTAKE = (   # y, half width, top, bottom
@@ -66,10 +69,16 @@ INTAKE = (   # y, half width, top, bottom
     (3.55, 0.56, -0.35, -1.28),
 )
 
-CANOPY = (   # y, half width, height above the sill
-    (1.55, 0.06, 0.04), (1.90, 0.26, 0.24), (2.40, 0.38, 0.44), (3.00, 0.43, 0.56), (3.70, 0.44, 0.60),
-    (4.40, 0.40, 0.52), (4.90, 0.30, 0.34), (5.25, 0.14, 0.12), (5.42, 0.03, 0.02),
+CANOPY = (   # y, half width, height above the sill (a tall one-piece bubble)
+    (1.40, 0.05, 0.04), (1.72, 0.30, 0.42), (2.10, 0.42, 0.70), (2.60, 0.465, 0.83), (3.20, 0.47, 0.84),
+    (3.80, 0.45, 0.74), (4.40, 0.39, 0.56), (4.90, 0.29, 0.36), (5.25, 0.14, 0.13), (5.42, 0.03, 0.02),
 )
+COCKPIT_OPEN = (1.98, 4.30)       # y range of the cockpit opening in the skin
+COCKPIT_RAMP = 0.14
+TUB_FLOOR = ((1.98, 0.62), (2.25, 0.20), (2.6, 0.08), (3.55, 0.08), (4.0, 0.30), (4.30, 0.55))
+TUB_UV_SPOT = (-5.10, 8.55)       # unused corner of the top-view atlas painted in cockpit grey
+TUB_PROFILE = ((0.995, 0.25), (0.985, 0.6), (0.97, 0.9), (0.92, 1.0), (0.5, 1.0), (0.0, 1.0), (-0.5, 1.0),
+               (-0.92, 1.0), (-0.97, 0.9), (-0.985, 0.6), (-0.995, 0.25))
 
 WING = ((0.85, 1.59, -3.15), (4.72, -1.95, -3.05))
 STRAKE_EDGE = ((1.00, 1.30), (1.18, 1.30), (1.6, 1.10), (2.2, 0.93), (2.8, 0.78), (3.4, 0.64), (4.0, 0.52),
@@ -98,16 +107,56 @@ def fuselage_top(y):
     return _catmull(FUSELAGE, y, 1)
 
 
-def fuselage_section(y, segments=56):
-    top, bottom, hw, cz, n = (_catmull(FUSELAGE, y, c) for c in range(1, 6))
+def _section_params(y):
+    return tuple(_catmull(FUSELAGE, y, c) for c in range(1, 6))
+
+
+def surface_z(y, x):
+    """Height of the upper fuselage skin at station y, lateral offset x (ignoring the cockpit cut)."""
+    top, bottom, hw, cz, n = _section_params(y)
+    c = min(abs(x) / max(hw, 1e-6), 1.0) ** (n / 2.0)
+    s = math.sqrt(max(0.0, 1.0 - c * c))
+    return cz + (top - cz) * s ** (2.0 / n)
+
+
+def tub_depth(y):
+    a, b = COCKPIT_OPEN
+    t = min(max((y - a) / COCKPIT_RAMP, 0.0), 1.0) * min(max((b - y) / COCKPIT_RAMP, 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def opening_half_width(y):
+    return max(0.14, _canopy_half_width(y) - 0.035)
+
+
+def cockpit_rim(y):
+    """(half width, z) of the edge of the cockpit opening."""
+    w = opening_half_width(y)
+    return w, surface_z(y, w)
+
+
+def fuselage_section(y, segments=48):
+    """Ring of skin points: the outer arc (left rim -> bottom -> right rim) followed by the cockpit tub
+    profile (right rim -> left rim).  Outside the cockpit the tub depth is zero, so those points simply
+    lie on the top of the fuselage and every ring has the same number of points."""
+    top, bottom, hw, cz, n = _section_params(y)
     e = 2.0 / n
-    pts = []
-    for k in range(segments + 1):
-        t = 2 * math.pi * k / segments
-        c = math.cos(t)
-        s = math.sin(t)
+    w = min(opening_half_width(y), hw * 0.9)
+    tc = math.acos(min((w / hw) ** (n / 2.0), 1.0))
+
+    def ring_point(t):
+        c, s = math.cos(t), math.sin(t)
         h = (top - cz) if s >= 0 else (cz - bottom)
-        pts.append(Vec3(hw * math.copysign(abs(c) ** e, c), y, cz + h * math.copysign(abs(s) ** e, s)))
+        return Vec3(hw * math.copysign(abs(c) ** e, c), y, cz + h * math.copysign(abs(s) ** e, s))
+    t0, t1 = math.pi - tc, 2 * math.pi + tc
+    pts = [ring_point(t0 + (t1 - t0) * k / segments) for k in range(segments + 1)]
+    depth = tub_depth(y)
+    floor = float(np.interp(y, [f[0] for f in TUB_FLOOR], [f[1] for f in TUB_FLOOR]))
+    for fx, f in TUB_PROFILE:
+        x = fx * w
+        zt = surface_z(y, x)
+        pts.append(Vec3(x, y, zt + (floor - zt) * f * depth))
+    pts.append(Vec3(pts[0]))
     return pts
 
 
@@ -129,10 +178,11 @@ class PaintedMesh:
     def __init__(self):
         self.tris = []
 
-    def tri(self, a, b, c, na, nb, nc):
-        self.tris.append((a, b, c, na, nb, nc))
+    def tri(self, a, b, c, na, nb, nc, fixed=False):
+        self.tris.append((a, b, c, na, nb, nc, fixed))
 
-    def loft(self, rings, hint=None, flip=False, smooth=True):
+    def loft(self, rings, hint=None, flip=False, smooth=True, fixed=None):
+        """``fixed(i, k)`` -> True gives that face the flat cockpit-grey UV instead of the paint atlas."""
         n = len(rings[0])
         normals = [[Vec3(0, 0, 0) for _ in range(n)] for _ in rings]
         faces = []
@@ -168,12 +218,13 @@ class PaintedMesh:
             idx = ((i, k), (i, k + 1), (i + 1, k + 1), (i + 1, k))
             p = [rings[a][b] for a, b in idx]
             nn = [normals[a][b] if smooth else fn for a, b in idx]
+            fx = bool(fixed and fixed(i, k))
             if f:
-                self.tri(p[0], p[3], p[2], nn[0], nn[3], nn[2])
-                self.tri(p[0], p[2], p[1], nn[0], nn[2], nn[1])
+                self.tri(p[0], p[3], p[2], nn[0], nn[3], nn[2], fx)
+                self.tri(p[0], p[2], p[1], nn[0], nn[2], nn[1], fx)
             else:
-                self.tri(p[0], p[1], p[2], nn[0], nn[1], nn[2])
-                self.tri(p[0], p[2], p[3], nn[0], nn[2], nn[3])
+                self.tri(p[0], p[1], p[2], nn[0], nn[1], nn[2], fx)
+                self.tri(p[0], p[2], p[3], nn[0], nn[2], nn[3], fx)
 
     def cap(self, ring, center, outward):
         for k in range(len(ring) - 1):
@@ -187,9 +238,9 @@ class PaintedMesh:
 
     def mirrored(self):
         pm = PaintedMesh()
-        for a, b, c, na, nb, nc in self.tris:
+        for a, b, c, na, nb, nc, fx in self.tris:
             m = [Vec3(-v.x, v.y, v.z) for v in (a, b, c, na, nb, nc)]
-            pm.tris.append((m[0], m[2], m[1], m[3], m[5], m[4]))
+            pm.tris.append((m[0], m[2], m[1], m[3], m[5], m[4], fx))
         return pm
 
     def extend(self, other):
@@ -217,7 +268,8 @@ class PaintedMesh:
         vw = GeomVertexWriter(vdata, "vertex")
         nw = GeomVertexWriter(vdata, "normal")
         tw = GeomVertexWriter(vdata, "texcoord")
-        for a, b, c, na, nb, nc in self.tris:
+        tub_uv = self._uv(Vec3(TUB_UV_SPOT[0], TUB_UV_SPOT[1], 0.0), 0)
+        for a, b, c, na, nb, nc, fx in self.tris:
             fn = (b - a).cross(c - a)
             if fn.length() > 1e-12:
                 fn.normalize()
@@ -228,7 +280,7 @@ class PaintedMesh:
             else:
                 region = 2 if fn.x >= 0.0 else 3
             for p, n in ((a, na), (b, nb), (c, nc)):
-                u, v = self._uv(p, region)
+                u, v = tub_uv if fx else self._uv(p, region)
                 if quat_inv is not None:
                     p = quat_inv.xform(p - origin)
                     n = quat_inv.xform(n)
@@ -305,13 +357,25 @@ def _fuselage(pm):
     rings = []
     y = Y0 + 1.0                                     # -7.0
     ys = []
-    while y < 8.05:
+    a, b = COCKPIT_OPEN
+    while y < 8.08:
         ys.append(y)
-        y += 0.12 if y > 6.0 or y < -6.0 else 0.22
-    ys.append(8.05)
+        near_cockpit = a - 0.05 < y < a + COCKPIT_RAMP + 0.05 or b - COCKPIT_RAMP - 0.05 < y < b + 0.05
+        y += 0.035 if near_cockpit else 0.12 if y > 6.0 or y < -6.0 else 0.2
+    ys.append(8.08)
     for y in ys:
         rings.append(fuselage_section(y))
-    pm.loft(rings, hint=lambda m: Vec3(m.x, 0, m.z - 0.1))
+    segments = len(rings[0]) - len(TUB_PROFILE) - 2       # outer arc faces come first
+
+    def hint(m):
+        top, bottom, hw, cz, n = _section_params(m.y)
+        if abs(m.x) < min(opening_half_width(m.y), hw * 0.9) and m.z > cz + 0.05:
+            return Vec3(-m.x, 0, 3.0 - m.z)          # cockpit tub (or the plain top): faces up / inwards
+        return Vec3(m.x, 0, m.z - 0.1)
+
+    def in_tub(i, k):
+        return k >= segments and (tub_depth(ys[i]) > 0.0 or tub_depth(ys[i + 1]) > 0.0)
+    pm.loft(rings, hint=hint, fixed=in_tub)
     # leading edge root extensions (the F-16's sharp strakes)
     half = PaintedMesh()
     ys = [e[0] for e in STRAKE_EDGE]
@@ -390,47 +454,39 @@ def _nozzle(plain):
         plain.loft([ring, ring2], (0.12, 0.11, 0.10, 1.0))
 
 
+def _canopy_base(y, w):
+    return surface_z(y, w) - 0.005
+
+
 def _canopy(glass, frame, interior):
+    """Bubble canopy sitting on the skin, its frame and the cockpit (returns the textured cockpit meshes)."""
     rings = []
     for y, w, h in CANOPY:
-        base = fuselage_top(y) - 0.06
-        rings.append(ellipse_ring(y, w, base, h + 0.06, segments=18, start=0.0, end=math.pi))
-    glass.loft(rings, (0.32, 0.27, 0.12, 0.42))
-    # rear frame and sill rails
-    y = 1.95
-    base = fuselage_top(y) - 0.06
-    w, h = 0.29, 0.30
-    r0 = ellipse_ring(y, w + 0.03, base, h + 0.03, segments=18, start=0.0, end=math.pi)
-    r1 = ellipse_ring(y - 0.16, w + 0.02, base, h + 0.0, segments=18, start=0.0, end=math.pi)
-    frame.loft([r1, r0], (0.18, 0.19, 0.2, 1.0))
+        rings.append(ellipse_ring(y, w, _canopy_base(y, w), h, segments=22, start=0.0, end=math.pi))
+    glass.loft(rings, (0.62, 0.54, 0.30, 0.20))
+    frame_col = (0.16, 0.17, 0.18, 1.0)
+    # aft canopy bow behind the head box, with the three rear view mirrors
+    y = 1.93
+    w, h = _canopy_half_width(y) + 0.012, float(np.interp(y, [c[0] for c in CANOPY], [c[2] for c in CANOPY])) + 0.012
+    arc = ellipse_ring(y, w, _canopy_base(y, w - 0.012), h, segments=14, start=0.0, end=math.pi)
+    for p0, p1 in zip(arc, arc[1:]):
+        _beam(frame, p0, p1, 0.026, frame_col)
+    for k in (4, 7, 10):
+        p = arc[k]
+        inward = Vec3(-p.x, 0, _canopy_base(y, w) - p.z)
+        inward.normalize()
+        c = p + inward * 0.05 + Vec3(0, 0.05, 0)
+        _box(interior, (c.x, c.y, c.z), (0.045, 0.006, 0.022), (0.55, 0.62, 0.70, 1.0))
+    # sill rails along both sides
     for side in (-1, 1):
-        pts = [Vec3(side * (_canopy_half_width(y) + 0.015), y, fuselage_top(y) - 0.04)
-               for y in (2.0, 2.6, 3.3, 4.0, 4.6, 5.1)]
-        for a, b in zip(pts, pts[1:]):
-            _beam(frame, a, b, 0.025, (0.2, 0.21, 0.22, 1.0))
-    # cockpit interior: tub, coaming, HUD, ACES II seat, pilot
-    dark = (0.10, 0.10, 0.11, 1.0)
-    for y0, y1 in ((2.1, 2.9), (2.9, 3.7), (3.7, 4.6)):
-        z = fuselage_top((y0 + y1) / 2) - 0.08
-        _box(interior, (0, (y0 + y1) / 2, z), (0.36, (y1 - y0) / 2, 0.02), dark)
-    _box(interior, (0, 4.55, fuselage_top(4.55) + 0.05), (0.30, 0.18, 0.08), (0.04, 0.04, 0.045, 1.0))   # glare shield
-    _box(interior, (0, 4.72, fuselage_top(4.72) + 0.24), (0.11, 0.01, 0.10), (0.25, 0.45, 0.35, 1.0))    # HUD combiner
-    seat = (0.13, 0.13, 0.14, 1.0)
-    _box(interior, (0, 2.58, 1.02), (0.22, 0.06, 0.36), seat)                     # seat back
-    _box(interior, (0, 2.60, 1.42), (0.13, 0.07, 0.07), (0.80, 0.66, 0.12, 1.0))   # yellow headbox
-    _box(interior, (0, 2.60, 1.42), (0.135, 0.02, 0.075), (0.08, 0.08, 0.08, 1.0))
-    _box(interior, (0, 2.92, 0.72), (0.22, 0.26, 0.05), seat)                     # seat pan
-    suit = (0.36, 0.38, 0.28, 1.0)
-    vest = (0.24, 0.26, 0.20, 1.0)
-    _sphere(interior, Vec3(0, 2.80, 1.02), 0.19, 0.27, suit)                    # torso
-    _box(interior, (0, 2.86, 1.06), (0.15, 0.05, 0.16), vest)                     # harness / vest
-    for side in (-1, 1):
-        _cylinder(interior, Vec3(side * 0.19, 2.80, 1.18), Vec3(side * 0.17, 3.05, 0.86), 0.05, suit)  # arms
-        _cylinder(interior, Vec3(side * 0.09, 2.95, 0.80), Vec3(side * 0.09, 3.40, 0.78), 0.07, suit)  # legs
-    _cylinder(interior, Vec3(0, 2.82, 1.27), Vec3(0, 2.82, 1.33), 0.06, suit)      # neck
-    _sphere(interior, Vec3(0, 2.84, 1.44), 0.135, 0.15, (0.88, 0.88, 0.86, 1.0))   # helmet
-    _sphere(interior, Vec3(0, 2.95, 1.42), 0.10, 0.07, (0.06, 0.07, 0.09, 1.0))    # visor
-    _cylinder(interior, Vec3(0, 2.98, 1.36), Vec3(0, 3.05, 1.30), 0.04, (0.20, 0.22, 0.20, 1.0))  # oxygen mask
+        pts = []
+        for yy in (1.93, 2.4, 3.0, 3.6, 4.2, 4.7, 5.15):
+            ww = _canopy_half_width(yy)
+            pts.append(Vec3(side * (ww + 0.008), yy, _canopy_base(yy, ww) + 0.012))
+        for p0, p1 in zip(pts, pts[1:]):
+            _beam(frame, p0, p1, 0.022, frame_col)
+    from .cockpit import build_cockpit           # late import keeps the module graph simple
+    return build_cockpit(interior, glass, cockpit_rim)
 
 
 def _canopy_half_width(y):
@@ -457,16 +513,6 @@ def _beam(mb, a, b, r, color):
     r0 = [a + c for c in corners] + [a + corners[0]]
     r1 = [a + d * length + c for c in corners] + [a + d * length + corners[0]]
     mb.loft([r0, r1], color, smooth=False)
-
-
-def _sphere(mb, center, r, rz, color):
-    rings = []
-    for k in range(1, 8):
-        a = -math.pi / 2 + math.pi * k / 8
-        rings.append([Vec3(center.x + math.cos(t) * math.cos(a) * r, center.y + math.sin(t) * math.cos(a) * r,
-                           center.z + math.sin(a) * rz) for t in (2 * math.pi * j / 14 for j in range(15))])
-    rings = [[Vec3(center.x, center.y, center.z - rz)] * 15] + rings + [[Vec3(center.x, center.y, center.z + rz)] * 15]
-    mb.loft(rings, color)
 
 
 def _cylinder(mb, a, b, r, color, segments=8):
@@ -650,7 +696,7 @@ def build_detailed_f16():
         x = v.x * ca - v.z * sa
         z = v.x * sa + v.z * ca
         return Vec3(x, v.y, z) if is_normal else Vec3(x + 0.55, v.y, z)
-    for a, b, c, na, nb, nc in vent.tris:
+    for a, b, c, na, nb, nc, _fx in vent.tris:
         half.tri(tilt(a), tilt(b), tilt(c), tilt(na, True), tilt(nb, True), tilt(nc, True))
     _speedbrakes(right_parts)
     pm.extend(half)
@@ -674,14 +720,15 @@ def build_detailed_f16():
     pm.cap(rings[-1], Vec3(0, -7.25, 0.80), Vec3(0, -1, 0))
 
     _nozzle(plain)
-    _canopy(glass, frame, interior)
+    cockpit_panels, cockpit_screens = _canopy(glass, frame, interior)
     _details(plain)
     _formation_lights(lights)
     plain.extend(frame)
     plain.extend(interior)
 
     out = dict(skin=pm.build("f16_skin"), plain=plain.build("f16_details"), glass=glass.build("f16_canopy"),
-               lights=lights.build("f16_lights"), parts=[])
+               lights=lights.build("f16_lights"), cockpit=cockpit_panels.build("f16_cockpit"),
+               screens=cockpit_screens.build("f16_screens"), parts=[])
     for part in parts:
         p0, p1 = part["p0"], part["p1"]
         q = _hinge_frame(p0, p1)
@@ -907,15 +954,17 @@ def livery_texture(name):
         c1, r1 = quad(Y1, 0.8)
         p.fill_rect(c0, r0, c1, r1, L["radome"])
 
-    panel = (0.32, 0.34, 0.36)
-    alpha = 0.32
+    panel = (0.30, 0.32, 0.34)
+    alpha = 0.17
     # --- panel lines: fuselage stations
-    stations = (6.0, 5.4, 4.8, 2.0, 1.2, 0.4, -0.5, -1.4, -2.3, -3.2, -4.0, -4.8, -5.6, -6.4)
-    for y in stations:
+    # (station, side view z range) - short, staggered seams instead of hoops around the whole body
+    stations = ((6.0, -0.30, 0.55), (4.8, -0.45, 0.45), (1.2, -0.20, 0.50), (-0.5, 0.05, 0.62), (-2.3, -0.35, 0.40),
+                (-4.0, -0.10, 0.62), (-5.6, -0.30, 0.50))
+    for y, za, zb in stations:
         for quad in (p.top, p.bottom):
-            p.line(quad(-1.2, y), quad(1.2, y), panel, 1.5, alpha)
+            p.line(quad(-0.55, y), quad(0.55, y), panel, 1.3, alpha)
         for quad in (p.right, p.left):
-            p.line(quad(y, -1.3), quad(y, 1.0), panel, 1.5, alpha)
+            p.line(quad(y, za), quad(y, zb), panel, 1.3, alpha)
     for x in (-0.75, -0.38, 0.38, 0.75):
         for quad in (p.top, p.bottom):
             p.line(quad(x, -6.9), quad(x, 1.8), panel, 1.4, alpha * 0.8)
@@ -989,6 +1038,11 @@ def livery_texture(name):
     p.fill_rect(c0, r0, c1, r1, (0.22, 0.23, 0.24), 0.9)
     for y in (0.95, 1.35, 1.75):
         p.line(p.top(-0.05, y), p.top(0.05, y + 0.25), (0.92, 0.92, 0.9), 2.0, 0.8)
+
+    # cockpit tub grey (the tub faces of the skin all sample this spot)
+    c0, r0 = p.top(TUB_UV_SPOT[0] - 0.15, TUB_UV_SPOT[1] - 0.15)
+    c1, r1 = p.top(TUB_UV_SPOT[0] + 0.15, TUB_UV_SPOT[1] + 0.15)
+    p.fill_rect(c0, r0, c1, r1, (0.15, 0.16, 0.17))
 
     # weathering: subtle noise + darker panel-to-panel tones
     noise = rng.normal(0.0, 0.012, (TEX // 8, TEX // 8, 1)).astype(np.float32)
@@ -1075,11 +1129,20 @@ def build_f16_detailed(livery="viper"):
     glass.setTransparency(TransparencyAttrib.MAlpha)
     glass.setDepthWrite(False)
     glass.setBin("transparent", 5)
-    glass.setTwoSided(True)
+    glass.setTwoSided(False)               # invisible from inside: the view out of the cockpit stays clear
     stage = TextureStage("reflection")
     stage.setMode(TextureStage.MAdd)
     glass.setTexture(stage, reflection_texture())
     glass.setTexGen(stage, TexGenAttrib.MEyeSphereMap)
+    from .cockpit import cockpit_texture
+    ctex = cockpit_texture()
+    cockpit = g["cockpit"].copyTo(root)
+    cockpit.setMaterial(_material(10.0, 0.08))
+    screens = g["screens"].copyTo(root)
+    screens.setLightOff(1)
+    if ctex is not None:
+        cockpit.setTexture(ctex)
+        screens.setTexture(ctex)
     for part in g["parts"]:
         pivot = root.attachNewNode("part_" + part["name"])
         pivot.setPos(part["pos"])

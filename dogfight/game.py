@@ -309,7 +309,7 @@ class DogfightApp:
             self._on_event(kind, data)
 
         self.cam.update(dt if not st.paused else 0.0, self.player, zoom=self.input.key("z"))
-        self.scene.hide_player = self.cam.cockpit and self.player.alive
+        self.scene.cockpit_view = self.cam.cockpit and self.player.alive
         self.scene.update(dt if not st.paused else 0.0, self.player)
         if st.paused and not self.help.visible:
             st.banner, st.sub_banner = "SZÜNET", "P: folytatás   Esc: kilépés   H: súgó"

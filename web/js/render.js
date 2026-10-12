@@ -13,7 +13,12 @@ function geom(g) {
   geo.setAttribute('position', new THREE.BufferAttribute(b64ToArray(g.pos, Float32Array), 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(b64ToArray(g.nrm, Float32Array), 3));
   if (g.uv) geo.setAttribute('uv', new THREE.BufferAttribute(b64ToArray(g.uv, Float32Array), 2));
-  if (g.col) geo.setAttribute('color', new THREE.BufferAttribute(b64ToArray(g.col, Float32Array), 4));
+  if (g.col) {
+    // the vertex colours were picked for Panda3D's non gamma-correct pipeline: convert sRGB -> linear
+    const col = b64ToArray(g.col, Float32Array);
+    for (let i = 0; i < col.length; i++) if (i % 4 !== 3) col[i] = Math.pow(col[i], 2.2);
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
+  }
   geo.setIndex(new THREE.BufferAttribute(b64ToArray(g.idx, Uint32Array), 1));
   geo.computeBoundingSphere();
   return geo;
@@ -58,14 +63,15 @@ export class Models {
     this.tex = textures;
     this.geo = {
       skin: geom(data.skin), plain: geom(data.plain), glass: geom(data.glass), lights: geom(data.lights),
-      gear: geom(data.gear), missiles: { 'AIM-9M': geom(data.missiles['AIM-9M']), 'AIM-120A': geom(data.missiles['AIM-120A']) },
+      cockpit: geom(data.cockpit), screens: geom(data.screens), gear: geom(data.gear), missiles: { 'AIM-9M': geom(data.missiles['AIM-9M']), 'AIM-120A': geom(data.missiles['AIM-120A']) },
     };
     this.parts = data.parts.map((p) => ({ ...p, geo: geom(p.geom) }));
     this.env = this.makeEnv();
     this.mat = {
-      plain: new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.55 }),
+      plain: new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.2, roughness: 0.6 }),
+      // front faces only: from inside the cockpit the canopy does not fog the view
       glass: new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, metalness: 0.9, roughness: 0.05,
-        envMap: this.env, envMapIntensity: 1.6, side: THREE.DoubleSide, depthWrite: false }),
+        envMap: this.env, envMapIntensity: 1.2, side: THREE.FrontSide, depthWrite: false }),
       lights: new THREE.MeshBasicMaterial({ vertexColors: true }),
       missile: new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.45 }),
     };
@@ -73,8 +79,13 @@ export class Models {
     for (const name of ['viper', 'aggressor']) {
       const t = textures[name];
       t.anisotropy = 8; t.encoding = THREE.sRGBEncoding;
-      this.skin[name] = new THREE.MeshStandardMaterial({ map: t, metalness: 0.25, roughness: 0.52, envMap: this.env, envMapIntensity: 0.6 });
+      this.skin[name] = new THREE.MeshStandardMaterial({ map: t, color: 0xe0e0e0, metalness: 0.12, roughness: 0.62, envMap: this.env, envMapIntensity: 0.35 });
     }
+    const ct = textures.cockpit;
+    ct.anisotropy = 8; ct.encoding = THREE.sRGBEncoding;
+    this.mat.cockpit = new THREE.MeshStandardMaterial({ map: ct, metalness: 0.1, roughness: 0.75 });
+    this.mat.screens = new THREE.MeshBasicMaterial({ map: ct });
+    this.eye = data.eye;
     this.flameGeo = new THREE.ConeGeometry(0.46, 1, 18, 1, true).rotateX(Math.PI).translate(0, -0.5, 0);
     this.flameCoreGeo = new THREE.ConeGeometry(0.28, 0.55, 14, 1, true).rotateX(Math.PI).translate(0, -0.275, 0);
     this.flameMat = new THREE.MeshBasicMaterial({ color: 0xff8a3c, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -102,6 +113,8 @@ export class Models {
     add_(this.geo.skin, this.skin[livery]);
     add_(this.geo.plain, this.mat.plain);
     add_(this.geo.lights, this.mat.lights);
+    add_(this.geo.cockpit, this.mat.cockpit);
+    add_(this.geo.screens, this.mat.screens);
     const glass = add_(this.geo.glass, this.mat.glass);
     glass.renderOrder = 2;
     const parts = {};
@@ -217,6 +230,11 @@ export class SceneView {
     const hemi = new THREE.HemisphereLight(0xbcd2f0, 0x4a5236, 0.95);
     hemi.position.set(0, 0, 1);
     scene.add(hemi);
+    // own aircraft in cockpit view: layer 1, drawn in a second pass with a tiny near plane
+    sun.layers.enable(1); hemi.layers.enable(1);
+    this.cockpitCam = new THREE.PerspectiveCamera(70, 16 / 9, 0.03, 400);
+    this.cockpitCam.up.set(0, 0, 1);
+    this.cockpitCam.layers.set(1);
     this.glowTex = softTexture(64, 2.2);
     this.smoke = new Particles(scene, softTexture(64, 1.4), false, 2500);
     this.fire = new Particles(scene, this.glowTex, true, 1200);
@@ -229,7 +247,7 @@ export class SceneView {
     this.tracers = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.tracers.frustumCulled = false;
     scene.add(this.tracers);
-    this.time = 0; this.hidePlayer = null;
+    this.time = 0; this.cockpitView = false;
   }
 
   buildSky() {
@@ -478,9 +496,9 @@ export class SceneView {
       s.position.copy(p); s.scale.set(0.8, 0.8, 1); root.add(s); return s;
     });
     const strobe = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false }));
-    strobe.position.set(0, -5.85, 3.8); strobe.scale.set(2, 2, 1); root.add(strobe);
+    strobe.position.set(0, -5.85, 3.8); strobe.scale.set(1.3, 1.3, 1); root.add(strobe);
     this.scene.add(root);
-    v = { root, stores, gear, flame, strobe, lamps, trail: 0, phase: Math.random() * 1.2 };
+    v = { root, stores, gear, flame, strobe, lamps, trail: 0, phase: Math.random() * 1.2, layer: 0 };
     this.visuals.set(ac, v);
     return v;
   }
@@ -490,9 +508,11 @@ export class SceneView {
     for (const ac of w.aircraft) {
       present.add(ac);
       const v = this.visualFor(ac);
-      const visible = !ac.crashed && !(this.hidePlayer && ac === player);
+      const visible = !ac.crashed;
       v.root.visible = visible;
       if (!visible) continue;
+      const layer = this.cockpitView && ac === player ? 1 : 0;
+      if (v.layer !== layer) { v.root.traverse((o) => o.layers.set(layer)); v.layer = layer; }
       v.root.position.copy(ac.pos); v.root.quaternion.copy(ac.quat);
       for (const st of ac.stations) { const m = v.stores.get(st.number); if (m) m.visible = st.loaded; }
       v.gear.visible = ac.fm.gearPos > 0.03; v.gear.scale.z = Math.max(ac.fm.gearPos, 0.03);
@@ -552,6 +572,23 @@ export class SceneView {
     const scale = this.renderer.domElement.height / (2 * Math.tan(this.camera.fov * DEG / 2));
     this.smoke.uniforms.scale.value = scale; this.fire.uniforms.scale.value = scale;
     this.sky.position.copy(this.camera.position);
+  }
+  render() {
+    const r = this.renderer, cam = this.camera;
+    r.autoClear = true;
+    r.render(this.scene, cam);
+    if (!this.cockpitView) return;
+    const cc = this.cockpitCam;
+    cc.position.copy(cam.position); cc.quaternion.copy(cam.quaternion);
+    if (cc.fov !== cam.fov || cc.aspect !== cam.aspect) { cc.fov = cam.fov; cc.aspect = cam.aspect; cc.updateProjectionMatrix(); }
+    cc.updateMatrixWorld();
+    const bg = this.scene.background;
+    this.scene.background = null;              // a colour background would force a clear of pass 1
+    r.autoClear = false;
+    r.clearDepth();
+    r.render(this.scene, cc);
+    r.autoClear = true;
+    this.scene.background = bg;
   }
   aircraftEffects(ac, v, dt) {
     if (ac.crashed) return;
