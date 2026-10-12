@@ -87,13 +87,22 @@ class Input {
       this.held.add(name);
     });
     addEventListener('keyup', (e) => { const n = this.codeName.get(e.code) || Input.name(e); this.held.delete(n); this.codeName.delete(e.code); });
-    addEventListener('blur', () => { this.held.clear(); this.codeName.clear(); this.mouse = [false, false, false]; });
+    const releaseAll = () => { this.held.clear(); this.codeName.clear(); this.mouse = [false, false, false]; };
+    addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', releaseAll);
+    document.addEventListener('pointerlockchange', releaseAll);
+    // a lost Shift key-up (Windows Sticky Keys popup, alt-tab...) would leave the throttle (afterburner)
+    // running up forever: every key and mouse event carries the real Shift state, so resync from it
+    const syncShift = (e) => { if (!e.shiftKey) this.held.delete('shift'); };
+    addEventListener('keydown', syncShift, true);
+    addEventListener('mousedown', syncShift, true);
     el.addEventListener('mousedown', (e) => {
       if (e.button === 1) e.preventDefault();          // middle button: no autoscroll
       this.mouse[e.button] = true; if (this.handlers.mousedown) this.handlers.mousedown(e);
     });
     addEventListener('mouseup', (e) => { this.mouse[e.button] = false; });
     addEventListener('mousemove', (e) => {
+      syncShift(e);
       this.dx += e.movementX || 0; this.dy += e.movementY || 0;
       const r = el.getBoundingClientRect();
       this.mx = (e.clientX - r.left) / r.width * 2 - 1; this.my = (e.clientY - r.top) / r.height * 2 - 1;
@@ -227,6 +236,11 @@ class Game {
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
     if (k === 'Enter' || k === 'NumpadEnter') { this.respawn(); return; }
     if (k === 'm') { this.hud.markers = !this.hud.markers; return; }
+    if (k === 'z' && this.canAct() && this.player.controls.throttle > 1) {
+      this.player.controls.throttle = 1;                     // one tap of Z: afterburner off, 100 % dry
+      this.hud.message('UTÁNÉGETŐ KI', 'info', 1.2);
+      return;
+    }
     if (k === 'v') { this.cam.cockpit = !this.cam.cockpit; return; }
     if (!this.canAct()) return;
     const p = this.player, msg = (t, l = 'info', d = 1.5) => this.hud.message(t, l, d);

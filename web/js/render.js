@@ -240,6 +240,7 @@ export class SceneView {
     this.fire = new Particles(scene, this.glowTex, true, 1200);
     this.visuals = new Map(); this.missileVis = new Map();
     this.buildSky(); this.buildSea(); this.buildTerrain(); this.buildClouds(); this.buildAirfield();
+    this.warmup = true;            // first update(): compile every shader once, so nothing stalls later
     const tg = new THREE.BufferGeometry();
     this.tracerPos = new Float32Array(6 * 600); this.tracerCol = new Float32Array(6 * 600);
     tg.setAttribute('position', new THREE.BufferAttribute(this.tracerPos, 3).setUsage(THREE.DynamicDrawUsage));
@@ -573,7 +574,18 @@ export class SceneView {
     this.smoke.uniforms.scale.value = scale; this.fire.uniforms.scale.value = scale;
     this.sky.position.copy(this.camera.position);
   }
+  // Shaders are compiled the first time a material is drawn. The afterburner flame, missiles in the air and
+  // the cockpit pass would otherwise compile in the middle of the game and freeze it for a moment.
+  compileAll() {
+    const shown = [];
+    this.scene.traverse((o) => { if (!o.visible) { shown.push(o); o.visible = true; } });
+    for (const layer of [0, 1]) { this.camera.layers.enable(layer); }
+    this.renderer.compile(this.scene, this.camera);
+    this.camera.layers.set(0);
+    for (const o of shown) o.visible = false;
+  }
   render() {
+    if (this.warmup) { this.warmup = false; this.compileAll(); }
     const r = this.renderer, cam = this.camera;
     r.autoClear = true;
     r.render(this.scene, cam);
