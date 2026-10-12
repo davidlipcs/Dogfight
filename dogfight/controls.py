@@ -5,11 +5,13 @@ import math
 from panda3d.core import KeyboardButton, MouseButton, Vec3
 
 from .ai.steering import steer_towards
+from .mathutil import quat_look
 
 THROTTLE_RATE = 0.40          # per second while Shift / Ctrl is held (after the first 5 % step)
 THROTTLE_STEP = 0.05
 MAX_AB = 1.1
 HOLD_DELAY = 0.3
+PLAYER_G = 0.85              # instructor G limit for the player (fraction of 9 G)
 
 
 class PlayerPilot:
@@ -26,13 +28,22 @@ class PlayerPilot:
     def think(self, world):
         pass
 
+    @property
+    def manual(self):
+        return self.pitch is not None or self.roll is not None
+
     def fly(self, dt, world):
         c = self.ac.controls
-        steer_towards(self.ac.fm, self.aim, c)
-        if self.pitch is not None:
-            c.pitch = self.pitch
-        if self.roll is not None:
-            c.roll = self.roll
+        fm = self.ac.fm
+        if self.manual:
+            # keyboard flying (like War Thunder): the instructor lets go; an axis without a key holds its
+            # attitude instead of fighting the pilot
+            c.pitch = self.pitch if self.pitch is not None else 0.0
+            c.roll = self.roll if self.roll is not None else max(-1.0, min(1.0, -fm.omega.y * 0.5))
+            c.yaw = self.yaw if self.yaw is not None else 0.0
+            return
+        # the instructor keeps a little G margin (~7.6 G) against blackout; S pulls the full 9 G
+        steer_towards(fm, self.aim, c, max_g_frac=PLAYER_G)
         if self.yaw is not None:
             c.yaw = self.yaw
 
@@ -116,6 +127,8 @@ class InputReader:
         pilot.pitch = self.axis("s", "w")      # S = nose up (pull), W = nose down (push)
         pilot.roll = self.axis("d", "a")
         pilot.yaw = self.axis("e", "q")
+        if pilot.manual:
+            cam.aim = quat_look(ac.forward)      # the mouse aim point rides on the nose while flying with keys
         c = ac.controls
         self._throttle(dt, c)
         c.airbrake = self.key("b")

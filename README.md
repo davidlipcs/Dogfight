@@ -92,7 +92,7 @@ piros jel a rakétán a távolsággal és a becsapódásig hátralévő idővel,
 | Billentyű | Funkció |
 |---|---|
 | **Egér** | War Thunder-féle egeres célzás: a gép a fehér kör felé repül |
-| S / W | orr fel / orr le (magassági kormány kézi felülbírálása) |
+| S / W | orr fel / orr le kézzel: amíg nyomod, az egeres segítő elengedi a gépet, a célzókör az orron marad (mint a War Thunderben); az S a teljes 9 G-t is kihúzza, az egeres segítő ~7,6 G-nél megáll |
 | A / D, Q / E | csűrő, oldalkormány kézi felülbírálása |
 | Shift / Ctrl (böngészőben Z is) | gáz fel / le: koppintás = 5%, tartva folyamatos. 100%-nál (MIL) megáll, ott még egy **Shift** = **utánégető**; lefelé az első nyomás kikapcsolja |
 | **G** | futómű ki / be |

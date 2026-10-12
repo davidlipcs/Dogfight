@@ -302,6 +302,8 @@ class Game {
     this.pilot.pitch = inp.axis('s', 'w');      // S = nose up (pull), W = nose down (push)
     this.pilot.roll = inp.axis('d', 'a');
     this.pilot.yaw = inp.axis('e', 'q');
+    // flying with the keys: the mouse aim point rides on the nose, so letting go does not yank the jet back
+    if (this.pilot.manual) cam.aim = qlook(p.forward);
     this.throttleInput(dt, inp.key('shift'), inp.key('z') || inp.key('control'));
     c.airbrake = inp.key('b');
     c.brakes = inp.key('b') && p.onGround;

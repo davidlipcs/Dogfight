@@ -423,7 +423,7 @@ export class HUD {
   gEffects(ac, dt) {
     if (!ac || !ac.alive) { this.black = 0; this.red = 0; return; }
     const g = ac.fm.gLoad;
-    this.black = clamp((this.black || 0) + (g > 6.5 ? (g - 6.5) * 0.11 : g < 5 ? -0.45 : 0) * dt, 0, 1);
+    this.black = clamp((this.black || 0) + (g > 7.5 ? (g - 7.5) * 0.15 : g < 6.5 ? -0.4 : 0) * dt, 0, 1);
     this.red = clamp((this.red || 0) + (g < -1.8 ? (-g - 1.8) * 0.35 : -0.6) * dt, 0, 1);
     const gfx = this.g, w = this.w, h = this.h, R = Math.hypot(w, h) / 2;
     for (const [lvl, rgb] of [[this.black, '0,0,0'], [this.red, '150,0,0']]) {

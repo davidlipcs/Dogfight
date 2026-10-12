@@ -65,32 +65,45 @@ def steer_towards(fm, direction, controls, max_g_frac=1.0, precision=1.0):
         perp = safe_normalized(perp * (1.0 - behind) + flat * max(behind, 0.01), flat)
     # PD: the flight path already swinging towards the target means "ease off"
     closing_rate = fm.accel.dot(perp) / speed
-    rate = clamp(off * 1.3 * precision - 0.6 * closing_rate * (1.0 - behind), 0.0, 1.2)
+    rate = clamp(off * 0.9 * precision - 0.5 * closing_rate * (1.0 - behind), 0.0, 1.0)
     accel = perp * (rate * speed) + Vec3(0, 0, G)
     accel -= path * accel.dot(path)                     # only lift can act sideways
-    a_side = accel.dot(side)
-    a_lift = accel.dot(lift)
-    roll_err = math.atan2(a_side, a_lift)               # roll needed to put lift on accel
-    nz = accel.length() / G
-    if abs(roll_err) > 100.0 * DEG and nz < 2.0:
-        # small correction "below": push a little instead of rolling inverted
-        roll_err = _wrap(roll_err + math.pi)
-        nz = -nz
-    controls.roll = clamp(roll_err * 2.6 - fm.omega.y * 0.25, -1.0, 1.0)
+    a_g = accel.length() / G
+    roll_pull = math.atan2(accel.dot(side), accel.dot(lift))   # roll needed to put lift on accel
+    roll_push = _wrap(roll_pull + math.pi)
+    # pull (lift towards the target) or push (negative G)?  Modest corrections below are pushed (the push
+    # saturates at about -2.5 G) instead of rolling inverted; hysteresis stops it flip-flopping.
+    push_ok = behind == 0.0 and (off < 40.0 * DEG or (a_g <= -spec.g_min * 0.85 and off < 60.0 * DEG))
+    cost_pull = abs(roll_pull)
+    cost_push = abs(roll_push) + 25.0 * DEG
+    push = getattr(fm, "steer_push", False) and push_ok
+    if push_ok and ((cost_pull + 20.0 * DEG < cost_push) if push else (cost_push + 20.0 * DEG < cost_pull)):
+        push = not push
+    fm.steer_push = push
+    roll_err = roll_push if push else roll_pull
+    # small corrections: keep the bank small, the rudder does the rest (War Thunder instructor feel)
+    if off < 45.0 * DEG and behind == 0.0:
+        cur = bank_angle(quat)
+        lim = (20.0 + 160.0 * smoothstep(4.0 * DEG, 40.0 * DEG, off)) * DEG
+        base = math.pi if (push and abs(cur) > math.pi / 2) else 0.0
+        want = _wrap(cur + roll_err - base)
+        roll_err = _wrap(clamp(want, -lim, lim) + base - cur)
+    controls.roll = clamp(roll_err * 1.8 - fm.omega.y * 0.3, -1.0, 1.0)
 
-    # pull only as much as the lift vector is already aligned
-    align = math.cos(clamp(roll_err, -math.pi / 2, math.pi / 2))
-    nz = nz * align if nz > 0 else nz
-    nz = clamp(nz, spec.g_min, spec.g_max * max_g_frac)
+    # load factor along the lift direction we roll to, applied as the roll gets there
+    target = lift * math.cos(roll_err) + side * math.sin(roll_err)
+    nz = accel.dot(target) / G
+    nz = 1.0 + (nz - 1.0) * max(0.0, math.cos(clamp(roll_err, -math.pi / 2, math.pi / 2)))
+    nz = clamp(nz, spec.g_min * 0.85, spec.g_max * max_g_frac)
     if nz >= 1.0:
         stick = (nz - 1.0) / (spec.g_max - 1.0)
     else:
         stick = (nz - 1.0) / (1.0 - spec.g_min)
     controls.pitch = clamp(stick, -1.0, 1.0)
 
-    # rudder for the last couple of degrees (gun tracking)
-    fine = 1.0 - smoothstep(1.0 * DEG, 4.0 * DEG, off)
-    controls.yaw = clamp(math.atan2(d.dot(side), d.dot(path)) * 5.0 * precision, -1.0, 1.0) * fine
+    # rudder for small corrections (gun tracking, flat turns)
+    fine = 1.0 - smoothstep(3.0 * DEG, 12.0 * DEG, off)
+    controls.yaw = clamp(math.atan2(d.dot(side), d.dot(path)) * 4.0 * precision, -1.0, 1.0) * fine
 
     if fm.on_ground:
         # taxi / take-off roll: wings stay level, steer the nose wheel towards the aim heading

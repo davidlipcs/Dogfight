@@ -530,7 +530,7 @@ class HUD:
             self.g_black = self.g_red = 0.0
         else:
             g = ac.fm.g_load
-            rate = (g - 6.5) * 0.11 if g > 6.5 else (-0.45 if g < 5.0 else 0.0)
+            rate = (g - 7.5) * 0.15 if g > 7.5 else (-0.4 if g < 6.5 else 0.0)
             self.g_black = clamp(self.g_black + rate * dt, 0.0, 1.0)
             rate = (-g - 1.8) * 0.35 if g < -1.8 else -0.6
             self.g_red = clamp(self.g_red + rate * dt, 0.0, 1.0)

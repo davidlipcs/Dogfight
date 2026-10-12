@@ -4,6 +4,11 @@ import { ARH } from './specs.js';
 import { STT, gunLead } from './weapons.js';
 import { AI_DT } from './sim.js';
 
+// Mouse-aim "instructor" (War Thunder style): swings the flight path towards `direction`.
+//  * the demanded turn rate grows with the angle to the target, so small corrections are gentle
+//  * small corrections are flown with little bank plus rudder instead of a big roll
+//  * a target a bit below is reached by pushing (negative G), not by rolling inverted; pull/push is chosen
+//    with hysteresis, so the aircraft never flip-flops between the two
 export function steerTowards(fm, direction, c, maxGFrac = 1, precision = 1) {
   const s = fm.spec, q = fm.quat, right = fm.right, up = fm.up, fwd = fm.forward;
   const path = fm.speed > 30 ? norm(fm.vel, fwd) : fwd;
@@ -23,20 +28,38 @@ export function steerTowards(fm, direction, c, maxGFrac = 1, precision = 1) {
     flat = mul(flat, sign >= 0 ? 1 : -1);
     perp = norm(add(mul(perp, 1 - behind), mul(flat, Math.max(behind, 0.01))), flat);
   }
+  // turn rate demand (PD: a path already swinging towards the target eases off)
   const closingRate = dot(fm.accel, perp) / speed;
-  const rate = clamp(off * 1.3 * precision - 0.6 * closingRate * (1 - behind), 0, 1.2);
+  const rate = clamp(off * 0.9 * precision - 0.5 * closingRate * (1 - behind), 0, 1.0);
   const acc = add(mul(perp, rate * speed), V(0, 0, G));
   acc.addScaledVector(path, -dot(acc, path));
-  let rollErr = Math.atan2(dot(acc, side), dot(acc, lift));
-  let nz = len(acc) / G;
-  if (Math.abs(rollErr) > 100 * DEG && nz < 2) { rollErr = wrap(rollErr + Math.PI); nz = -nz; }
-  c.roll = clamp(rollErr * 2.6 - fm.omega.y * 0.25, -1, 1);
-  const align = Math.cos(clamp(rollErr, -Math.PI / 2, Math.PI / 2));
-  if (nz > 0) nz *= align;
-  nz = clamp(nz, s.gMin, s.gMax * maxGFrac);
+  const aG = len(acc) / G;
+  const rollPull = Math.atan2(dot(acc, side), dot(acc, lift)), rollPush = wrap(rollPull + Math.PI);
+  // pull (lift towards the target) or push (lift away, negative G)?
+  // modest corrections below are always pushed (the push saturates at about -2.5 G); bigger ones only if
+  // the push needed is within limits
+  const pushOk = behind === 0 && (off < 40 * DEG || (aG <= -s.gMin * 0.85 && off < 60 * DEG));
+  const costPull = Math.abs(rollPull), costPush = Math.abs(rollPush) + 25 * DEG;
+  let push = !!fm.steerPush && pushOk;
+  if (pushOk && (push ? costPull + 20 * DEG < costPush : costPush + 20 * DEG < costPull)) push = !push;
+  fm.steerPush = push;
+  let rollErr = push ? rollPush : rollPull;
+  // small corrections: keep the bank small (the rudder below does the rest)
+  if (off < 45 * DEG && behind === 0) {
+    const cur = bankAngle(q), lim = (20 + 160 * smoothstep(4 * DEG, 40 * DEG, off)) * DEG;
+    const base = push && Math.abs(cur) > Math.PI / 2 ? Math.PI : 0;        // inverted flight: limit around 180
+    const want = wrap(cur + rollErr - base);
+    rollErr = wrap(clamp(want, -lim, lim) + base - cur);
+  }
+  // load factor along the lift direction we are rolling to, applied as the roll gets there
+  const target = add(mul(lift, Math.cos(rollErr)), mul(side, Math.sin(rollErr)));
+  let nz = dot(acc, target) / G;
+  nz = 1 + (nz - 1) * Math.max(0, Math.cos(clamp(rollErr, -Math.PI / 2, Math.PI / 2)));
+  nz = clamp(nz, s.gMin * 0.85, s.gMax * maxGFrac);
+  c.roll = clamp(rollErr * 1.8 - fm.omega.y * 0.3, -1, 1);
   c.pitch = clamp(nz >= 1 ? (nz - 1) / (s.gMax - 1) : (nz - 1) / (1 - s.gMin), -1, 1);
-  const fine = 1 - smoothstep(1 * DEG, 4 * DEG, off);
-  c.yaw = clamp(Math.atan2(dot(d, side), dot(d, path)) * 5 * precision, -1, 1) * fine;
+  const fine = 1 - smoothstep(3 * DEG, 12 * DEG, off);
+  c.yaw = clamp(Math.atan2(dot(d, side), dot(d, path)) * 4 * precision, -1, 1) * fine;
   if (fm.onGround) {
     const he = wrap(Math.atan2(d.x, d.y) - Math.atan2(fwd.x, fwd.y));
     c.roll = 0; c.yaw = clamp(he * 3, -1, 1);
@@ -45,14 +68,24 @@ export function steerTowards(fm, direction, c, maxGFrac = 1, precision = 1) {
   return off;
 }
 
+const PLAYER_G = 0.85;
+
 export class PlayerPilot {
   constructor(ac) { this.ac = ac; this.aim = ac.forward.clone(); this.pitch = null; this.roll = null; this.yaw = null; ac.pilot = this; }
   think() {}
+  get manual() { return this.pitch !== null || this.roll !== null; }
   fly() {
-    const c = this.ac.controls;
-    steerTowards(this.ac.fm, this.aim, c);
-    if (this.pitch !== null) c.pitch = this.pitch;
-    if (this.roll !== null) c.roll = this.roll;
+    const c = this.ac.controls, fm = this.ac.fm;
+    if (this.manual) {
+      // keyboard flying (like War Thunder): the instructor lets go, the jet does exactly what the keys say;
+      // an axis without a key holds its attitude instead of fighting the pilot
+      c.pitch = this.pitch !== null ? this.pitch : 0;
+      c.roll = this.roll !== null ? this.roll : clamp(-fm.omega.y * 0.5, -1, 1);
+      c.yaw = this.yaw !== null ? this.yaw : 0;
+      return;
+    }
+    // the instructor keeps a little G margin (~7.6 G) so the pilot does not black out; S pulls the full 9 G
+    steerTowards(fm, this.aim, c, PLAYER_G);
     if (this.yaw !== null) c.yaw = this.yaw;
   }
 }
