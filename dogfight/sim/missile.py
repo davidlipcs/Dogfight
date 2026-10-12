@@ -339,3 +339,34 @@ def launch_zone(spec, launch_speed, altitude, target_closing):
         return max(0.0, x + closure * t)
 
     return fly(target_closing), fly(-300.0)
+
+
+def flyout_time(spec, launch_speed, altitude, distance):
+    """Seconds a missile launched now needs to fly ``distance`` metres (same 1D model); None = never."""
+    mass = spec.mass
+    v = launch_speed
+    x = 0.0
+    t = 0.0
+    dt = 0.1
+    path = distance * (1.08 if spec.loft else 1.0)
+    burn = spec.burn_time
+    while t < spec.guidance_time:
+        rho, a_sound = isa(altitude + (2500.0 * min(t / 20.0, 1.0) if spec.loft else 0.0))
+        thrust = 0.0
+        tt = t
+        for duration, th in spec.motor:
+            if tt < duration:
+                thrust = th
+                break
+            tt -= duration
+        if t < burn:
+            mass -= spec.propellant / burn * dt
+        drag = 0.5 * rho * v * v * spec.ref_area * interp_table(spec.cd_table, v / a_sound) * 1.15
+        v += (thrust - drag) / mass * dt
+        x += v * dt
+        t += dt
+        if x >= path:
+            return t
+        if v < 250.0 and t > burn:
+            return None
+    return None

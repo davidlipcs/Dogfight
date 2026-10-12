@@ -14,7 +14,7 @@ from panda3d.core import Point2, Point3, TextNode, Vec3
 
 from ..mathutil import DEG, angle_between, clamp, heading_deg, safe_normalized
 from ..sim.guns import gun_lead
-from ..sim.missile import launch_zone, time_to_impact
+from ..sim.missile import flyout_time, launch_zone, time_to_impact
 from ..sim.radar import ACM, STT
 from ..sim.specs import ARH, IR
 from .colors import AMBER, CYAN, DIM, ENEMY, GREEN, RED, WHITE
@@ -180,7 +180,6 @@ class HUD:
         if not self.show_markers:
             return
         c = self.canvas
-        radar = ac.radar
         for tgt in world.aircraft:
             if tgt is ac or not tgt.alive or tgt.team == ac.team:
                 continue
@@ -191,8 +190,9 @@ class HUD:
             if p is None:
                 continue
             x, y = p
-            if tgt is not radar.locked:
-                c.polyline([(x - 0.012, y + 0.03), (x + 0.012, y + 0.03), (x, y + 0.016)], ENEMY, closed=True)
+            if tgt is self._lock_target(ac, ac.selected_spec):
+                continue                       # drawn by the lock box
+            c.polyline([(x - 0.012, y + 0.03), (x + 0.012, y + 0.03), (x, y + 0.016)], ENEMY, closed=True)
             self.labels.text("%.1f" % (dist / 1000.0), x, y + 0.04, ENEMY, scale=0.026, align=TextNode.ACenter)
 
     def _weapons_symbols(self, ac, world, dt):
@@ -203,16 +203,10 @@ class HUD:
             tgt = radar.locked
             p = self.project(radar.track_pos)
             color = GREEN if radar.lost_time == 0 else AMBER
-            if p is not None:
-                c.rect(p[0], p[1], 0.03, 0.03, color)
-                rel = radar.track_pos - ac.pos
-                closure = -(radar.track_vel - ac.vel).dot(safe_normalized(rel))
-                self.labels.text("%.1f km" % (rel.length() / 1000.0), p[0] + 0.04, p[1] + 0.01, color, scale=0.028)
-                self.labels.text("Vc %+d" % (closure * 3.6), p[0] + 0.04, p[1] - 0.025, color, scale=0.028)
-                if radar.lost_time > 0:
-                    self.labels.text("MEM", p[0] - 0.04, p[1] + 0.04, AMBER, scale=0.028)
-            else:
-                self.edge_arrow(radar.track_pos, GREEN)
+            if p is None:
+                self.edge_arrow(radar.track_pos, color)
+            elif radar.lost_time > 0:
+                self.labels.text("MEM", p[0], p[1] - 0.07, AMBER, scale=0.03, align=TextNode.ACenter)
             # gun lead indicator
             if tgt is not None and (tgt.pos - ac.pos).length() < ac.spec.gun.max_lead_range:
                 aim_dir, tof = gun_lead(ac.pos, ac.vel, tgt.pos, tgt.vel, ac.spec.gun)
@@ -243,6 +237,7 @@ class HUD:
             if p is not None:
                 c.brackets(p[0], p[1], 0.03, DIM)
 
+        self._missile_paths(ac, world)
         spec = ac.selected_spec
         if spec is None:
             return
@@ -266,6 +261,104 @@ class HUD:
                             color = DIM
                         c.circle(p[0], p[1], radius, color, segments=40)
         self._dlz_bar(ac, spec, dt)
+        self._lock_box(ac, spec)
+
+    @staticmethod
+    def _lock_target(ac, spec):
+        """What the selected missile is locked on (IR seeker or radar STT), or None."""
+        seeker = ac.ir_seeker
+        if spec is not None and spec.guidance == IR and seeker.locked and not getattr(seeker.target, "is_flare", False):
+            return seeker.target
+        radar = ac.radar
+        if radar.mode == STT and radar.locked is not None and radar.locked.alive:
+            return radar.locked
+        return None
+
+    def _dashed(self, a, b, color, on=0.018, off=0.012):
+        c = self.canvas
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        length = math.hypot(dx, dy)
+        if length < 1e-6:
+            return
+        s = 0.0
+        while s < length:
+            e = min(s + on, length)
+            c.line(a[0] + dx * s / length, a[1] + dy * s / length, a[0] + dx * e / length, a[1] + dy * e / length, color)
+            s += on + off
+
+    def _lock_box(self, ac, spec):
+        """Big square around the locked aircraft and where a missile fired now would meet it."""
+        tgt = self._lock_target(ac, spec)
+        if tgt is None:
+            return
+        c = self.canvas
+        radar = ac.radar
+        pos = radar.track_pos if (radar.mode == STT and radar.locked is tgt and radar.track_pos is not None) else tgt.pos
+        rel = pos - ac.pos
+        dist = rel.length()
+        in_range = self._dlz is not None and spec is not None and spec.min_range < dist < self._dlz[0]
+        color = RED if in_range else GREEN
+        p = self.project(pos)
+        if spec is not None:
+            tt = flyout_time(spec, ac.speed, ac.pos.z, dist)
+            ip = pos
+            for _ in range(4):
+                if tt is None:
+                    break
+                ip = pos + tgt.vel * tt
+                tt = flyout_time(spec, ac.speed, ac.pos.z, (ip - ac.pos).length())
+            a = self.project(ac.pos + ac.forward * 25.0)
+            b = self.project(ip) if tt is not None else None
+            if a is not None and b is not None:
+                self._dashed(a, b, color)
+                if p is not None:
+                    self._dashed(p, b, ENEMY, 0.006, 0.008)
+                k = 0.014
+                c.line(b[0] - k, b[1] - k, b[0] + k, b[1] + k, color)
+                c.line(b[0] - k, b[1] + k, b[0] + k, b[1] - k, color)
+                c.circle(b[0], b[1], 0.02, color, segments=16)
+                self.labels.text("találat ~%d s" % round(tt), b[0] + 0.028, b[1] - 0.03, color, scale=0.026)
+        if p is None:
+            return
+        vfov = self.base.camLens.getFov()[1] * DEG
+        hs = clamp(7.0 / max(dist, 1.0) / math.tan(vfov / 2.0), 0.045, 0.25)
+        for off in (0.0, 0.004):                     # double line = thick box
+            c.rect(p[0], p[1], hs + off, hs + off, color)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                c.line(p[0] + sx * (hs + 0.008), p[1] + sy * hs, p[0] + sx * (hs + 0.02), p[1] + sy * hs, color)
+                c.line(p[0] + sx * hs, p[1] + sy * (hs + 0.008), p[0] + sx * hs, p[1] + sy * (hs + 0.02), color)
+        closure = -(tgt.vel - ac.vel).dot(safe_normalized(rel))
+        self.labels.text("LOCK  %s" % (spec.name if spec else ""), p[0] - hs, p[1] + hs + 0.025, color, scale=0.034)
+        self.labels.text("%.1f km   Vc %+d" % (dist / 1000.0, closure * 3.6), p[0] - hs, p[1] - hs - 0.04, color,
+                         scale=0.026)
+        note = None
+        if in_range:
+            if int(self.time * 4) % 2 == 0:
+                note = ("LŐHETSZ!  (Space)", RED, 0.04)
+        elif spec is not None and dist <= spec.min_range:
+            note = ("túl közel", AMBER, 0.028)
+        elif spec is not None and self._dlz is not None and dist >= self._dlz[0]:
+            note = ("még messze", AMBER, 0.028)
+        if note is not None:
+            self.labels.text(note[0], p[0], p[1] - hs - 0.085, note[1], scale=note[2], align=TextNode.ACenter)
+
+    def _missile_paths(self, ac, world):
+        """Own missiles in flight: marker on the missile and its path to the target."""
+        c = self.canvas
+        for m in world.missiles:
+            if m.shooter is not ac or not m.alive:
+                continue
+            mp = self.project(m.pos)
+            aim = m.guided_target.pos if m.guided_target is not None else m.est_pos
+            ap = self.project(aim) if aim is not None else None
+            if mp is not None and ap is not None:
+                self._dashed(mp, ap, CYAN, 0.01, 0.01)
+            if mp is not None:
+                c.diamond(mp[0], mp[1], 0.011, CYAN)
+                ttg = time_to_impact(m)
+                if ttg is not None and ttg < 99:
+                    self.labels.text("%.1f s" % ttg, mp[0] + 0.015, mp[1] + 0.015, CYAN, scale=0.024)
 
     def _dlz_bar(self, ac, spec, dt):
         radar = ac.radar

@@ -484,6 +484,23 @@ export function launchZone(spec, launchSpeed, altitude, closing) {
   return [fly(closing), fly(-300)];
 }
 
+// time a missile launched now needs to fly `range` metres (same 1-D fly-out model as the DLZ); null = never
+export function flyoutTime(spec, launchSpeed, altitude, range) {
+  let mass = spec.mass, v = launchSpeed, x = 0, t = 0;
+  const dt = 0.1, path = range * (spec.loft ? 1.08 : 1.0);
+  while (t < spec.guidanceTime) {
+    const [rho, aS] = isa(altitude + (spec.loft ? 2500 * Math.min(t / 20, 1) : 0));
+    let thrust = 0, tt = t;
+    for (const [d, th] of spec.motor) { if (tt < d) { thrust = th; break; } tt -= d; }
+    if (t < spec.burnTime) mass -= spec.propellant / spec.burnTime * dt;
+    const drag = 0.5 * rho * v * v * spec.refArea * interp(spec.cd, v / aS) * 1.15;
+    v += (thrust - drag) / mass * dt; x += v * dt; t += dt;
+    if (x >= path) return t;
+    if (v < 250 && t > spec.burnTime) return null;
+  }
+  return null;
+}
+
 // -------------------------------------------------------------------------- gun
 export const GUN_OFFSET = V(-0.75, 2.6, 0.55);
 export class Gun {

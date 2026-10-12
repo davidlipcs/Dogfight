@@ -1,7 +1,7 @@
 // HUD drawn on a 2D canvas over the WebGL view (port of dogfight/ui/hud.py + scopes.py).
 import { THREE, V, add, sub, mul, dot, len, norm, clamp, DEG, toLocal, xform, angleBetween, headingDeg } from './util.js';
 import { IR, ARH } from './specs.js';
-import { STT, ACM, OFF, SEARCH, gunLead, launchZone, timeToImpact } from './weapons.js';
+import { STT, ACM, OFF, SEARCH, gunLead, launchZone, timeToImpact, flyoutTime } from './weapons.js';
 
 const GREEN = 'rgba(107,255,133,0.95)', DIM = 'rgba(107,255,133,0.5)', AMBER = '#ffc840', RED = '#ff4d40',
   WHITE = 'rgba(245,245,245,0.95)', ENEMY = 'rgba(255,84,72,0.95)', CYAN = 'rgba(115,217,255,0.95)';
@@ -131,7 +131,8 @@ export class HUD {
       if (d > 25000) continue;
       const p = this.project(cam, t.pos);
       if (!p) continue;
-      if (t !== ac.radar.locked) this.poly([[p[0] - 8 * u, p[1] - 20 * u], [p[0] + 8 * u, p[1] - 20 * u], [p[0], p[1] - 10 * u]], ENEMY);
+      if (t === this.lockTarget(ac, ac.selectedSpec)) continue;      // drawn by the lock box
+      this.poly([[p[0] - 8 * u, p[1] - 20 * u], [p[0] + 8 * u, p[1] - 20 * u], [p[0], p[1] - 10 * u]], ENEMY);
       this.text((d / 1000).toFixed(1), p[0], p[1] - 30 * u, ENEMY, 11 * u + 2, 'center');
     }
   }
@@ -147,13 +148,8 @@ export class HUD {
     const u = this.u, r = ac.radar;
     if (r.mode === STT && r.trackPos) {
       const t = r.locked, p = this.project(cam, r.trackPos), col = r.lostTime === 0 ? GREEN : AMBER;
-      if (p) {
-        this.rect(p[0], p[1], 20 * u, 20 * u, col);
-        const rel = sub(r.trackPos, ac.pos), vc = -dot(sub(r.trackVel, ac.vel), norm(rel));
-        this.text(`${(len(rel) / 1000).toFixed(1)} km`, p[0] + 28 * u, p[1] - 8 * u, col, 11 * u + 2);
-        this.text(`Vc ${vc * 3.6 >= 0 ? '+' : ''}${Math.round(vc * 3.6)}`, p[0] + 28 * u, p[1] + 10 * u, col, 11 * u + 2);
-        if (r.lostTime > 0) this.text('MEM', p[0] - 28 * u, p[1] - 26 * u, AMBER, 11 * u + 2);
-      } else this.edgeArrow(cam, r.trackPos, GREEN);
+      if (!p) this.edgeArrow(cam, r.trackPos, col);
+      else if (r.lostTime > 0) this.text('MEM', p[0], p[1] + 40 * u, AMBER, 12 * u + 2, 'center');
       if (t && len(sub(t.pos, ac.pos)) < ac.spec.gun.maxLeadRange) {
         const [aim] = gunLead(ac.pos, ac.vel, t.pos, t.vel, ac.spec.gun);
         const d = len(sub(t.pos, ac.pos)), lp = this.project(cam, add(ac.pos, mul(aim, d)));
@@ -179,6 +175,7 @@ export class HUD {
       if (p) this.brackets(p[0], p[1], 20 * u, DIM);
     }
     const sp = ac.selectedSpec;
+    this.missilePaths(ac, world, cam);
     if (!sp) return;
     if (sp.guidance === IR && ac.irSeeker.axis) {
       const s = ac.irSeeker, p = this.project(cam, add(ac.pos, mul(s.axis, 2000)));
@@ -193,6 +190,83 @@ export class HUD {
       }
     }
     this.dlzBar(ac, sp, dt);
+    this.lockBox(ac, sp, cam);
+  }
+
+  // what the selected missile is locked on (radar STT or IR seeker), or null
+  lockTarget(ac, sp) {
+    if (sp && sp.guidance === IR && ac.irSeeker.locked && !ac.irSeeker.target.isFlare) return ac.irSeeker.target;
+    const r = ac.radar;
+    return r.mode === STT && r.locked && r.locked.alive ? r.locked : null;
+  }
+
+  // big square around the locked aircraft + where a missile fired now would meet it
+  lockBox(ac, sp, cam) {
+    const t = this.lockTarget(ac, sp);
+    if (!t) return;
+    const u = this.u, r = ac.radar;
+    const pos = r.mode === STT && r.locked === t && r.trackPos ? r.trackPos : t.pos;
+    const p = this.project(cam, pos);
+    const rel = sub(pos, ac.pos), d = len(rel);
+    const inRange = this.dlz && sp && d > sp.minRange && d < this.dlz[0];
+    const blink = Math.floor(this.time * 4) % 2 === 0;
+    const col = inRange ? RED : GREEN;
+    // predicted intercept point: where the target will be when a missile launched now reaches it
+    if (sp) {
+      let tt = flyoutTime(sp, ac.speed, ac.pos.z, d), ip = pos;
+      for (let i = 0; i < 4 && tt !== null; i++) {
+        ip = add(pos, mul(t.vel, tt));
+        tt = flyoutTime(sp, ac.speed, ac.pos.z, len(sub(ip, ac.pos)));
+      }
+      const a = this.project(cam, add(ac.pos, mul(ac.forward, 25))), b = tt !== null ? this.project(cam, ip) : null;
+      if (a && b) {
+        this.dashed(a[0], a[1], b[0], b[1], col, 10 * u, 7 * u);
+        if (p) this.dashed(p[0], p[1], b[0], b[1], ENEMY, 4 * u, 5 * u);
+        const k = 9 * u;
+        this.line(b[0] - k, b[1] - k, b[0] + k, b[1] + k, col); this.line(b[0] - k, b[1] + k, b[0] + k, b[1] - k, col);
+        this.circle(b[0], b[1], 13 * u, col);
+        this.text(`találat ~${tt.toFixed(0)} s`, b[0] + 18 * u, b[1] + 14 * u, col, 11 * u + 2);
+      }
+    }
+    if (!p) return;
+    // box sized to the target's wingspan on screen
+    const pxPerM = this.h / 2 / Math.tan(cam.fov * DEG / 2) / Math.max(d, 1);
+    const hs = clamp(7 * pxPerM, 26 * u, 140 * u);
+    const g = this.g, lw = g.lineWidth;
+    g.lineWidth = Math.max(2.5, 3 * u);
+    this.rect(p[0], p[1], hs, hs, col);
+    g.lineWidth = lw;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      // outer corner ticks make the box readable against bright clouds
+      this.line(p[0] + sx * (hs + 4 * u), p[1] + sy * hs, p[0] + sx * (hs + 12 * u), p[1] + sy * hs, col);
+      this.line(p[0] + sx * hs, p[1] + sy * (hs + 4 * u), p[0] + sx * hs, p[1] + sy * (hs + 12 * u), col);
+    }
+    const vc = -dot(sub(t.vel, ac.vel), norm(rel));
+    this.text(`LOCK  ${sp ? sp.name : ''}`, p[0] - hs, p[1] - hs - 14 * u, col, 13 * u + 3, 'left', 'Oswald, Impact, sans-serif');
+    this.text(`${(d / 1000).toFixed(1)} km   Vc ${vc * 3.6 >= 0 ? '+' : ''}${Math.round(vc * 3.6)}`, p[0] - hs, p[1] + hs + 14 * u, col, 11 * u + 2);
+    if (inRange && blink) this.text('LŐHETSZ!  (Space)', p[0], p[1] + hs + 34 * u, RED, 15 * u + 4, 'center', 'Oswald, Impact, sans-serif');
+    else if (!inRange && sp && d >= this.dlz?.[0]) this.text('még messze', p[0], p[1] + hs + 34 * u, AMBER, 12 * u + 2, 'center');
+    else if (!inRange && sp && d <= sp.minRange) this.text('túl közel', p[0], p[1] + hs + 34 * u, AMBER, 12 * u + 2, 'center');
+  }
+
+  // own missiles in flight: marker on the missile and its path to the target
+  missilePaths(ac, world, cam) {
+    const u = this.u;
+    for (const m of world.missiles) {
+      if (m.shooter !== ac || !m.alive) continue;
+      const mp = this.project(cam, m.pos);
+      const aim = m.guidedTarget ? m.guidedTarget.pos : m.estPos;
+      const ap = aim ? this.project(cam, aim) : null;
+      if (mp && ap) this.dashed(mp[0], mp[1], ap[0], ap[1], CYAN, 6 * u, 6 * u);
+      if (mp) {
+        this.poly([[mp[0], mp[1] - 7 * u], [mp[0] + 7 * u, mp[1]], [mp[0], mp[1] + 7 * u], [mp[0] - 7 * u, mp[1]]], CYAN);
+        const ttg = timeToImpact(m);
+        if (ttg !== null && ttg < 99) this.text(`${ttg.toFixed(1)} s`, mp[0] + 10 * u, mp[1] - 10 * u, CYAN, 11 * u + 2);
+      }
+    }
+  }
+  dashed(x1, y1, x2, y2, c, on, off) {
+    const g = this.g; g.save(); g.setLineDash([on, off]); this.line(x1, y1, x2, y2, c); g.restore();
   }
   dlzBar(ac, sp, dt) {
     const r = ac.radar;
