@@ -1,0 +1,182 @@
+<title>Dogfight F-16 Viper</title>
+<meta name="description" content="F-16C légiharc szimulátor a böngészőben">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: full-bleed WebGL view, HUD canvas on top, menus as a single cockpit-panel card centred over the scene.
+     Single dark look on purpose (a cockpit at dusk): Hill-gray panel, HUD phosphor green, master-caution amber. */
+  :root {
+    color-scheme: dark;
+    --ink: #0b1016;          /* behind the WebGL view */
+    --panel: rgba(20, 27, 34, 0.86);
+    --panel-edge: #3a4652;   /* FS 36118 gunship gray, darkened */
+    --text: #dfe6ea;
+    --muted: #93a1ab;
+    --hud: #6bff85;          /* HUD phosphor */
+    --caution: #ffc840;      /* master caution amber */
+    --display: "Oswald", "Arial Narrow", Impact, sans-serif;
+    --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  body { background: var(--ink); color: var(--text); font-family: var(--body); overflow: hidden; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  #hud { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #fps { position: fixed; right: 12px; bottom: 6px; font: 11px var(--mono); color: var(--muted); pointer-events: none; }
+  .screen { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+  .screen.dim { background: rgba(5, 9, 12, 0.55); }
+  .card {
+    width: min(560px, 100%); background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 6px; padding: 24px 26px; display: grid; gap: 16px;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px);
+  }
+  .eyebrow { font: 600 12px var(--mono); letter-spacing: 0.18em; color: var(--hud); text-transform: uppercase; }
+  h1 { margin: 0; font: 600 clamp(34px, 7vw, 54px)/1 var(--display); letter-spacing: 0.02em; text-wrap: balance; }
+  h1 span { color: var(--caution); }
+  p { margin: 0; line-height: 1.5; color: var(--muted); }
+  .bar { height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+  #bar { height: 100%; width: 0; background: var(--hud); transition: width 0.3s; }
+  #status { font: 12px var(--mono); color: var(--muted); }
+  .opts { display: grid; gap: 12px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .label { font: 600 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); min-width: 108px; }
+  .seg { display: inline-flex; border: 1px solid var(--panel-edge); border-radius: 4px; overflow: hidden; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label { padding: 6px 12px; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .seg input:checked + label { background: var(--panel-edge); color: var(--text); }
+  .seg input:focus-visible + label { outline: 2px solid var(--hud); outline-offset: -2px; }
+  select, input[type=range] { accent-color: var(--hud); }
+  select { background: transparent; color: var(--text); border: 1px solid var(--panel-edge); border-radius: 4px; padding: 5px 8px; font: inherit; }
+  select option { background: #141b22; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+  button {
+    font: 600 15px var(--display); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+    padding: 11px 18px; border-radius: 4px; border: 1px solid var(--panel-edge); background: transparent; color: var(--text);
+  }
+  button.primary { background: var(--caution); border-color: var(--caution); color: #1b1404; }
+  button:hover { filter: brightness(1.12); }
+  button:focus-visible { outline: 2px solid var(--hud); outline-offset: 2px; }
+  #menuerr { color: var(--caution); font-size: 13px; }
+  .keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 22px; }
+  .keys h3 { margin: 0 0 6px; font: 600 12px var(--mono); letter-spacing: 0.14em; color: var(--hud); text-transform: uppercase; }
+  .keys dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13.5px; }
+  .keys dt { font: 600 12px var(--mono); color: var(--caution); white-space: nowrap; padding-top: 2px; }
+  .keys dd { margin: 0; color: var(--text); min-width: 0; }
+  .wide { width: min(860px, 100%); }
+  .tip { font-size: 13.5px; color: var(--text); line-height: 1.5; }
+  .tip b { color: var(--hud); font-weight: 600; }
+  .hint { font: 12px var(--mono); color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
+</style>
+
+<canvas id="view" tabindex="0"></canvas>
+<canvas id="hud"></canvas>
+<div id="fps"></div>
+
+<div id="loading" class="screen dim">
+  <div class="card">
+    <div class="eyebrow">F-16C Block 50 · AIM-9M · AIM-120A</div>
+    <h1>Dogfight <span>Viper</span></h1>
+    <div class="bar"><div id="bar"></div></div>
+    <div id="status">Terep, repülőgép és festés betöltése (~9 MB)…</div>
+  </div>
+</div>
+
+<div id="menu" class="screen dim" hidden>
+  <div class="card">
+    <div class="eyebrow">F-16C Block 50 · AIM-9M · AIM-120A</div>
+    <h1>Dogfight <span>Viper</span></h1>
+    <p>Egeres célzás, mint a War Thunderben: oda repül a gép, ahová az egérrel nézel. Radar- és hőkövető lock, gépágyú, flare és chaff. Az ellenség hullámokban jön, a bázison leszállva újratölthetsz.</p>
+    <div class="opts">
+      <div class="row">
+        <span class="label">Nehézség</span>
+        <div class="seg" role="radiogroup" aria-label="Nehézség">
+          <input type="radio" name="diff" id="d-easy" value="easy"><label for="d-easy">Könnyű</label>
+          <input type="radio" name="diff" id="d-normal" value="normal" checked><label for="d-normal">Normál</label>
+          <input type="radio" name="diff" id="d-hard" value="hard"><label for="d-hard">Nehéz</label>
+        </div>
+      </div>
+      <div class="row">
+        <label class="label" for="enemies">Ellenség</label>
+        <select id="enemies">
+          <option value="1">1 az első hullámban</option>
+          <option value="2" selected>2 az első hullámban</option>
+          <option value="3">3 az első hullámban</option>
+          <option value="4">4 az első hullámban</option>
+        </select>
+      </div>
+      <div class="row">
+        <label class="label" for="sens">Egér</label>
+        <input type="range" id="sens" min="0.03" max="0.25" step="0.01" value="0.09">
+        <label class="hint"><input type="checkbox" id="invert"> fordított Y</label>
+      </div>
+    </div>
+    <div class="buttons">
+      <button class="primary" id="start-ground">Felszállás a kifutóról</button>
+      <button id="start-air">Indulás a levegőben</button>
+    </div>
+    <div id="menuerr"></div>
+    <div class="hint">Kattintás után az egér a játékhoz kötődik · Esc = elengedés · H = súgó</div>
+  </div>
+</div>
+
+<div id="pause" class="screen dim" hidden>
+  <div class="card">
+    <div class="eyebrow">Szünet</div>
+    <h1>Kattints a folytatáshoz</h1>
+    <p>H = irányítás és lockolás súgó · Enter = újraéledés, ha lelőttek</p>
+    <div class="buttons"><button class="primary">Folytatás</button><button id="fullscreen">Teljes képernyő</button></div>
+  </div>
+</div>
+
+<div id="help" class="screen dim" hidden>
+  <div class="card wide">
+    <div class="eyebrow">Súgó · kattints a folytatáshoz</div>
+    <div class="keys">
+      <div>
+        <h3>Repülés</h3>
+        <dl>
+          <dt>Egér</dt><dd>ide repül a gép (fehér kör)</dd>
+          <dt>W / S</dt><dd>magassági kormány felülbírálás</dd>
+          <dt>A / D</dt><dd>orsózás</dd>
+          <dt>Q / E</dt><dd>oldalkormány</dd>
+          <dt>Shift / Z</dt><dd>gáz fel / le (100% felett utánégető)</dd>
+          <dt>B</dt><dd>földön fék, levegőben légfék (tartva)</dd>
+          <dt>G</dt><dd>futómű ki / be</dd>
+          <dt>C, jobb egér</dt><dd>szabad körülnézés</dd>
+          <dt>Görgő</dt><dd>zoom</dd>
+          <dt>V</dt><dd>kabin / külső nézet</dd>
+        </dl>
+      </div>
+      <div>
+        <h3>Fegyverek és radar</h3>
+        <dl>
+          <dt>Bal egér</dt><dd>M61A1 gépágyú</dd>
+          <dt>Space</dt><dd>rakéta indítása</dd>
+          <dt>1 / 2</dt><dd>AIM-9M / AIM-120A</dd>
+          <dt>X</dt><dd>flare + chaff (tartva)</dd>
+          <dt>R</dt><dd>radar be / ki</dd>
+          <dt>Y</dt><dd>következő radarcél</dd>
+          <dt>T</dt><dd>radar lock / unlock (cél nélkül: ACM mód)</dd>
+          <dt>F</dt><dd>AIM-9M kereső lock</dd>
+          <dt>M</dt><dd>célpont jelölők</dd>
+          <dt>P · Enter</dt><dd>szünet · újraéledés</dd>
+        </dl>
+      </div>
+      <div class="tip">
+        <h3 style="margin:0 0 6px;font:600 12px var(--mono);letter-spacing:.14em;color:var(--hud)">FELSZÁLLÁS</h3>
+        Tartsd a <b>Shiftet</b>, amíg a gáz 100% fölé megy (utánégető). <b>~280 km/h</b>-nál emeld az egeret, a gép elemelkedik, utána <b>G</b>. Leszállás: futómű ki, ~270 km/h, lassú süllyedés (&lt; 4 m/s), a földön <b>B</b> fékez. A bázison megállva újratölt, tankol és javít.
+      </div>
+      <div class="tip">
+        <h3 style="margin:0 0 6px;font:600 12px var(--mono);letter-spacing:.14em;color:var(--hud)">HOGYAN LOCKOLJ?</h3>
+        <b>AIM-9M:</b> vidd a célt a kereső körébe, a morgás magas hangra vált, <b>F</b> = lock, <b>Space</b>. Hátulról és utánégetős célra a legjobb.<br>
+        <b>AIM-120A:</b> <b>T</b> = radar lock (zöld négyzet), a DLZ csík mutatja a hatótávot, <b>Space</b>. Tartsd a lockot, amíg PITBULL nem lesz.<br>
+        <b>Védekezés:</b> fordulj 90°-ra a rakétára (notch) és szórj chaffot; hőkövető ellen flare és éles forduló.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script type="module" src="js/game.js"></script>
