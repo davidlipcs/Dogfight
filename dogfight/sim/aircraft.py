@@ -16,6 +16,8 @@ from .rwr import RWR
 from .specs import AIM9M, FIRING_ORDER, IR, MISSILES
 
 STORE_CD = 0.0011          # drag coefficient added per missile on a pylon
+ASSIST_IR_FOV = 10.0       # player lock assist: AIM-9 search cone (deg) ...
+ASSIST_IR_CONE = 30.0      # ... and the cone the F key searches when nothing is in the seeker
 
 
 class Station:
@@ -31,7 +33,7 @@ class Station:
 
 class Aircraft:
     def __init__(self, spec, name, team, pos, heading_deg, speed, loadout="default",
-                 rng=None, is_player=False, livery="viper"):
+                 rng=None, is_player=False, livery="viper", lock_assist=False):
         self.spec = spec
         self.name = name
         self.team = team
@@ -64,6 +66,8 @@ class Aircraft:
         self.last_attacker = None
         self.last_hit_time = -1e9
         self.pilot = None
+        self.lock_assist = lock_assist
+        self._ir_auto_hold = 0.0
         self.rearm()
 
     # ----------------------------------------------------------------- state
@@ -193,6 +197,7 @@ class Aircraft:
         if spec is not None and spec.guidance == IR:
             if self.ir_seeker.spec is not spec:
                 self.ir_seeker = IRSeeker(spec, self.rng)
+            self.ir_seeker.acq_fov = ASSIST_IR_FOV if self.lock_assist else None
             slave = None
             if radar.mode == STT and radar.track_pos is not None:
                 slave = safe_normalized(radar.track_pos - self.pos)
@@ -205,16 +210,30 @@ class Aircraft:
             # With a radar lock the seeker is slaved and locks on by itself.
             if slave is not None and not self.ir_seeker.locked and self.ir_seeker.candidate is radar.locked:
                 self.ir_seeker.lock()
+            # lock assist: the seeker locks by itself onto an enemy in its (wide) search cone
+            self._ir_auto_hold -= dt
+            cand = self.ir_seeker.candidate
+            if (self.lock_assist and self._ir_auto_hold <= 0.0 and not self.ir_seeker.locked and cand is not None
+                    and not getattr(cand, "is_flare", False) and getattr(cand, "team", self.team) != self.team):
+                self.ir_seeker.lock()
+                world.emit("message", to=self, text="SEEKER LOCK - Space: indítás", level="good")
         self.rwr.update(world)
 
     # ------------------------------------------------------------ weapons
-    def toggle_ir_lock(self):
+    def toggle_ir_lock(self, world=None):
         spec = self.selected_spec
         if spec is None or spec.guidance != IR:
             return False
         if self.ir_seeker.locked:
             self.ir_seeker.unlock()
+            self._ir_auto_hold = 3.0
             return False
+        if self.lock_assist and world is not None and self.ir_seeker.candidate is None:
+            # nothing in the seeker: take the hottest enemy within a wide cone around the nose
+            src = self.ir_seeker.best_in_cone(self.pos, self.forward, world.heat_sources(), ASSIST_IR_CONE * DEG,
+                                              world.terrain, exclude=self)
+            if src is not None and not getattr(src, "is_flare", False) and getattr(src, "team", None) != self.team:
+                self.ir_seeker.candidate = src
         return self.ir_seeker.lock()
 
     def fire_missile(self, world):

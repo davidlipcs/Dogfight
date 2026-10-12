@@ -66,6 +66,8 @@ export class Chaff {
 export class IRSeeker {
   constructor(spec, rnd) {
     this.spec = spec; this.rnd = rnd; this.axis = null; this.target = null; this.candidate = null; this.judged = new Set();
+    this.acqFov = null;        // wider search cone (deg) for the player's lock assist; null = real seeker FOV
+    this.snap = false;
   }
   get locked() { return this.target !== null; }
   reset() { this.target = null; this.candidate = null; this.judged.clear(); }
@@ -97,11 +99,12 @@ export class IRSeeker {
       let want = slaveDir || boresight;
       if (angleBetween(boresight, want) > sp.gimbal * DEG) want = boresight;
       this.axis = norm(want);
-      this.candidate = this.bestInCone(origin, this.axis, sources, fov, terrain, exclude);
+      this.candidate = this.bestInCone(origin, this.axis, sources, (this.acqFov || sp.seekerFov) * DEG, terrain, exclude);
       return null;
     }
     const tgt = this.target;
     const desired = norm(sub(tgt.pos, origin));
+    if (this.snap) { this.axis = desired; this.snap = false; }     // seeker head jumps onto what it locked
     this.axis = rotateTowards(this.axis, desired, sp.trackRate * DEG * dt);
     this.candidate = tgt;
     if (!this.visible(tgt, origin, terrain) || angleBetween(this.axis, desired) > fov * 1.6
@@ -118,7 +121,7 @@ export class IRSeeker {
     }
     return null;
   }
-  lock() { if (this.candidate) { this.target = this.candidate; return true; } return false; }
+  lock() { if (this.candidate) { this.target = this.candidate; this.snap = true; return true; } return false; }
   unlock() { this.target = null; }
   tone() { return this.target || this.candidate ? 'lock' : 'growl'; }
 }
@@ -161,6 +164,34 @@ export class Radar {
     if (this.mode === SEARCH && this.selected && this.contacts.has(this.selected) && this.tryLock(this.selected)) return 'locking';
     if (this.mode === SEARCH) { this.setAcm(); return 'acm'; }
     this.setSearch(); return 'search';
+  }
+  // lock assist: lock the enemy closest to `dir` (where the player looks); pressed again it moves on to the
+  // next one, or unlocks when there is no other
+  quickLock(world, dir, coneDeg = 30) {
+    if (this.mode === OFF) this.mode = SEARCH;
+    const gim = this.spec.sttGimbal * DEG, own = this.owner;
+    const cands = [];
+    for (const t of world.aircraft) {
+      if (t === own || !t.alive || t.team === own.team) continue;
+      const rel = sub(t.pos, own.pos), off = angleBetween(dir, rel);
+      const [az, el, d] = this.anglesTo(t.pos);
+      if (off > coneDeg * DEG || d > this.spec.lockRange || Math.abs(az) > gim || Math.abs(el) > gim) continue;
+      if (!world.terrain.lineOfSight(own.pos, t.pos)) continue;
+      cands.push({ t, off });
+    }
+    cands.sort((a, b) => a.off - b.off);
+    const current = this.locked || this.pending;
+    if (!cands.length) return current ? 'keep' : 'none';
+    let pick = cands[0].t;
+    const i = cands.findIndex((c) => c.t === current);
+    if (i >= 0) {
+      pick = cands[(i + 1) % cands.length].t;
+      if (pick === current) { this.setSearch(); return 'unlocked'; }
+    }
+    this.dropLock(); this.mode = SEARCH;
+    if (!this.tryLock(pick)) return 'none';
+    this.pendingTime = this.spec.lockTime * 0.5; this.selected = pick;
+    return 'locking';
   }
   cycleTarget() {
     if (!this.contacts.size) { this.selected = null; return; }

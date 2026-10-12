@@ -135,6 +135,45 @@ class Radar:
         self.set_search()
         return "search"
 
+    def quick_lock(self, world, direction, cone_deg=30.0):
+        """Lock assist: lock the enemy closest to ``direction`` (where the player looks).
+
+        Pressed again it moves on to the next enemy in the cone, or unlocks when there is no other.
+        """
+        if self.mode == OFF:
+            self.mode = SEARCH
+        own = self.owner
+        gimbal = self.spec.stt_gimbal * DEG
+        cands = []
+        for t in world.aircraft:
+            if t is own or not t.alive or t.team == own.team:
+                continue
+            off = angle_between(direction, t.pos - own.pos)
+            az, el, dist = self.angles_to(t.pos)
+            if off > cone_deg * DEG or dist > self.spec.lock_range or abs(az) > gimbal or abs(el) > gimbal:
+                continue
+            if not world.terrain.line_of_sight(own.pos, t.pos):
+                continue
+            cands.append((off, t))
+        cands.sort(key=lambda c: c[0])
+        targets = [t for _, t in cands]
+        current = self.locked if self.locked is not None else self.pending
+        if not targets:
+            return "keep" if current is not None else "none"
+        pick = targets[0]
+        if current in targets:
+            pick = targets[(targets.index(current) + 1) % len(targets)]
+            if pick is current:
+                self.set_search()
+                return "unlocked"
+        self._drop_lock()
+        self.mode = SEARCH
+        if not self.try_lock(pick):
+            return "none"
+        self.pending_time = self.spec.lock_time * 0.5
+        self.selected = pick
+        return "locking"
+
     def cycle_target(self):
         """Select the next search contact (sorted by angle off the nose)."""
         if not self.contacts:

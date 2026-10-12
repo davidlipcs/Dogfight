@@ -5,6 +5,7 @@ import { AIM9M, IR, MISSILES, FIRING_ORDER } from './specs.js';
 import { IRSeeker, Radar, RWR, Missile, Gun, Flare, Chaff, STT, updateBullets } from './weapons.js';
 
 const STORE_CD = 0.0011;
+const ASSIST_IR_FOV = 10, ASSIST_IR_CONE = 30;     // player lock assist: seeker search cone / F-key cone (deg)
 export const PHYS_DT = 1 / 100, SENSOR_DT = 1 / 30, AI_DT = 1 / 10;
 
 export class Aircraft {
@@ -26,6 +27,7 @@ export class Aircraft {
     this.flares = spec.cm.flares; this.chaff = spec.cm.chaff; this.cmHold = false; this.cmTimer = 0;
     this.hp = spec.hp; this.alive = true; this.burning = false; this.crashed = false; this.deathTime = null;
     this.kills = 0; this.lastAttacker = null; this.lastHitTime = -1e9; this.pilot = null;
+    this.lockAssist = !!opts.lockAssist; this.irAutoHold = 0;
     this.rearm();
   }
   get pos() { return this.fm.pos; }
@@ -89,19 +91,32 @@ export class Aircraft {
     const sp = this.selectedSpec;
     if (sp && sp.guidance === IR) {
       if (this.irSeeker.spec !== sp) this.irSeeker = new IRSeeker(sp, this.rnd);
+      this.irSeeker.acqFov = this.lockAssist ? ASSIST_IR_FOV : null;
       const slave = r.mode === STT && r.trackPos ? norm(sub(r.trackPos, this.pos)) : null;
       const res = this.irSeeker.update(dt, this.pos, this.forward, world.heatSources(), world.terrain, slave, this);
       if (res === 'lost') world.emit('message', { to: this, text: 'SEEKER LOST', level: 'warn' });
       else if (res === 'decoyed') world.emit('message', { to: this, text: 'SEEKER ON FLARE', level: 'warn' });
       if (slave && !this.irSeeker.locked && this.irSeeker.candidate === r.locked) this.irSeeker.lock();
+      // lock assist: the seeker locks by itself onto an enemy in its (wide) search cone
+      this.irAutoHold -= dt;
+      const c = this.irSeeker.candidate;
+      if (this.lockAssist && this.irAutoHold <= 0 && !this.irSeeker.locked && c && !c.isFlare && c.team !== this.team) {
+        this.irSeeker.lock();
+        world.emit('message', { to: this, text: 'SEEKER LOCK - Space: indítás', level: 'good' });
+      }
     }
     this.rwr.update(world);
   }
 
-  toggleIrLock() {
+  toggleIrLock(world = null) {
     const sp = this.selectedSpec;
     if (!sp || sp.guidance !== IR) return false;
-    if (this.irSeeker.locked) { this.irSeeker.unlock(); return false; }
+    if (this.irSeeker.locked) { this.irSeeker.unlock(); this.irAutoHold = 3; return false; }
+    if (this.lockAssist && world && !this.irSeeker.candidate) {
+      // nothing in the seeker: look for the hottest enemy within a wide cone around the nose
+      const s = this.irSeeker.bestInCone(this.pos, this.forward, world.heatSources(), ASSIST_IR_CONE * DEG, world.terrain, this);
+      if (s && !s.isFlare && s.team !== this.team) this.irSeeker.candidate = s;
+    }
     return this.irSeeker.lock();
   }
 

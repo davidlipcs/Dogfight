@@ -91,9 +91,9 @@ python main.py --air-start                       # levegőben indulás, felszál
 | 1 / 2 | AIM-9M / AIM-120A kiválasztása |
 | X (tartva) | flare + chaff |
 | R | radar be / ki |
+| **T** | radar **lock** arra az ellenségre, amerre nézel (±30°); újra T: következő cél, ha nincs más: unlock |
+| **F** | AIM-9M **lock** / elengedés (ha a keresőben nincs semmi: a legforróbb ellenség ±30°-on belül) |
 | Y | következő radarcél kijelölése |
-| **T** | radar **lock** / unlock (ha nincs kijelölt cél → ACM mód) |
-| **F** | AIM-9M kereső **lock** / elengedés |
 | M | célpont-jelölők ki/be |
 | H vagy F1 | súgó (szünetelteti a játékot) |
 | P | szünet, Esc: kilépés (szünetben) |
@@ -125,13 +125,16 @@ megközelítési fények). Az ellenség csak a felszállás után érkezik.
 
 ## Hogyan működik a lockolás? (mint a War Thunderben)
 
+A játékos gépén **lockolást segítő mód** van (az AI-n nincs): a hőkövető kereső 10°-os körben keres
+és magától lockol, a **T** pedig arra az ellenségre lockol, amerre nézel.
+
 ### AIM-9M Sidewinder (hőkövető)
-1. Válaszd ki: **1**. A HUD-on megjelenik egy kör – ez a rakéta **keresőfeje**. Közben hallod a
-   halk „morgást” (growl).
-2. Vidd a célpontot a körbe. Ha a kereső hőforrást lát, a hang **magas, folyamatos sípolásra**
-   vált, a kör villog.
-3. Nyomd meg az **F**-et: a kereső rááll a célra (LOCK), és innentől magától követi – a fejjel akár
-   40°-ra is elnézhet az orrtól.
+1. Válaszd ki: **1** (vagy görgő). A HUD-on megjelenik egy nagy kör – ez a rakéta **keresőfejének**
+   látómezeje. Közben hallod a halk „morgást” (growl).
+2. Vidd a célpontot a körbe. Ha a kereső ellenséges hőforrást lát, **magától rááll (LOCK)**, a hang
+   **magas, folyamatos sípolásra** vált, és innentől a kereső magától követi – akár 40°-ra is elnézhet
+   az orrtól. Az **F** azonnal lockol bármelyik ellenségre az orr előtti ±30°-ban, vagy elengedi a
+   lockot (utána 3 s-ig nem lockol magától).
 4. **Space** = indítás. Repülés közben a rakéta saját keresővel, arányos rávezetéssel megy a célra.
 
 Tippek: a hátsó félgömbből és utánégetős (AB) célra sokkal messzebbről lockol (≈9–13 km),
@@ -140,11 +143,11 @@ A célpont flare-jei elcsalhatják a rakétát; az AIM-9M IRCCM-je ~65% eséllye
 
 ### AIM-120A AMRAAM (aktív radaros)
 1. A radar **SRCH** módban pásztáz (±60°). A jobb alsó **B-scope** kijelzőn látod a célokat
-   (vízszintesen az irány, függőlegesen a távolság). **Y**-nal válthatsz célt.
-2. **T** = lock. Kb. fél másodperc után **STT** lesz: zöld négyzet a célon, távolság és közeledési
-   sebesség (Vc).
-3. Közelharcban, ha nincs kijelölt cél, a **T** az **ACM** módot kapcsolja: ami az orrod elé kerül
-   (szűk függőleges ablak, 16 km-ig), azt automatikusan lockolja.
+   (vízszintesen az irány, függőlegesen a távolság).
+2. **Nézz a célra** (egérrel vagy C-vel körülnézve) és nyomd meg a **T**-t: a nézési irányhoz
+   legközelebbi ellenséget (±30°, 55 km-ig) negyed másodperc alatt lockolja, **STT** lesz: zöld négyzet
+   a célon, távolság és közeledési sebesség (Vc). Újra **T**: a következő cél; ha nincs más, unlock.
+3. Lock közben az AIM-9M keresője is a radarcélra fordul és lockol.
 4. A HUD jobb oldalán a **DLZ** csík mutatja a hatótávot: `Rmax` (még elér), `NO ESC` (nem tud
    kitérni), `MIN` (túl közel). **Space** = indítás.
 5. Indítás után a rakéta **datalinken** kapja a célpont helyzetét, amíg tartod a lockot. Kb. 16 km-re

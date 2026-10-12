@@ -106,3 +106,43 @@ def test_seeker_tone_and_lock(world, make_aircraft):
     # beyond the 40 deg gimbal limit the lock breaks
     assert sweep(20.0, 50.0, 60) == "lost"
     assert not seeker.locked
+
+
+def test_quick_lock_picks_target_closest_to_view(world, make_aircraft):
+    me = make_aircraft()
+    left = make_aircraft(pos=(-6000, 20000, 5000), heading=180.0, team="red")
+    right = make_aircraft(pos=(4000, 20000, 5000), heading=180.0, team="red")
+    look = Vec3(4000, 20000, 0)
+    look.normalize()
+    assert me.radar.quick_lock(world, look) == "locking"
+    run(world, 0.6)
+    assert me.radar.mode == STT and me.radar.locked is right
+    # pressed again: moves on to the other enemy
+    assert me.radar.quick_lock(world, look) == "locking"
+    run(world, 0.6)
+    assert me.radar.locked is left
+
+
+def test_quick_lock_ignores_targets_far_from_view(world, make_aircraft):
+    me = make_aircraft()
+    make_aircraft(pos=(15000, 15000, 5000), heading=180.0, team="red")     # 45 deg off
+    assert me.radar.quick_lock(world, Vec3(0, 1, 0)) == "none"
+
+
+def test_ir_lock_assist_locks_off_boresight_target(world, make_aircraft):
+    me = make_aircraft()
+    me.lock_assist = True
+    me.radar.toggle_power()                                     # no radar slaving
+    bandit = make_aircraft(pos=(300, 3000, 5000), heading=0.0, team="red")   # ~6 deg off the nose, tail on
+    assert me.select("AIM-9M")
+    run(world, 0.3)
+    assert me.ir_seeker.locked and me.ir_seeker.target is bandit
+
+
+def test_ir_without_assist_needs_target_in_narrow_fov(world, make_aircraft):
+    me = make_aircraft()
+    me.radar.toggle_power()
+    make_aircraft(pos=(300, 3000, 5000), heading=0.0, team="red")
+    me.select("AIM-9M")
+    run(world, 0.3)
+    assert me.ir_seeker.candidate is None and not me.ir_seeker.locked

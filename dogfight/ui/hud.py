@@ -255,11 +255,16 @@ class HUD:
                         c.circle(p[0], p[1], 0.04, GREEN, segments=24)
                         c.circle(p[0], p[1], 0.044, GREEN, segments=24)
                         c.diamond(p[0], p[1], 0.01, GREEN)
-                    elif seeker.candidate is not None:
-                        color = GREEN if int(self.time * 10) % 2 == 0 else WHITE
-                        c.circle(p[0], p[1], 0.04, color, segments=24)
                     else:
-                        c.circle(p[0], p[1], 0.04, DIM, segments=24)
+                        # search circle as big as the seeker's search cone (wide with the lock assist)
+                        fov = (seeker.acq_fov or seeker.spec.seeker_fov) * DEG
+                        vfov = self.base.camLens.getFov()[1] * DEG
+                        radius = max(0.04, math.tan(fov) / math.tan(vfov / 2.0))
+                        if seeker.candidate is not None:
+                            color = GREEN if int(self.time * 10) % 2 == 0 else WHITE
+                        else:
+                            color = DIM
+                        c.circle(p[0], p[1], radius, color, segments=40)
         self._dlz_bar(ac, spec, dt)
 
     def _dlz_bar(self, ac, spec, dt):

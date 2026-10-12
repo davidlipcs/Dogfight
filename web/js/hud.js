@@ -184,8 +184,12 @@ export class HUD {
       const s = ac.irSeeker, p = this.project(cam, add(ac.pos, mul(s.axis, 2000)));
       if (p) {
         if (s.locked) { this.circle(p[0], p[1], 26 * u, GREEN); this.circle(p[0], p[1], 29 * u, GREEN); this.poly([[p[0], p[1] - 7 * u], [p[0] + 7 * u, p[1]], [p[0], p[1] + 7 * u], [p[0] - 7 * u, p[1]]], GREEN); }
-        else if (s.candidate) this.circle(p[0], p[1], 26 * u, Math.floor(this.time * 10) % 2 ? WHITE : GREEN);
-        else this.circle(p[0], p[1], 26 * u, DIM);
+        else {
+          // search circle as big as the seeker's search cone (wide with the lock assist)
+          const fov = (s.acqFov || s.spec.seekerFov) * DEG;
+          const rad = Math.max(26 * u, Math.tan(fov) / Math.tan(cam.fov * DEG / 2) * this.h / 2);
+          this.circle(p[0], p[1], rad, s.candidate ? (Math.floor(this.time * 10) % 2 ? WHITE : GREEN) : DIM);
+        }
       }
     }
     this.dlzBar(ac, sp, dt);

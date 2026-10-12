@@ -185,7 +185,7 @@ class Game {
       const [x, y, hdg] = field.startPosition();
       pos = V(x, y, 0); heading = hdg;
     }
-    const ac = new Aircraft(F16C, 'Te (Viper 1)', 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', rnd: rng(Math.floor(this.rnd() * 1e9)) });
+    const ac = new Aircraft(F16C, 'Te (Viper 1)', 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', lockAssist: true, rnd: rng(Math.floor(this.rnd() * 1e9)) });
     if (air) ac.controls.throttle = 0.95;
     else {
       ac.fm.placeOnGround(pos.x, pos.y, this.terrain.height(pos.x, pos.y), heading);
@@ -238,14 +238,16 @@ class Game {
       }
       case 'f':
         if (!p.selectedSpec || p.selectedSpec.guidance !== IR) p.select('AIM-9M');
-        if (p.irSeeker.locked) { p.irSeeker.unlock(); msg('KERESŐ ELENGEDVE', 'info', 1.2); }
-        else if (p.toggleIrLock()) msg('SEEKER LOCK', 'good');
-        else msg('Nincs hőforrás a keresőben', 'warn');
+        if (p.irSeeker.locked) { p.toggleIrLock(this.world); msg('KERESŐ ELENGEDVE', 'info', 1.2); }
+        else if (p.toggleIrLock(this.world)) msg('SEEKER LOCK - Space: indítás', 'good');
+        else msg('Nincs ellenség az orr előtt (±30°)', 'warn');
         break;
       case 't': {
-        const res = p.radar.lockButton();
-        const t = { on: ['RADAR BE', 'info'], unlocked: ['UNLOCK', 'info'], locking: ['LOCKOLÁS...', 'info'],
-          acm: ['ACM MÓD - célt az orr elé!', 'warn'], search: ['RADAR KERESÉS', 'info'] }[res];
+        // lock the enemy closest to where you are looking (mouse aim, or free look)
+        const view = this.cam.freeLook ? fwdOf(this.cam.look) : this.cam.aimDirection();
+        const res = p.radar.quickLock(this.world, view);
+        const t = { unlocked: ['UNLOCK', 'info'], locking: ['LOCKOLÁS...', 'info'], keep: ['Nincs másik cél', 'info'],
+          none: ['Nincs cél a nézési irányban - fordulj felé', 'warn'] }[res];
         if (t) msg(t[0], t[1], 1.6);
         break;
       }

@@ -120,7 +120,7 @@ class DogfightApp:
             pos = Vec3(x, y, 0.0)
             speed = 0.0
         ac = Aircraft(F16C, "Te (Viper 1)", "blue", pos, heading, speed, loadout=self.options.loadout,
-                      rng=self.rng, is_player=True, livery="viper")
+                      rng=self.rng, is_player=True, livery="viper", lock_assist=True)
         if air_start:
             ac.controls.throttle = 0.95
         else:
@@ -195,19 +195,21 @@ class DogfightApp:
         if p.selected_spec is None or p.selected_spec.guidance != IR:
             p.select("AIM-9M")
         if p.ir_seeker.locked:
-            p.ir_seeker.unlock()
+            p.toggle_ir_lock(self.world)
             self.hud.message("KERESŐ ELENGEDVE", "info", 1.2)
-        elif p.toggle_ir_lock():
-            self.hud.message("SEEKER LOCK", "good", 1.5)
+        elif p.toggle_ir_lock(self.world):
+            self.hud.message("SEEKER LOCK - Space: indítás", "good", 1.5)
         else:
-            self.hud.message("Nincs hőforrás a keresőben", "warn", 1.5)
+            self.hud.message("Nincs ellenség az orr előtt (±30°)", "warn", 1.5)
 
     def _radar_lock(self):
         if not self._can_act():
             return
-        result = self.player.radar.lock_button()
-        text = {"on": ("RADAR BE", "info"), "unlocked": ("UNLOCK", "info"), "locking": ("LOCKOLÁS...", "info"),
-                "acm": ("ACM MÓD - célt az orr elé!", "warn"), "search": ("RADAR KERESÉS", "info")}.get(result)
+        # lock the enemy closest to where you are looking (mouse aim, or free look)
+        view = self.cam.look.getForward() if self.cam.free_look else self.cam.aim_direction()
+        result = self.player.radar.quick_lock(self.world, view)
+        text = {"unlocked": ("UNLOCK", "info"), "locking": ("LOCKOLÁS...", "info"), "keep": ("Nincs másik cél", "info"),
+                "none": ("Nincs cél a nézési irányban - fordulj felé", "warn")}.get(result)
         if text:
             self.hud.message(*text, duration=1.6)
 

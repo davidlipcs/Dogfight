@@ -31,18 +31,17 @@ FEGYVEREK
 
 RADAR ÉS LOCKOLÁS
   R ............... radar be / ki
+  T ............... radar LOCK arra az ellenségre, amerre
+                    nézel (±30°); újra T: következő cél
+  F ............... AIM-9M LOCK / elengedés (±30°)
   Y ............... következő cél kijelölése a radaron
-  T ............... radar LOCK / unlock
-                    (ha nincs kijelölt cél: ACM mód -
-                     ami az orr elé kerül, azt lockolja)
-  F ............... AIM-9M kereső LOCK / elengedés
 
 HOGYAN LOCKOLJ?
   AIM-9M (hőkövető): a kör a keresőfej. Vidd a célt
-   a körbe -> a morgás magas hangra vált -> F = lock
-   -> Space. Radar lockkal a kereső magától ráfordul.
+   a nagy körbe -> MAGÁTÓL LOCKOL (vagy F) -> Space.
+   Radar lockkal a kereső magától ráfordul.
    A hátsó félgömbből és utánégetős célra a legjobb.
-  AIM-120A (radar): T = radar lock (zöld négyzet),
+  AIM-120A (radar): nézz a célra, T = lock (zöld négyzet),
    jobbra a DLZ csík mutatja a hatótávot -> Space.
    Tartsd a lockot amíg "PITBULL" (aktív) nem lesz!
   Védekezés: fordulj 90 fokra a rakétára (NOTCH),

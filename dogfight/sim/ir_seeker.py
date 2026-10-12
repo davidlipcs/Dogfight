@@ -22,6 +22,8 @@ class IRSeeker:
         self.axis = None             # world unit vector the head looks along
         self.target = None           # tracked heat source (aircraft or flare)
         self.candidate = None        # best source inside the caged FOV (lock tone)
+        self.acq_fov = None          # wider search cone (deg) for the player's lock assist; None = seeker FOV
+        self._snap = False
         self._judged_flares = set()
 
     @property
@@ -83,12 +85,16 @@ class IRSeeker:
             if angle_between(boresight, want) > spec.gimbal_limit * DEG:
                 want = boresight
             self.axis = safe_normalized(want)
-            self.candidate = self.best_in_cone(origin, self.axis, sources, fov, terrain, exclude)
+            search = (self.acq_fov or spec.seeker_fov) * DEG
+            self.candidate = self.best_in_cone(origin, self.axis, sources, search, terrain, exclude)
             return None
 
         tgt = self.target
         to_tgt = tgt.pos - origin
         desired = safe_normalized(to_tgt)
+        if self._snap:                  # the head jumps onto what it just locked
+            self.axis = desired
+            self._snap = False
         self.axis = rotate_towards(self.axis, desired, spec.track_rate * DEG * dt)
         self.candidate = tgt
         if (not self.visible(tgt, origin, terrain)
@@ -117,6 +123,7 @@ class IRSeeker:
         """Pilot pressed lock: start tracking the current candidate."""
         if self.candidate is not None:
             self.target = self.candidate
+            self._snap = True
             return True
         return False
 
