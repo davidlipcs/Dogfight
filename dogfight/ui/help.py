@@ -48,6 +48,9 @@ HOGYAN LOCKOLJ?
   Védekezés: fordulj 90 fokra a rakétára (NOTCH),
    szórj chaffot; hőkövető ellen flare + éles forduló.
 
+KONTROLLER: bal kar = gép, jobb kar = célzás, RT/LT = gáz,
+  RB = ágyú, A = rakéta, LB = flare, X/B = lock, Y = fegyver
+
   M: célpont jelölők   P: szünet   Enter: újraéledés
   Esc: kilépés         H / F1: súgó be / ki
 """

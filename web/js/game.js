@@ -151,6 +151,33 @@ class Input {
   takeDelta() { const d = [this.dx, this.dy]; this.dx = 0; this.dy = 0; return d; }
 }
 
+// ----------------------------------------------------------------- gamepad
+// Standard mapping (Xbox / PlayStation pads): left stick flies the jet directly (stick back = nose up),
+// right stick moves the aim circle like the mouse, triggers = throttle, RB gun, A missile, LB flares,
+// X radar lock, B IR lock, Y next weapon, D-pad up gear / down air brake / left view / right zoom,
+// Start = pause, Back = help, L3 held = look around with the right stick.
+const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, BACK: 8, START: 9, L3: 10, R3: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+class Pad {
+  constructor() { this.prev = null; this.connected = false; this.name = ''; }
+  poll() {
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    const gp = pads.find((p) => p.mapping === 'standard') || pads[0];
+    this.connected = !!gp;
+    if (!gp) { this.pressed = () => false; this.held = () => false; return false; }
+    this.name = gp.id;
+    const now = gp.buttons.map((b) => b.pressed || b.value > 0.5);
+    const prev = this.prev || now;              // first poll: buttons already down are not new presses
+    this.held = (i) => !!now[i];
+    this.pressed = (i) => !!now[i] && !prev[i];
+    this.value = (i) => (gp.buttons[i] ? gp.buttons[i].value : 0);
+    const dz = (v) => { const a = Math.abs(v); return a < 0.12 ? 0 : Math.sign(v) * Math.pow((a - 0.12) / 0.88, 1.5); };
+    this.lx = dz(gp.axes[0] || 0); this.ly = dz(gp.axes[1] || 0);
+    this.rx = dz(gp.axes[2] || 0); this.ry = dz(gp.axes[3] || 0);
+    this.prev = now;
+    return true;
+  }
+}
+
 // -------------------------------------------------------------------- game
 class Game {
   constructor(assets, opts) {
@@ -171,6 +198,8 @@ class Game {
     this.hud = new HUD($('hud'));
     this.sounds = new Sounds(0.7);
     this.input = new Input(canvas);
+    this.pad = new Pad();
+    addEventListener('gamepadconnected', (e) => this.hud.message(`KONTROLLER CSATLAKOZTATVA`, 'good', 3, 'pad'));
     this.state = { wave: 0, kills: 0, deaths: 0, banner: '', subBanner: '', paused: true, waveTimer: FIRST_WAVE_DELAY, waveActive: false };
     this.player = null; this.pilot = null; this.helpVisible = false; this.locked = false;
     this.input.handlers.press = (k) => this.onKey(k);
@@ -298,18 +327,41 @@ class Game {
       const dz = (v) => (Math.abs(v) < 0.06 ? 0 : (v - Math.sign(v) * 0.06) / 0.94);
       cam.rotate(-dz(inp.mx) * 95 * dt, -dz(inp.my) * 70 * dt * (cam.invertY ? -1 : 1));
     }
+    const pad = this.pad.connected ? this.pad : null;
+    if (pad) {
+      cam.setFreeLook(pad.held(PAD.L3));
+      cam.rotate(-pad.rx * 110 * dt, -pad.ry * 80 * dt * (cam.invertY ? -1 : 1));
+    }
     this.pilot.aim = cam.aimDirection();
     this.pilot.pitch = inp.axis('s', 'w');      // S = nose up (pull), W = nose down (push)
     this.pilot.roll = inp.axis('d', 'a');
     this.pilot.yaw = inp.axis('e', 'q');
+    if (pad && (pad.lx || pad.ly)) {            // left stick: direct control, stick back = nose up
+      if (this.pilot.pitch === null) this.pilot.pitch = pad.ly;
+      if (this.pilot.roll === null) this.pilot.roll = pad.lx;
+    }
     // flying with the keys: the mouse aim point rides on the nose, so letting go does not yank the jet back
     if (this.pilot.manual) cam.aim = qlook(p.forward);
-    this.throttleInput(dt, inp.key('shift'), inp.key('z') || inp.key('control'));
-    c.airbrake = inp.key('b');
-    c.brakes = inp.key('b') && p.onGround;
-    p.trigger = inp.mouse[0];
-    p.cmHold = inp.key('x');
-    cam.setFreeLook(inp.key('c') || inp.mouse[2]);
+    const rt = pad ? pad.value(PAD.RT) > 0.5 : false, lt = pad ? pad.value(PAD.LT) > 0.5 : false;
+    if (pad && pad.pressed(PAD.RT)) this.throttleStep(1);
+    if (pad && pad.pressed(PAD.LT)) this.throttleStep(-1);
+    this.throttleInput(dt, inp.key('shift') || rt, inp.key('z') || inp.key('control') || lt);
+    const brake = inp.key('b') || (pad && pad.held(PAD.DOWN));
+    c.airbrake = brake;
+    c.brakes = brake && p.onGround;
+    p.trigger = inp.mouse[0] || (pad && pad.held(PAD.RB));
+    p.cmHold = inp.key('x') || (pad && pad.held(PAD.LB));
+    if (!pad || !pad.held(PAD.L3)) cam.setFreeLook(inp.key('c') || inp.mouse[2]);
+    if (pad) {
+      if (pad.pressed(PAD.A)) this.onKey('Space');
+      if (pad.pressed(PAD.X)) this.onKey('t');
+      if (pad.pressed(PAD.B)) this.onKey('f');
+      if (pad.pressed(PAD.Y)) this.cycleWeapon(1);
+      if (pad.pressed(PAD.UP)) this.onKey('g');
+      if (pad.pressed(PAD.LEFT)) this.onKey('v');
+      if (pad.pressed(PAD.RIGHT)) this.cam.zoom = (this.cam.zoom + 1) % 3;
+      if (pad.pressed(PAD.R3)) this.onKey('m');
+    }
   }
 
   // Throttle like a real lever with a MIL detent: a tap moves it 5 % (taken from the key event itself, so
@@ -385,6 +437,11 @@ class Game {
     const dt = Math.min((t - this.last) / 1000, 0.1);
     this.last = t;
     const st = this.state;
+    if (this.pad.poll()) {
+      if (this.pad.pressed(PAD.START)) { if (st.paused) this.resume(); else this.pause(); }
+      if (this.pad.pressed(PAD.BACK)) this.toggleHelp();
+      if (!this.player.alive && this.pad.pressed(PAD.A)) this.respawn();
+    }
     if (!st.paused) {
       if (this.player.alive) this.applyInput(dt);
       else this.input.takeDelta();
@@ -444,6 +501,20 @@ class Game {
           this.hud.message(`${s.key} ÚJRATÖLTVE`, 'good', 1.5, 'reload');
         }
       }
+    }
+    // arcade: the gun and the flare / chaff dispensers refill too (full in 10 s, after a 2 s pause)
+    if (this.opts.mode === 'arcade') {
+      this.gunIdle = p.gun.firing ? 0 : (this.gunIdle || 0) + dt;
+      this.cmIdle = p.cmHold ? 0 : (this.cmIdle || 0) + dt;
+      const refill = (have, max, idle, key) => {
+        if (have >= max || idle < 2) { this[key] = 0; return have; }
+        this[key] = (this[key] || 0) + max / RELOAD_TIME * dt;
+        const n = Math.floor(this[key]); this[key] -= n;
+        return Math.min(max, have + n);
+      };
+      p.gun.ammo = refill(p.gun.ammo, p.spec.gun.ammo, this.gunIdle, 'ammoAcc');
+      p.flares = refill(p.flares, p.spec.cm.flares, this.cmIdle, 'flareAcc');
+      p.chaff = refill(p.chaff, p.spec.cm.chaff, this.cmIdle, 'chaffAcc');
     }
     // both modes: landing on the base (on the concrete, slowed down) rearms, refuels and repairs at once
     const needs = p.hp < p.spec.hp || p.fm.fuel < p.spec.internalFuel * 0.95 || p.gun.ammo < p.spec.gun.ammo ||
@@ -509,6 +580,17 @@ async function boot() {
     });
   }
   $('start-ground').addEventListener('click', () => start(false));
+  // controller on the menu: A = take off from the runway, X = start in the air
+  const menuPad = new Pad();
+  const menuPoll = () => {
+    if (window.game) return;
+    if (!$('menu').hidden && menuPad.poll()) {
+      if (menuPad.pressed(PAD.A)) { start(false); return; }
+      if (menuPad.pressed(PAD.X)) { start(true); return; }
+    }
+    requestAnimationFrame(menuPoll);
+  };
+  requestAnimationFrame(menuPoll);
   $('start-air').addEventListener('click', () => start(true));
   $('pause').addEventListener('click', () => window.game && window.game.resume());
   $('help').addEventListener('click', () => window.game && window.game.resume());

@@ -80,12 +80,30 @@ python main.py --air-start                       # levegőben indulás, felszál
 ## Játékmódok
 
 * **Arkád** (alapértelmezett, `--mode arcade`): minden kilőtt rakéta 10 s múlva magától visszakerül a sínre
-  (a HUD alján látszik: `AIM-9M x3 +1 (7s)`).
+  (a HUD alján látszik: `AIM-9M x3 +1 (7s)`), a gépágyú lőszere és a flare / chaff pedig 2 s szünet után
+  10 s alatt tölt fel újra.
 * **Realisztikus** (`--mode realistic`): újratöltés csak leszállás után – a bázis betonján lelassulva azonnal
   újrafegyvereznek, tankolnak és megjavítanak.
 
 Minden rád kilőtt rakétánál (a hőkövetőknél is) szól a rakétaközelítés-jelző: egyre gyorsuló sípolás, „MISSILE!”,
 piros jel a rakétán a távolsággal és a becsapódásig hátralévő idővel, az RWR-en `M`.
+
+## Kontroller (Xbox / PlayStation)
+
+Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A menüben **A** = felszállás a kifutóról,
+**X** = indulás a levegőben.
+
+| Gomb | Funkció |
+|---|---|
+| Bal kar | a gép közvetlen irányítása (hátra = orr fel, oldalra = orsózás) |
+| Jobb kar | a célzókör mozgatása, mint az egérrel (az egeres segítő repül oda) |
+| RT / LT | gáz fel / le (100%-nál megáll, újra RT = utánégető) |
+| RB / A | gépágyú / rakéta |
+| X / B / Y | radar lock / hőkövető lock / fegyverváltás |
+| LB | flare + chaff |
+| D-pad | fel: futómű, le: fék / légfék, bal: kabin / külső nézet, jobb: zoom |
+| L3 (tartva) / R3 | körülnézés a jobb karral / célpont-jelölők |
+| Start / Back | szünet / súgó |
 
 ## Irányítás
 

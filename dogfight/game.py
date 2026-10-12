@@ -315,6 +315,22 @@ class DogfightApp:
         dt = min(ClockObject.getGlobalClock().getDt(), 0.1)
         st = self.state
         self._read_mouse()
+        pad = self.input.pad
+        if pad is not None and pad.poll():
+            if pad.pressed("start"):
+                self._toggle_pause()
+            if pad.pressed("back"):
+                self._toggle_help()
+            if not st.paused and self.player.alive:
+                for button, action in (("a", self._fire_missile), ("x", self._radar_lock), ("b", self._ir_lock),
+                                       ("y", lambda: self._cycle_weapon(1)), ("up", self._gear),
+                                       ("left", self.cam.toggle_view), ("r3", self._toggle_markers)):
+                    if pad.pressed(button):
+                        action()
+                if pad.pressed("right"):
+                    self.pad_zoom = not getattr(self, "pad_zoom", False)
+            elif pad.pressed("a"):
+                self._respawn()
         if not st.paused:
             if self.player.alive:
                 self.input.apply(dt, self.pilot, self.cam)
@@ -326,7 +342,7 @@ class DogfightApp:
             self.sounds.handle_event(kind, data, self.player)
             self._on_event(kind, data)
 
-        self.cam.update(dt if not st.paused else 0.0, self.player, zoom=self.input.key("z"))
+        self.cam.update(dt if not st.paused else 0.0, self.player, zoom=self.input.key("z") or getattr(self, "pad_zoom", False))
         self.scene.cockpit_view = self.cam.cockpit and self.player.alive
         self.scene.update(dt if not st.paused else 0.0, self.player)
         if st.paused and not self.help.visible:
@@ -387,6 +403,14 @@ class DogfightApp:
                     if p.selected is None or p.missile_count(p.selected) == 0:
                         p.select(station.key)
                     self.hud.message("%s ÚJRATÖLTVE" % station.key, "good", 1.5, key="reload")
+        # arcade: the gun and the flare / chaff dispensers refill too (full in 10 s, after a 2 s pause)
+        if self.options.mode == "arcade":
+            self._gun_idle = 0.0 if p.gun.firing else getattr(self, "_gun_idle", 0.0) + dt
+            self._cm_idle = 0.0 if p.cm_hold else getattr(self, "_cm_idle", 0.0) + dt
+            cm = p.spec.countermeasures
+            p.gun.ammo = self._refill(p.gun.ammo, p.spec.gun.ammo, self._gun_idle, "ammo", dt)
+            p.flares = self._refill(p.flares, cm.flares, self._cm_idle, "flares", dt)
+            p.chaff = self._refill(p.chaff, cm.chaff, self._cm_idle, "chaff", dt)
         # both modes: landing on the base (on the concrete, slowed down) rearms, refuels and repairs at once
         needs_service = (p.hp < p.spec.hp or p.fm.fuel < p.spec.internal_fuel * 0.95 or p.gun.ammo < p.spec.gun.ammo
                          or any(not st_.loaded for st_ in p.stations) or p.flares < p.spec.countermeasures.flares)
@@ -398,6 +422,16 @@ class DogfightApp:
             for station in p.stations:
                 station.reload = None
             self.hud.message("ÚJRAFEGYVERZÉS, TANKOLÁS, JAVÍTÁS KÉSZ", "good", 4.0, key="service")
+
+    def _refill(self, have, full, idle, key, dt):
+        acc = self.__dict__.setdefault("_refill_acc", {})
+        if have >= full or idle < 2.0:
+            acc[key] = 0.0
+            return have
+        acc[key] = acc.get(key, 0.0) + full / RELOAD_TIME * dt
+        n = int(acc[key])
+        acc[key] -= n
+        return min(full, have + n)
 
     def run(self):
         self.base.run()
