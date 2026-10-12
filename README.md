@@ -21,16 +21,27 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 ![F-16C](docs/f16_front.png)
 
 Részletes, valódi méretekből kódból épített F-16C Block 50 (nem kell hozzá külső 3D fájl):
-lekerekített, a szárnyba simuló törzs (blended wing-body) éles szárnytő-kiterjesztéssel (LERX),
-NACA szárnyprofilok, alsó szívócsatorna a belsejéig, átlátszó aranyszínű kabintető alatt ACES II
-katapultülés és pilóta, szirmos F110-fúvóka lángtartóval, pitot-cső, „bird slicer” IFF-antennák,
-fékernyő-konténer, LAU-129 indítósínek, pilonok. A festés textúra: kétszínű szürke (vagy aggressor
-sivatagi terepszín), panelvonalak, szegecsek, koromnyomok, USAF felségjelek, farokkód és gyári szám.
+
+* **forma:** a szárnyba simuló törzs (blended wing-body) éles szárnytő-kiterjesztéssel (LERX),
+  NACA szárnyprofilok, kifelé dőlő hasúszók, fékernyő-konténer, alsó szívócsatorna a belsejéig,
+  szirmos F110-fúvóka lángtartóval, pitot-cső, „bird slicer" IFF-antennák, pilonok, LAU-129 sínek
+* **mozgó kormányfelületek:** a stabilizátorok húzásra és orsózásra, a flaperonok orsózásra
+  és fékszárnyként, az oldalkormány, a belépőél-orrsegédszárny az állásszöggel, és a fúvóka melletti
+  kagyló-légfékek (B) – mind valódi csuklótengely körül, korlátozott sebességgel mozognak
+* **kabin:** tükröződő, aranyszínű kabintető, alatta ACES II katapultülés és pilóta
+  (sisak, napellenző, oxigénmaszk, kezek)
+* **festés:** a valódi F-16 háromszínű szürke sémája (sötét gerinc, középszürke oldalak és szárnyak,
+  világos has), panelvonalak, szegecsek, árnyékolás a csatlakozásoknál, koromnyomok,
+  USAF felségjelek, farokkód és gyári szám; az ellenség „aggressor" sivatagi terepszínben
+* **fények:** formációs fénycsíkok, helyzetjelző fények, villogó stroboszkóp
+* **effektek:** nagy állásszögnél páracsóva a szárnytő-kiterjesztésből, 9 G közelében szárnyvég-örvények
+
 Közelről a részletes modell, 2,5 km-en túl egy egyszerűbb változat látszik (LOD), így gyors marad.
 
 | | |
 |---|---|
-| ![Aggressor](docs/f16_aggressor.png) | ![Kabin](docs/f16_cockpit.png) |
+| ![Aggressor kinyitott légfékkel](docs/f16_aggressor.png) | ![Kabin](docs/f16_cockpit.png) |
+| ![Felülnézet](docs/f16_top.png) | ![Páracsóva fordulóban](docs/screenshot_vapor.png) |
 
 ## Telepítés és indítás
 

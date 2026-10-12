@@ -2,23 +2,35 @@
 
 import math
 
-from panda3d.core import ColorBlendAttrib, LineSegs, TransparencyAttrib, Vec3
+from panda3d.core import CardMaker, ColorBlendAttrib, LineSegs, NodePath, TransparencyAttrib, Vec3
 
 from ..mathutil import quat_look
 from ..sim.guns import GUN_OFFSET
 from .effects import SpriteSystem, soft_texture
+from .f16_model import ControlSurfaces
 from .models import ModelLibrary
 
 WINGTIPS = (Vec3(-4.9, -2.4, 0.12), Vec3(4.9, -2.4, 0.12))
+STRAKE_VORTEX = (Vec3(-0.92, 2.2, 0.22), Vec3(0.92, 2.2, 0.22), Vec3(-1.15, 1.4, 0.2), Vec3(1.15, 1.4, 0.2))
+NAV_LIGHTS = ((Vec3(-0.62, 2.0, -0.78), (1.0, 0.15, 0.1, 1.0)), (Vec3(0.62, 2.0, -0.78), (0.2, 1.0, 0.3, 1.0)),
+              (Vec3(0.0, -6.70, 3.74), (1.0, 1.0, 0.95, 1.0)))
+STROBE = Vec3(0.0, -5.85, 3.80)
 NOZZLE = Vec3(0.0, -7.45, 0.07)
 
 
 class AircraftVisual:
-    def __init__(self, parent, ac, models):
+    def __init__(self, parent, ac, models, glow=None):
         self.ac = ac
         self.root = parent.attachNewNode("aircraft")
         self.body = models.aircraft(ac.livery)
         self.body.reparentTo(self.root)
+        self.surfaces = ControlSurfaces(self.body)
+        self.lights = []
+        self.strobe = None
+        if glow is not None:
+            for pos, color in NAV_LIGHTS:
+                self.lights.append(self._lamp(glow, pos, color, 0.7))
+            self.strobe = self._lamp(glow, STROBE, (1.0, 1.0, 1.0, 1.0), 1.6)
         self.stores = {}
         for st in ac.stations:
             node = models.missile(st.key)
@@ -33,11 +45,30 @@ class AircraftVisual:
         self.flame.hide()
         self.trail_timer = 0.0
 
+    def _lamp(self, glow, pos, color, size):
+        lamp = glow.copyTo(self.root)
+        lamp.setPos(pos)
+        lamp.setScale(size)
+        lamp.setColor(*color)
+        return lamp
+
     def update(self, dt, visible, time):
         ac = self.ac
         if ac.crashed or not visible:
             self.root.hide()
             return
+        if ac.alive:
+            fm = ac.fm
+            c = ac.controls
+            flaps = fm.gear_pos * min(1.0, max(0.0, (125.0 - fm.ias) / 25.0))
+            self.surfaces.update(dt, c.pitch, c.roll, c.yaw, math.degrees(fm.alpha), flaps,
+                                 1.0 if (c.airbrake and not ac.on_ground) else 0.0, ac.on_ground)
+        if self.strobe is not None:
+            phase = (time + (id(ac) % 97) * 0.13) % 1.2
+            if phase < 0.06 or 0.18 < phase < 0.24:
+                self.strobe.show()
+            else:
+                self.strobe.hide()
         self.root.show()
         self.root.setPos(ac.pos)
         self.root.setQuat(ac.quat)
@@ -93,11 +124,27 @@ class SceneRenderer:
         glow = soft_texture(64, 2.2, "glow")
         self.smoke = SpriteSystem(self.root, soft, additive=False, max_count=1400, sort=10, name="smoke")
         self.fire = SpriteSystem(self.root, glow, additive=True, max_count=700, sort=30, name="fire")
+        self.glow = self._glow_card(soft_texture(32, 2.4, "navlight"))
         self.aircraft = {}
         self.missiles = {}
         self.tracers = None
         self.hide_player = False
         self._time = 0.0
+
+    @staticmethod
+    def _glow_card(texture):
+        cm = CardMaker("glow")
+        cm.setFrame(-0.5, 0.5, -0.5, 0.5)
+        card = NodePath(cm.generate())
+        card.setTexture(texture)
+        card.setBillboardPointEye()
+        card.setLightOff(1)
+        card.setDepthWrite(False)
+        card.setTransparency(TransparencyAttrib.MAlpha)
+        card.setAttrib(ColorBlendAttrib.make(ColorBlendAttrib.MAdd, ColorBlendAttrib.OIncomingAlpha,
+                                             ColorBlendAttrib.OOne))
+        card.setBin("fixed", 25)
+        return card
 
     def reset(self):
         for v in self.aircraft.values():
@@ -158,7 +205,7 @@ class SceneRenderer:
             present.add(ac)
             vis = self.aircraft.get(ac)
             if vis is None:
-                vis = self.aircraft[ac] = AircraftVisual(self.root, ac, self.models)
+                vis = self.aircraft[ac] = AircraftVisual(self.root, ac, self.models, self.glow)
             visible = not (self.hide_player and ac is player)
             vis.update(dt, visible, self._time)
             self._aircraft_effects(ac, dt, vis, visible)
@@ -221,6 +268,13 @@ class SceneRenderer:
                                      color=((0.45, 0.45, 0.45, 0.5), (0.6, 0.6, 0.6, 0.0)), drag=2.0)
         if not ac.alive or not visible:
             return
+        # vortices off the strakes at high angle of attack (the classic F-16 look)
+        alpha = math.degrees(ac.fm.alpha)
+        if alpha > 13.0 and ac.speed > 70.0:
+            a = 0.38 * min(1.0, (alpha - 13.0) / 9.0)
+            for src in STRAKE_VORTEX:
+                self.smoke.spawn(ac.pos + quat.xform(src), ac.vel * 0.9, life=0.45, size=(0.7, 2.8),
+                                 color=((1, 1, 1, a), (1, 1, 1, 0.0)), drag=1.5)
         # wingtip vortices when pulling hard
         if ac.fm.g_load > 5.5 and ac.speed > 120.0:
             a = min(0.45, (ac.fm.g_load - 5.5) * 0.12)

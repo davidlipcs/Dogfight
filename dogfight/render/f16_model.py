@@ -20,9 +20,9 @@ import math
 import os
 
 import numpy as np
-from panda3d.core import (Filename, Geom, GeomNode, GeomTriangles, GeomVertexData,
-                          GeomVertexFormat, GeomVertexWriter, Material, NodePath, PNMImage, PNMTextMaker, Texture,
-                          TransparencyAttrib, Vec3, Vec4)
+from panda3d.core import (Filename, Geom, GeomNode, GeomTriangles, GeomVertexData, GeomVertexFormat,
+                          GeomVertexWriter, Mat3, Material, NodePath, PNMImage, PNMTextMaker, Quat, TexGenAttrib,
+                          Texture, TextureStage, TransparencyAttrib, Vec3, Vec4)
 
 from .meshbuilder import MeshBuilder, ellipse_ring
 
@@ -98,7 +98,7 @@ def fuselage_top(y):
     return _catmull(FUSELAGE, y, 1)
 
 
-def fuselage_section(y, segments=40):
+def fuselage_section(y, segments=56):
     top, bottom, hw, cz, n = (_catmull(FUSELAGE, y, c) for c in range(1, 6))
     e = 2.0 / n
     pts = []
@@ -208,7 +208,9 @@ class PaintedMesh:
             return v_len, v_side
         return 0.5 + (0.5 - v_len), v_side   # left side, mirrored so text reads correctly
 
-    def build(self, name):
+    def build(self, name, origin=None, quat_inv=None):
+        """UVs come from the model-space position; ``origin`` / ``quat_inv`` then move the
+        vertices into a hinge frame (for control surfaces)."""
         fmt = GeomVertexFormat.getV3n3t2()
         vdata = GeomVertexData(name, fmt, Geom.UHStatic)
         vdata.setNumRows(len(self.tris) * 3)
@@ -226,9 +228,13 @@ class PaintedMesh:
             else:
                 region = 2 if fn.x >= 0.0 else 3
             for p, n in ((a, na), (b, nb), (c, nc)):
+                u, v = self._uv(p, region)
+                if quat_inv is not None:
+                    p = quat_inv.xform(p - origin)
+                    n = quat_inv.xform(n)
                 vw.addData3(p)
                 nw.addData3(n)
-                tw.addData2(*self._uv(p, region))
+                tw.addData2(u, v)
         prim = GeomTriangles(Geom.UHStatic)
         prim.setIndexType(Geom.NT_uint32)
         for i in range(len(self.tris)):
@@ -241,33 +247,58 @@ class PaintedMesh:
 
 
 # ---------------------------------------------------------------- geometry
-def _airfoil_surface(pm, root, tip, root_z, tip_z, thickness, axis="z", stations=6, cap=True):
-    """Lifting surface from (span, LE, TE) root/tip; axis = thickness direction."""
-    prof = naca_points(14, thickness)
-    rings = []
-    for s in range(stations + 1):
-        t = s / stations
-        span = root[0] + (tip[0] - root[0]) * t
+def _yt(x, thickness):
+    x = min(max(x, 0.0), 1.0)
+    return 5 * thickness * (0.2969 * math.sqrt(x) - 0.1260 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4)
+
+
+def _airfoil_part(pm, root, tip, root_z, tip_z, thickness, axis="z", stations=10, chord=(0.0, 1.0),
+                  span=(0.0, 1.0), caps=(False, True), points=18):
+    """A lifting surface (or a chordwise / spanwise slice of it for control surfaces).
+
+    root / tip = (span position, LE y, TE y); ``chord`` = (a, b) chord fractions, either
+    constants or callables of the span position; ``span`` = (t0, t1) fraction of the span.
+    Upper, lower and cut faces are lofted separately so every edge stays crisp.
+    """
+    ca = chord[0] if callable(chord[0]) else (lambda s, v=chord[0]: v)
+    cb = chord[1] if callable(chord[1]) else (lambda s, v=chord[1]: v)
+    up = Vec3(0, 0, 1) if axis == "z" else Vec3(1, 0, 0)
+    uppers, lowers = [], []
+    for k in range(stations + 1):
+        t = span[0] + (span[1] - span[0]) * k / stations
+        sp = root[0] + (tip[0] - root[0]) * t
         le = root[1] + (tip[1] - root[1]) * t
         te = root[2] + (tip[2] - root[2]) * t
-        z = root_z + (tip_z - root_z) * t
-        chord = le - te
-        ring = []
-        for cx, cy in prof:
-            y = le - cx * chord
-            off = cy * chord
-            if axis == "z":
-                ring.append(Vec3(span, y, z + off))
-            else:                                     # vertical fin: span along z, thickness along x
-                ring.append(Vec3(off, y, span))
-        rings.append(ring)
-    pm.loft(rings, hint=None)
-    if cap:
-        tip_ring = rings[-1]
-        center = sum(tip_ring, Vec3(0)) / len(tip_ring)
-        out = Vec3(1, 0, 0) if axis == "z" else Vec3(0, 0, 1)
-        pm.cap(tip_ring, center, out)
-    return rings
+        zc = root_z + (tip_z - root_z) * t
+        c = le - te
+        a, b = ca(sp), cb(sp)
+        xs = [a + (b - a) * 0.5 * (1 - math.cos(math.pi * j / points)) for j in range(points + 1)]
+
+        def pt(x, side):
+            y = le - x * c
+            off = side * _yt(x, thickness) * c
+            return Vec3(sp, y, zc + off) if axis == "z" else Vec3(off, y, sp)
+        uppers.append([pt(x, 1.0) for x in xs])
+        lowers.append([pt(x, -1.0) for x in xs])
+    pm.loft(uppers, hint=lambda m: up)
+    pm.loft(lowers, hint=lambda m: -up)
+    chord_dir = Vec3(0, 1, 0)
+    for rings, out in (([[u[0], l[0]] for u, l in zip(uppers, lowers)], chord_dir),
+                       ([[u[-1], l[-1]] for u, l in zip(uppers, lowers)], -chord_dir)):
+        if (rings[0][0] - rings[0][1]).length() > 1e-4 or (rings[-1][0] - rings[-1][1]).length() > 1e-4:
+            pm.loft(rings, hint=lambda m, o=out: o, smooth=False)
+    span_dir = Vec3(1, 0, 0) if axis == "z" else Vec3(0, 0, 1)
+    for end, wanted, sign in ((0, caps[0], -1.0), (-1, caps[1], 1.0)):
+        if not wanted:
+            continue
+        ring = uppers[end] + lowers[end][::-1] + [uppers[end][0]]
+        center = sum(ring[:-1], Vec3(0)) / (len(ring) - 1)
+        pm.cap(ring, center, span_dir * sign)
+    return uppers, lowers
+
+
+def _airfoil_surface(pm, root, tip, root_z, tip_z, thickness, axis="z", stations=10, cap=True):
+    _airfoil_part(pm, root, tip, root_z, tip_z, thickness, axis, stations, caps=(False, cap))
 
 
 def _fuselage(pm):
@@ -276,7 +307,7 @@ def _fuselage(pm):
     ys = []
     while y < 8.05:
         ys.append(y)
-        y += 0.18 if y > 6.0 or y < -6.0 else 0.3
+        y += 0.12 if y > 6.0 or y < -6.0 else 0.22
     ys.append(8.05)
     for y in ys:
         rings.append(fuselage_section(y))
@@ -486,35 +517,153 @@ def _details(plain):
             _box(plain, (side * x, y - 0.05, bottom - 0.02), (0.05, 0.75, 0.03), (0.40, 0.41, 0.42, 1.0))
 
 
+def _hinge_frame(p0, p1):
+    """Quat whose local X axis runs along the hinge p0 -> p1."""
+    x = p1 - p0
+    x.normalize()
+    ref = Vec3(0, 1, 0) if abs(x.y) < 0.9 else Vec3(0, 0, 1)
+    y = ref - x * ref.dot(x)
+    y.normalize()
+    z = x.cross(y)
+    q = Quat()
+    q.setFromMatrix(Mat3(x.x, x.y, x.z, y.x, y.y, y.z, z.x, z.y, z.z))
+    return q
+
+
+def _hinge_sign(q, probe, check):
+    """+1 / -1 so that a positive deflection moves ``probe`` (local) the way ``check`` wants."""
+    r = Quat()
+    r.setHpr((0, 10.0, 0))
+    moved = q.xform(r.xform(probe)) - q.xform(probe)
+    return 1.0 if check(moved) else -1.0
+
+
+def _wing_geometry(pm, parts):
+    (x0, le0, te0), (x1, le1, te1) = WING
+
+    def t_of(x):
+        return (x - x0) / (x1 - x0)
+
+    def chord(x):
+        t = t_of(x)
+        return (le0 + (le1 - le0) * t) - (te0 + (te1 - te0) * t)
+
+    def lef_f(x):
+        return 0.40 / chord(x)
+
+    def flap_f(x):
+        return 1.0 - 0.62 / chord(x)
+    zr, zt = 0.13, 0.11
+    th = 0.045
+    tf0, tf1 = t_of(1.25), t_of(3.15)
+    _airfoil_part(pm, WING[0], WING[1], zr, zt, th, chord=(lef_f, 1.0), span=(0.0, tf0), stations=2, caps=(False, False))
+    _airfoil_part(pm, WING[0], WING[1], zr, zt, th, chord=(lef_f, flap_f), span=(tf0, tf1), stations=6,
+                  caps=(False, False))
+    _airfoil_part(pm, WING[0], WING[1], zr, zt, th, chord=(lef_f, 1.0), span=(tf1, 1.0), stations=6, caps=(False, True))
+    # leading edge flap (droops with angle of attack)
+    lef = PaintedMesh()
+    _airfoil_part(lef, WING[0], WING[1], zr, zt, th, chord=(0.0, lef_f), span=(t_of(1.05), 1.0), stations=10,
+                  caps=(False, True))
+
+    def wpt(x, back):
+        t = t_of(x)
+        le = le0 + (le1 - le0) * t
+        return Vec3(x, le - back, zr + (zt - zr) * t)
+    parts.append(dict(name="lef", mesh=lef, p0=wpt(1.05, 0.40), p1=wpt(4.72, 0.40), kind="le"))
+    # flaperon
+    flap = PaintedMesh()
+    _airfoil_part(flap, WING[0], WING[1], zr, zt, th, chord=(flap_f, 1.0), span=(tf0, tf1), stations=4,
+                  caps=(True, True))
+    tpt = lambda x: Vec3(x, te0 + (te1 - te0) * t_of(x) + 0.62, zr + (zt - zr) * t_of(x))   # noqa: E731
+    parts.append(dict(name="flap", mesh=flap, p0=tpt(1.25), p1=tpt(3.15), kind="te"))
+    # all moving stabilator
+    stab = PaintedMesh()
+    _airfoil_part(stab, STAB[0], STAB[1], 0.10, -0.26, 0.045, stations=8, caps=(True, True))
+    parts.append(dict(name="stab", mesh=stab, p0=Vec3(0.70, -5.75, 0.10), p1=Vec3(2.80, -5.75, -0.26), kind="te"))
+
+
+def _fin_geometry(pm, parts):
+    (z0, le0, te0), (z1, le1, te1) = FIN
+
+    def t_of(z):
+        return (z - z0) / (z1 - z0)
+
+    def chord(z):
+        t = t_of(z)
+        return (le0 + (le1 - le0) * t) - (te0 + (te1 - te0) * t)
+
+    def rud_f(z):
+        return 1.0 - 0.66 / chord(z)
+    ra, rb = t_of(0.95), t_of(3.55)
+    _airfoil_part(pm, FIN[0], FIN[1], 0.0, 0.0, 0.05, axis="fin", span=(0.0, ra), stations=2, caps=(False, False))
+    _airfoil_part(pm, FIN[0], FIN[1], 0.0, 0.0, 0.05, axis="fin", chord=(0.0, rud_f), span=(ra, rb), stations=8,
+                  caps=(False, False))
+    _airfoil_part(pm, FIN[0], FIN[1], 0.0, 0.0, 0.05, axis="fin", span=(rb, 1.0), stations=2, caps=(False, True))
+    rudder = PaintedMesh()
+    _airfoil_part(rudder, FIN[0], FIN[1], 0.0, 0.0, 0.05, axis="fin", chord=(rud_f, 1.0), span=(ra, rb), stations=6,
+                  caps=(True, True))
+
+    def hpt(z):
+        t = t_of(z)
+        return Vec3(0.0, te0 + (te1 - te0) * t + 0.66, z)
+    parts.append(dict(name="rudder", mesh=rudder, p0=hpt(0.95), p1=hpt(3.55), kind="rudder"))
+    # dorsal fillet
+    _airfoil_surface(pm, (0.84, -2.10, -3.70), (1.40, -3.55, -3.95), 0.0, 0.0, 0.07, axis="fin", stations=2)
+
+
+def _speedbrakes(parts):
+    """Clamshell speed brakes beside the nozzle (upper and lower petal per side)."""
+    for name, z_lo, z_hi in (("sb_up", 0.08, 0.40), ("sb_lo", -0.26, 0.06)):
+        pm = PaintedMesh()
+        x_in, x_out = 0.60, 0.66
+        rings = []
+        for y in (-6.22, -6.6, -7.0, -7.22):
+            rings.append([Vec3(x_out, y, z_lo), Vec3(x_out, y, z_hi), Vec3(x_in, y, z_hi), Vec3(x_in, y, z_lo),
+                          Vec3(x_out, y, z_lo)])
+        pm.loft(rings, hint=lambda m: Vec3(m.x - 0.63, 0, m.z - (z_lo + z_hi) / 2), smooth=False)
+        pm.cap(rings[-1], sum(rings[-1][:-1], Vec3(0)) / 4, Vec3(0, -1, 0))
+        hinge_z = 0.07
+        parts.append(dict(name=name, mesh=pm, p0=Vec3(0.55, -6.22, hinge_z), p1=Vec3(0.75, -6.22, hinge_z),
+                          kind="up" if name == "sb_up" else "down"))
+
+
 def build_detailed_f16():
-    """Returns (painted NodePath, plain NodePath, glass NodePath)."""
+    """Returns dict(skin, plain, glass, lights, parts=[...])."""
     pm = PaintedMesh()
     plain = MeshBuilder()
     glass = MeshBuilder()
     frame = MeshBuilder()
     interior = MeshBuilder()
+    lights = MeshBuilder()
 
     _fuselage(pm)
     _intake(pm, plain)
     half = PaintedMesh()
-    _airfoil_surface(half, WING[0], WING[1], 0.13, 0.11, 0.045)
-    _airfoil_surface(half, STAB[0], STAB[1], 0.10, -0.26, 0.045)
-    # ventral fin (canted)
+    right_parts = []
+    _wing_geometry(half, right_parts)
+    # ventral fin (canted 15 deg outwards)
     vent = PaintedMesh()
     _airfoil_surface(vent, (-0.52, -3.70, -4.90), (-1.05, -4.30, -5.00), 0.0, 0.0, 0.06, axis="fin", stations=2)
+    ca, sa = math.cos(math.radians(15)), math.sin(math.radians(15))
+
+    def tilt(v, is_normal=False):
+        x = v.x * ca - v.z * sa
+        z = v.x * sa + v.z * ca
+        return Vec3(x, v.y, z) if is_normal else Vec3(x + 0.55, v.y, z)
     for a, b, c, na, nb, nc in vent.tris:
-        def tilt(v, is_normal=False):
-            # rotate 15 deg outwards around the y axis and move to x = 0.5
-            ca, sa = math.cos(math.radians(15)), math.sin(math.radians(15))
-            x = v.x * ca - v.z * sa
-            z = v.x * sa + v.z * ca
-            return Vec3(x, v.y, z) if is_normal else Vec3(x + 0.55 + 0.0, v.y, z)
         half.tri(tilt(a), tilt(b), tilt(c), tilt(na, True), tilt(nb, True), tilt(nc, True))
+    _speedbrakes(right_parts)
     pm.extend(half)
     pm.extend(half.mirrored())
-    # vertical fin + dorsal fillet
-    _airfoil_surface(pm, FIN[0], FIN[1], 0.0, 0.0, 0.05, axis="fin", stations=6)
-    _airfoil_surface(pm, (0.84, -2.10, -3.70), (1.40, -3.55, -3.95), 0.0, 0.0, 0.07, axis="fin", stations=2)
+
+    parts = []
+    for part in right_parts:
+        parts.append(dict(part, name=part["name"] + "_R", side=1.0))
+        mirrored = dict(part, name=part["name"] + "_L", side=-1.0, mesh=part["mesh"].mirrored(),
+                        p0=Vec3(-part["p0"].x, part["p0"].y, part["p0"].z),
+                        p1=Vec3(-part["p1"].x, part["p1"].y, part["p1"].z))
+        parts.append(mirrored)
+    _fin_geometry(pm, parts)
 
     # fin base housing (drag chute / ECM pod of the Block 50)
     rings = []
@@ -522,23 +671,52 @@ def build_detailed_f16():
                       (-7.25, 0.12, 0.16)):
         rings.append(ellipse_ring(y, hw, 0.80, hh, segments=16))
     pm.loft(rings, hint=lambda m: Vec3(m.x, 0, m.z - 0.8))
-    end = rings[-1]
-    pm.cap(end, Vec3(0, -7.25, 0.80), Vec3(0, -1, 0))
+    pm.cap(rings[-1], Vec3(0, -7.25, 0.80), Vec3(0, -1, 0))
 
     _nozzle(plain)
     _canopy(glass, frame, interior)
     _details(plain)
+    _formation_lights(lights)
     plain.extend(frame)
     plain.extend(interior)
 
-    painted = pm.build("f16_skin")
-    plain_np = plain.build("f16_details")
-    glass_np = glass.build("f16_canopy")
-    glass_np.setTransparency(TransparencyAttrib.MAlpha)
-    glass_np.setDepthWrite(False)
-    glass_np.setBin("transparent", 5)
-    glass_np.setTwoSided(True)
-    return painted, plain_np, glass_np
+    out = dict(skin=pm.build("f16_skin"), plain=plain.build("f16_details"), glass=glass.build("f16_canopy"),
+               lights=lights.build("f16_lights"), parts=[])
+    for part in parts:
+        p0, p1 = part["p0"], part["p1"]
+        q = _hinge_frame(p0, p1)
+        qi = Quat(q)
+        qi.invertInPlace()
+        kind = part["kind"]
+        if kind == "te":
+            sign = _hinge_sign(q, Vec3(0, -1, 0), lambda m: m.z < 0)       # trailing edge down
+        elif kind == "le":
+            sign = _hinge_sign(q, Vec3(0, 1, 0), lambda m: m.z < 0)        # leading edge down
+        elif kind == "rudder":
+            sign = _hinge_sign(q, Vec3(0, 0, -1) if abs(q.getRight().z) > 0.5 else Vec3(0, -1, 0),
+                               lambda m: m.x > 0)                            # trailing edge right
+        elif kind == "up":
+            sign = _hinge_sign(q, Vec3(0, -1, 0), lambda m: m.z > 0)        # opens upwards
+        else:
+            sign = _hinge_sign(q, Vec3(0, -1, 0), lambda m: m.z < 0)        # opens downwards
+        node = part["mesh"].build("surf", origin=p0, quat_inv=qi)
+        out["parts"].append(dict(name=part["name"], node=node, pos=p0, quat=q, sign=sign))
+    return out
+
+
+def _formation_lights(mb):
+    """Electroluminescent formation strips and position lights (unlit, they glow)."""
+    strip = (0.70, 0.95, 0.70, 1.0)
+    for side in (-1, 1):
+        x = side * (_catmull(FUSELAGE, 4.0, 3) + 0.004)
+        mb.quad(Vec3(x, 4.25, 0.24), Vec3(x, 3.75, 0.24), Vec3(x, 3.75, 0.28), Vec3(x, 4.25, 0.28), strip,
+                outward=Vec3(side, 0, 0))
+        x = side * (_catmull(FUSELAGE, -4.5, 3) + 0.004)
+        mb.quad(Vec3(x, -4.3, 0.20), Vec3(x, -4.8, 0.20), Vec3(x, -4.8, 0.24), Vec3(x, -4.3, 0.24), strip,
+                outward=Vec3(side, 0, 0))
+        x = side * 0.062
+        mb.quad(Vec3(x, -4.85, 2.30), Vec3(x, -5.25, 2.70), Vec3(x, -5.25, 2.75), Vec3(x, -4.85, 2.35), strip,
+                outward=Vec3(side, 0, 0))
 
 
 # ----------------------------------------------------------------- texture
@@ -638,7 +816,8 @@ class _Painter:
 
 
 LIVERY_COLORS = {
-    "viper": dict(upper=(0.50, 0.53, 0.57), lower=(0.63, 0.66, 0.69), radome=(0.56, 0.58, 0.60), code="HL",
+    "viper": dict(upper=(0.52, 0.55, 0.59), lower=(0.66, 0.68, 0.71), dark=(0.38, 0.40, 0.44),
+                  radome=(0.47, 0.49, 0.52), code="HL",
                   serial="AF 90-0700", stripe=(0.15, 0.15, 0.17)),
     "aggressor": dict(upper=(0.78, 0.66, 0.47), lower=(0.70, 0.73, 0.76), radome=(0.42, 0.40, 0.36), code="WA",
                       serial="AF 86-0291", stripe=(0.70, 0.12, 0.10), camo=((0.55, 0.40, 0.26), (0.86, 0.78, 0.60))),
@@ -672,13 +851,48 @@ def livery_texture(name):
     rng = np.random.default_rng(7)
     up = np.asarray(L["upper"], np.float32)
     lo = np.asarray(L["lower"], np.float32)
-    img[Q:, :Q] = up                                  # top view
-    img[Q:, Q:] = lo                                  # bottom view
-    # side views: upper colour above the chine line, lower colour below
-    rows = np.arange(Q)
-    z = Z0 + rows / Q * (Z1 - Z0)
-    blend = np.clip((z - 0.18) / 0.25, 0, 1)[:, None, None]
-    img[:Q, :] = lo * (1 - blend) + up * blend
+    dark = np.asarray(L.get("dark", L["upper"]), np.float32)
+    grid = (np.arange(Q) + 0.5) / Q
+    xs = X0 + grid * (X1 - X0)                     # top / bottom view columns
+    ys = Y0 + grid * (Y1 - Y0)                     # top / bottom view rows, side view columns
+    zs = Z0 + grid * (Z1 - Z0)                     # side view rows
+    body_hw = np.array([_catmull(FUSELAGE, y, 3) for y in ys], np.float32)
+    body_top = np.array([fuselage_top(y) for y in ys], np.float32)
+    strake = np.interp(ys, [e[0] for e in STRAKE_EDGE], [e[1] for e in STRAKE_EDGE], left=0.0, right=0.0)
+
+    def smooth(e0, e1, v):
+        t = np.clip((v - e0) / (e1 - e0), 0.0, 1.0)
+        return t * t * (3.0 - 2.0 * t)
+
+    # --- top view: medium grey wings, dark grey spine and strakes (F-16 "Hill grey" scheme)
+    dw = np.maximum(body_hw * 0.82, strake * 0.97)
+    dw = np.where((ys > -6.9) & (ys < 5.9), dw, 0.0)
+    wave = 0.04 * np.sin(ys * 3.1)
+    inside = smooth(0.06, -0.06, np.abs(xs)[None, :] - (dw + wave)[:, None])
+    top_img = up[None, None, :] * (1 - inside[..., None]) + dark[None, None, :] * inside[..., None]
+    # ambient occlusion where wing and body meet
+    ao = 1.0 - 0.13 * np.exp(-((np.abs(xs)[None, :] - (body_hw + 0.05)[:, None]) / 0.16) ** 2) * \
+        ((ys > -3.3) & (ys < 1.5))[:, None]
+    soot = 1.0 - 0.25 * smooth(-6.2, -7.0, ys)[:, None] * (np.abs(xs) < 0.75)[None, :]
+    img[Q:, :Q] = top_img * (ao * soot)[..., None]
+    img[Q:, Q:] = lo
+    img[Q:, Q:] *= (1.0 - 0.10 * np.exp(-((np.abs(xs)[None, :] - (body_hw + 0.05)[:, None]) / 0.16) ** 2)
+                    * ((ys > -3.3) & (ys < 1.5))[:, None])[..., None]
+
+    # --- side views: dark spine, medium sides and fin, light belly
+    Zg = zs[:, None]
+    dark_mask = smooth(body_top - 0.34, body_top - 0.26, Zg) * (1.0 - smooth(body_top + 0.02, body_top + 0.12, Zg))
+    dark_mask *= ((ys > -6.9) & (ys < 5.9))[None, :]
+    light_mask = smooth(0.12, 0.0, Zg + 0.03 * np.sin(ys * 2.3)[None, :])
+    side = np.empty((Q, Q, 3), np.float32)
+    side[:] = up
+    side = side * (1 - dark_mask[..., None]) + dark * dark_mask[..., None]
+    side = side * (1 - light_mask[..., None]) + lo * light_mask[..., None]
+    occl = 1.0 - 0.12 * np.exp(-((Zg - 0.02) / 0.09) ** 2) * ((ys > -3.6) & (ys < 4.6))[None, :]
+    occl *= 1.0 - 0.14 * np.exp(-((Zg + 0.47) / 0.06) ** 2) * ((ys > -2.4) & (ys < 3.5))[None, :]
+    side *= occl[..., None]
+    img[:Q, :Q] = side                                       # right side view (columns: y increasing)
+    img[:Q, Q:] = side[:, ::-1]                              # left side view is mirrored
     if "camo" in L:
         cam = list(L["camo"]) + [tuple(L["upper"])]
         _camo(p, p.top, (X0, X1, Y0, Y1), cam, 3)
@@ -840,17 +1054,105 @@ def _material(shininess, spec):
 
 _GEOMETRY = {}
 
+PART_NAMES = ("lef", "flap", "stab", "sb_up", "sb_lo")
+
 
 def build_f16_detailed(livery="viper"):
     if "geom" not in _GEOMETRY:
         _GEOMETRY["geom"] = build_detailed_f16()
-    painted, plain, glass = _GEOMETRY["geom"]
+    g = _GEOMETRY["geom"]
     root = NodePath("f16_" + livery)
-    skin = painted.copyTo(root)
-    skin.setTexture(livery_texture(livery))
-    skin.setMaterial(_material(30.0, 0.22))
-    plain.copyTo(root).setMaterial(_material(20.0, 0.15))
-    g = glass.copyTo(root)
-    g.setMaterial(_material(90.0, 0.9))
+    tex = livery_texture(livery)
+    paint = _material(30.0, 0.22)
+    skin = g["skin"].copyTo(root)
+    skin.setTexture(tex)
+    skin.setMaterial(paint)
+    g["plain"].copyTo(root).setMaterial(_material(20.0, 0.15))
+    lights = g["lights"].copyTo(root)
+    lights.setLightOff(1)
+    glass = g["glass"].copyTo(root)
+    glass.setMaterial(_material(90.0, 0.9))
+    glass.setTransparency(TransparencyAttrib.MAlpha)
+    glass.setDepthWrite(False)
+    glass.setBin("transparent", 5)
+    glass.setTwoSided(True)
+    stage = TextureStage("reflection")
+    stage.setMode(TextureStage.MAdd)
+    glass.setTexture(stage, reflection_texture())
+    glass.setTexGen(stage, TexGenAttrib.MEyeSphereMap)
+    for part in g["parts"]:
+        pivot = root.attachNewNode("part_" + part["name"])
+        pivot.setPos(part["pos"])
+        pivot.setQuat(part["quat"])
+        pivot.setTag("part", part["name"])
+        pivot.setTag("sign", "%.1f" % part["sign"])
+        surf = part["node"].copyTo(pivot)
+        surf.setTexture(tex)
+        surf.setMaterial(paint)
     return root
 
+
+_REFLECTION = {}
+
+
+def reflection_texture():
+    """Sphere map of sky (top), horizon glare and ground (bottom) for the canopy."""
+    if "tex" in _REFLECTION:
+        return _REFLECTION["tex"]
+    n = 256
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
+    u = (xx / (n - 1)) * 2 - 1
+    v = (yy / (n - 1)) * 2 - 1              # rows bottom -> top in texture memory
+    r = np.sqrt(u * u + v * v)
+    sky = np.stack([0.30 + 0.25 * v, 0.38 + 0.25 * v, 0.50 + 0.25 * v], -1)
+    ground = np.stack([np.full_like(v, 0.10), np.full_like(v, 0.11), np.full_like(v, 0.08)], -1)
+    col = np.where((v > -0.05)[..., None], sky, ground)
+    horizon = np.exp(-((v + 0.05) / 0.08) ** 2)[..., None] * 0.35
+    sun = np.exp(-(((u - 0.35) ** 2 + (v - 0.45) ** 2) / 0.006))[..., None] * 0.9
+    col = np.clip(col + horizon + sun, 0, 1) * (r <= 1.0)[..., None]
+    rgb = (col * 255).astype(np.uint8)
+    tex = Texture("canopy_reflection")
+    tex.setup2dTexture(n, n, Texture.T_unsigned_byte, Texture.F_rgb)
+    tex.setRamImage(rgb[:, :, ::-1].tobytes())
+    _REFLECTION["tex"] = tex
+    return tex
+
+
+class ControlSurfaces:
+    """Moves the flight controls of one detailed F-16 model like the FLCS would.
+
+    Angles in degrees (positive = trailing edge down / leading edge down /
+    rudder trailing edge right / speed brake open); actuators are rate limited.
+    """
+
+    RATE = 60.0      # deg/s actuator speed
+
+    def __init__(self, model_root):
+        self.parts = {}
+        for pivot in model_root.findAllMatches("**/=part"):
+            surf = pivot.find("surf")
+            self.parts[pivot.getTag("part")] = [surf, float(pivot.getTag("sign")), 0.0]
+
+    def _move(self, name, target, dt):
+        part = self.parts.get(name)
+        if part is None:
+            return
+        surf, sign, angle = part
+        step = self.RATE * dt
+        angle += max(-step, min(step, target - angle))
+        part[2] = angle
+        surf.setP(angle * sign)
+
+    def update(self, dt, pitch, roll, yaw, alpha_deg, flaps, speedbrake, on_ground=False):
+        stab = -pitch * 16.0
+        self._move("stab_R", stab - roll * 5.0, dt)
+        self._move("stab_L", stab + roll * 5.0, dt)
+        self._move("flap_R", flaps * 20.0 - roll * 18.0, dt)
+        self._move("flap_L", flaps * 20.0 + roll * 18.0, dt)
+        lef = 0.0 if on_ground else max(-2.0, min(25.0, alpha_deg * 1.4 - 2.0))
+        self._move("lef_R", lef, dt)
+        self._move("lef_L", lef, dt)
+        self._move("rudder", yaw * 25.0, dt)
+        brake = speedbrake * 60.0
+        for name in ("sb_up_R", "sb_up_L", "sb_lo_R", "sb_lo_L"):
+            self._move(name, brake, dt)
