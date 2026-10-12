@@ -16,6 +16,22 @@ Alap fegyverzet: 4× AIM-9M + 2× AIM-120A (`--loadout amraam` = 4× AIM-120A + 
 Az ellenfelek is F-16-osok („aggressor” homokszínű festéssel), AI pilótával: radarral lockolnak,
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
+## A gép
+
+![F-16C](docs/f16_front.png)
+
+Részletes, valódi méretekből kódból épített F-16C Block 50 (nem kell hozzá külső 3D fájl):
+lekerekített, a szárnyba simuló törzs (blended wing-body) éles szárnytő-kiterjesztéssel (LERX),
+NACA szárnyprofilok, alsó szívócsatorna a belsejéig, átlátszó aranyszínű kabintető alatt ACES II
+katapultülés és pilóta, szirmos F110-fúvóka lángtartóval, pitot-cső, „bird slicer” IFF-antennák,
+fékernyő-konténer, LAU-129 indítósínek, pilonok. A festés textúra: kétszínű szürke (vagy aggressor
+sivatagi terepszín), panelvonalak, szegecsek, koromnyomok, USAF felségjelek, farokkód és gyári szám.
+Közelről a részletes modell, 2,5 km-en túl egy egyszerűbb változat látszik (LOD), így gyors marad.
+
+| | |
+|---|---|
+| ![Aggressor](docs/f16_aggressor.png) | ![Kabin](docs/f16_cockpit.png) |
+
 ## Telepítés és indítás
 
 Python 3.9+ kell (Panda3D + numpy).
@@ -32,7 +48,7 @@ python main.py --difficulty hard --enemies 3     # nehezebb AI, több ellenség
 python main.py --fullscreen --size 1920x1080
 python main.py --loadout amraam                  # 4 AMRAAM
 python main.py --sensitivity 0.06 --invert-y     # egér beállítások
-python main.py --clouds 20 --no-aa               # gyengébb gépre
+python main.py --clouds 20 --no-aa --no-shaders  # gyengébb gépre
 python main.py --air-start                       # levegőben indulás, felszállás nélkül
 ```
 
@@ -193,7 +209,7 @@ dogfight/
     guns.py             gépágyú, ballisztika, találat-doboz, előretartás
     aircraft.py, world.py, terrain.py, signatures.py, countermeasures.py
   ai/                   AI pilóta + közös "instruktor" (irány -> kormánymozdulatok)
-  render/               procedurális F-16 (futóművel) és rakéta modellek, terep (LOD), reptér, ég, effektek
+  render/               részletes F-16 (f16_model.py) és rakéta modellek, terep (LOD), reptér, ég, effektek
   ui/                   HUD, radar B-scope, RWR, súgó
 tests/                  pytest tesztek a szimulációhoz
 ```

@@ -6,9 +6,10 @@ including wingtip missiles).  +Y is forward, +Z up, +X right.
 
 import math
 
-from panda3d.core import (ColorBlendAttrib, NodePath, TransparencyAttrib, Vec3)
+from panda3d.core import ColorBlendAttrib, LODNode, NodePath, TransparencyAttrib, Vec3
 
 from ..mathutil import interp_table
+from .f16_model import build_f16_detailed
 from .meshbuilder import MeshBuilder, ellipse_ring
 
 LIVERIES = {
@@ -154,11 +155,30 @@ def build_f16(livery_name="viper"):
 
 
 MISSILE_SHAPES = {
-    "AIM-9M": dict(length=2.87, radius=0.0635, nose=0.22, body=(0.80, 0.81, 0.80, 1), nose_col=(0.25, 0.30, 0.36, 1),
-                   band=(0.85, 0.75, 0.25, 1), front=(0.95, 0.24, 0.20), rear=(-1.05, 0.32, 0.30), mid=None),
-    "AIM-120A": dict(length=3.65, radius=0.089, nose=0.55, body=(0.88, 0.88, 0.86, 1), nose_col=(0.70, 0.70, 0.68, 1),
-                     band=(0.80, 0.70, 0.25, 1), front=None, rear=(-1.45, 0.21, 0.32), mid=(0.15, 0.17, 0.55)),
+    "AIM-9M": dict(length=2.87, radius=0.0635, body=(0.80, 0.81, 0.80, 1)),
+    "AIM-120A": dict(length=3.65, radius=0.089, body=(0.90, 0.90, 0.88, 1)),
 }
+_YELLOW = (0.86, 0.70, 0.12, 1.0)
+_BROWN = (0.42, 0.30, 0.18, 1.0)
+_DARK = (0.08, 0.08, 0.09, 1.0)
+
+
+def _fin_set(mb, r, y_center, root_chord, span, tip_chord, sweep, color, rolleron=False, angle0=math.pi / 4):
+    for k in range(4):
+        a = angle0 + k * math.pi / 2
+        d = Vec3(math.cos(a), 0, math.sin(a))
+        thick = Vec3(-math.sin(a), 0, math.cos(a))
+        root_le = d * r + Vec3(0, y_center + root_chord * 0.5, 0)
+        root_te = d * r + Vec3(0, y_center - root_chord * 0.5, 0)
+        tip_le = d * (r + span) + Vec3(0, y_center + root_chord * 0.5 - sweep, 0)
+        tip_te = tip_le - Vec3(0, tip_chord, 0)
+        mb.surface(root_le, root_te, tip_le, tip_te, 0.014, 0.006, thick, color)
+        if rolleron:   # small gyro wheel at the trailing tip corner
+            c = d * (r + span - 0.025) + Vec3(0, y_center - root_chord * 0.5 + 0.035, 0)
+            ring0 = [c + thick * 0.008 + (d * math.cos(t) + Vec3(0, math.sin(t), 0)) * 0.035
+                     for t in (2 * math.pi * j / 10 for j in range(11))]
+            ring1 = [p - thick * 0.016 for p in ring0]
+            mb.loft([ring0, ring1], _DARK, cap_front=(0.5, 0.5, 0.5, 1.0), cap_back=(0.5, 0.5, 0.5, 1.0))
 
 
 def build_missile(key):
@@ -166,34 +186,58 @@ def build_missile(key):
     mb = MeshBuilder()
     length = s["length"]
     r = s["radius"]
+    body = s["body"]
     tail = -length * 0.5
-    nose_start = length * 0.5 - s["nose"]
-    rings = [ellipse_ring(tail, r, 0.0, r, segments=10),
-             ellipse_ring(nose_start - 0.35, r, 0.0, r, segments=10),
-             ellipse_ring(nose_start - 0.3, r * 1.001, 0.0, r * 1.001, segments=10),
-             ellipse_ring(nose_start, r, 0.0, r, segments=10)]
-    mb.loft(rings, lambda p, n: s["band"] if nose_start - 0.35 < p.y < nose_start - 0.29 else s["body"],
-            cap_back=DARK)
-    nose = [ellipse_ring(nose_start, r, 0.0, r, segments=10),
-            ellipse_ring(nose_start + s["nose"] * 0.5, r * 0.75, 0.0, r * 0.75, segments=10),
-            [Vec3(0, length * 0.5, 0) for _ in range(11)]]
-    mb.loft(nose, s["nose_col"])
+    front = length * 0.5
+    seg = 16
 
-    def fins(y_center, span, chord):
-        for k in range(4):
-            a = math.pi / 4 + k * math.pi / 2
-            d = Vec3(math.cos(a), 0, math.sin(a))
-            thick = Vec3(-math.sin(a), 0, math.cos(a))
-            root_le = d * r + Vec3(0, y_center + chord * 0.5, 0)
-            root_te = d * r + Vec3(0, y_center - chord * 0.5, 0)
-            tip_le = d * (r + span) + Vec3(0, y_center - chord * 0.1, 0)
-            tip_te = d * (r + span) + Vec3(0, y_center - chord * 0.5, 0)
-            mb.surface(root_le, root_te, tip_le, tip_te, 0.012, 0.006, thick, s["body"])
+    def ring(y, rr):
+        return ellipse_ring(y, rr, 0.0, rr, segments=seg)
+    if key == "AIM-9M":
+        nose_y = front - 0.11
+        bands = ((nose_y - 0.62, nose_y - 0.56, _YELLOW), (tail + 1.15, tail + 1.09, _BROWN))
+    else:
+        nose_y = front - 0.55
+        bands = ((nose_y - 0.32, nose_y - 0.26, _YELLOW), (tail + 1.40, tail + 1.34, _BROWN))
 
-    for key2 in ("front", "mid", "rear"):
-        f = s[key2]
-        if f is not None:
-            fins(f[0], f[1], f[2])
+    def body_color(p, n):
+        for y0, y1, col in bands:
+            if y1 <= p.y <= y0:
+                return col
+        if p.y < tail + 0.12:
+            return (0.55, 0.56, 0.56, 1.0)
+        return body
+    ys = sorted({tail, tail + 0.12, nose_y} | {b[0] for b in bands} | {b[1] for b in bands})
+    for y0, y1 in zip(ys, ys[1:]):          # one loft per segment: crisp paint bands
+        col = body_color(Vec3(0, (y0 + y1) * 0.5, 0), None)
+        mb.loft([ring(y0, r), ring(y1, r)], col)
+    # recessed nozzle
+    nozzle = [ring(tail, r), ring(tail + 0.02, r * 0.75), ring(tail + 0.15, r * 0.6)]
+    inner = MeshBuilder()
+    inner.loft(nozzle, _DARK)
+    inner.tris = [(a, c, b) for a, b, c in inner.tris]
+    mb.extend(inner)
+    mb._cap(nozzle[-1], Vec3(0, tail + 0.15, 0), Vec3(0, -1, 0), _DARK)
+
+    if key == "AIM-9M":
+        # glass seeker dome + guidance section with double delta canards
+        dome = [ring(nose_y, r)]
+        for k in range(1, 7):
+            a = k / 6 * math.pi / 2
+            dome.append(ring(nose_y + math.sin(a) * 0.11, r * math.cos(a) + 0.0005))
+        mb.loft(dome, (0.14, 0.17, 0.22, 1.0))
+        _fin_set(mb, r, front - 0.40, 0.30, 0.20, 0.06, 0.20, body)
+        _fin_set(mb, r, front - 0.40, 0.12, 0.27, 0.03, 0.08, body)
+        _fin_set(mb, r, tail + 0.24, 0.34, 0.26, 0.20, 0.14, body, rolleron=True)
+    else:
+        # ogive radome, mid-body wings, clipped tail fins
+        ogive = []
+        for k in range(9):
+            t = k / 8
+            ogive.append(ring(nose_y + t * 0.55, r * math.sqrt(max(1 - t * t, 0.0)) * (1 - 0.12 * t) + 0.0005))
+        mb.loft(ogive, lambda p, n: (0.78, 0.78, 0.76, 1.0))
+        _fin_set(mb, r, 0.15, 0.55, 0.11, 0.30, 0.25, body)
+        _fin_set(mb, r, tail + 0.20, 0.32, 0.21, 0.14, 0.18, body)
     return mb.build("missile_" + key)
 
 
@@ -257,8 +301,18 @@ class ModelLibrary:
             self._cache[key] = node
         return self._cache[key]
 
-    def aircraft(self, livery):
-        return self._get(("f16", livery), lambda: build_f16(livery)).copyTo(NodePath("ac"))
+    def aircraft(self, livery, detail_range=2500.0):
+        """F-16 with two levels of detail: the full model up close, the light one far away."""
+        key = ("f16_lod", livery)
+        if key not in self._cache:
+            lod = LODNode("f16_lod")
+            root = NodePath(lod)
+            build_f16_detailed(livery).reparentTo(root)
+            lod.addSwitch(detail_range, 0.0)
+            self._get(("f16", livery), lambda: build_f16(livery)).copyTo(root)
+            lod.addSwitch(1.0e7, detail_range)
+            self._cache[key] = root
+        return self._cache[key].copyTo(NodePath("ac"))
 
     def missile(self, key):
         return self._get(("missile", key), lambda: build_missile(key)).copyTo(NodePath("m"))

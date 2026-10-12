@@ -18,6 +18,7 @@ def parse_args(argv=None):
     p.add_argument("--volume", type=float, default=0.8, help="hangerő 0..1")
     p.add_argument("--mute", action="store_true", help="hang kikapcsolása")
     p.add_argument("--clouds", type=int, default=70, help="felhők száma (gyengébb gépen kevesebb)")
+    p.add_argument("--no-shaders", action="store_true", help="per-pixel fényezés kikapcsolása (régi videokártyákhoz)")
     p.add_argument("--no-aa", action="store_true", help="élsimítás kikapcsolása")
     p.add_argument("--fps", action="store_true", help="FPS kijelzés")
     p.add_argument("--seed", type=int, default=None, help="véletlen mag")

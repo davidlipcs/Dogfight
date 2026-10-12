@@ -73,6 +73,9 @@ class DogfightApp:
         base.camLens.setFov(70)
         if not options.no_aa:
             base.render.setAntialias(AntialiasAttrib.MMultisample)
+        gsg = base.win.getGsg() if base.win is not None else None
+        if not options.no_shaders and gsg is not None and gsg.getSupportsBasicShaders():
+            base.render.setShaderAuto()          # per-pixel lighting, glossy paint and canopy
         if options.fps:
             base.setFrameRateMeter(True)
         # plain key names ("t" instead of "shift-t" while Shift is held for throttle)

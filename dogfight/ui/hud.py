@@ -345,7 +345,7 @@ class HUD:
         L.text("HP   %5d" % max(0, ac.hp), x, y - 0.25, GREEN if ac.hp > 50 else RED)
 
         # weapons
-        y = -0.66
+        y = -0.79
         parts = []
         for key in ac.weapon_keys():
             n = ac.missile_count(key)
