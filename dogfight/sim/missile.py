@@ -23,7 +23,7 @@ import math
 
 from panda3d.core import Vec3
 
-from ..mathutil import DEG, G, angle_between, clamp, closest_approach, interp_table, safe_normalized, smoothstep
+from ..mathutil import DEG, G, angle_between, closest_approach, interp_table, safe_normalized, smoothstep
 from .atmosphere import isa
 from .ir_seeker import IRSeeker
 from .radar import STT
