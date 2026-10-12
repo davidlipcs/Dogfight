@@ -88,7 +88,10 @@ class Input {
     });
     addEventListener('keyup', (e) => { const n = this.codeName.get(e.code) || Input.name(e); this.held.delete(n); this.codeName.delete(e.code); });
     addEventListener('blur', () => { this.held.clear(); this.codeName.clear(); this.mouse = [false, false, false]; });
-    el.addEventListener('mousedown', (e) => { this.mouse[e.button] = true; if (this.handlers.mousedown) this.handlers.mousedown(e); });
+    el.addEventListener('mousedown', (e) => {
+      if (e.button === 1) e.preventDefault();          // middle button: no autoscroll
+      this.mouse[e.button] = true; if (this.handlers.mousedown) this.handlers.mousedown(e);
+    });
     addEventListener('mouseup', (e) => { this.mouse[e.button] = false; });
     addEventListener('mousemove', (e) => {
       this.dx += e.movementX || 0; this.dy += e.movementY || 0;
@@ -98,7 +101,18 @@ class Input {
     el.addEventListener('mouseenter', () => { this.inside = true; });
     el.addEventListener('mouseleave', () => { this.inside = false; });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
-    el.addEventListener('wheel', (e) => { e.preventDefault(); if (this.handlers.wheel) this.handlers.wheel(Math.sign(e.deltaY)); }, { passive: false });
+    let wheelAcc = 0, wheelTime = 0;
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      // touchpads send many small events: one weapon step per notch-sized amount, at most ~6 per second
+      const now = performance.now();
+      if (now - wheelTime > 400) wheelAcc = 0;
+      wheelAcc += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+      if (Math.abs(wheelAcc) >= 40 && now - wheelTime > 150) {
+        if (this.handlers.wheel) this.handlers.wheel(Math.sign(wheelAcc));
+        wheelAcc = 0; wheelTime = now;
+      }
+    }, { passive: false });
   }
   static name(e) {
     if (e.code && e.code.startsWith('Digit')) return e.code.slice(5);
@@ -134,8 +148,11 @@ class Game {
     this.state = { wave: 0, kills: 0, deaths: 0, banner: '', subBanner: '', paused: true, waveTimer: FIRST_WAVE_DELAY, rearmTimer: 0, waveActive: false };
     this.player = null; this.pilot = null; this.helpVisible = false; this.locked = false;
     this.input.handlers.press = (k) => this.onKey(k);
-    this.input.handlers.wheel = (s) => { this.cam.zoom = clamp(this.cam.zoom - s, 0, 2); };
-    this.input.handlers.mousedown = () => { if (this.state.paused && !this.helpVisible) this.resume(); };
+    this.input.handlers.wheel = (s) => this.cycleWeapon(s);
+    this.input.handlers.mousedown = (e) => {
+      if (this.state.paused && !this.helpVisible) this.resume();
+      else if (e.button === 1) this.cam.zoom = (this.cam.zoom + 1) % 3;     // middle button: zoom steps
+    };
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
       if (!this.locked && !this.state.paused && this.lockWanted) this.pause();
@@ -252,7 +269,7 @@ class Game {
       cam.rotate(-dz(inp.mx) * 95 * dt, -dz(inp.my) * 70 * dt * (cam.invertY ? -1 : 1));
     }
     this.pilot.aim = cam.aimDirection();
-    this.pilot.pitch = inp.axis('w', 's');
+    this.pilot.pitch = inp.axis('s', 'w');      // S = nose up (pull), W = nose down (push)
     this.pilot.roll = inp.axis('d', 'a');
     this.pilot.yaw = inp.axis('e', 'q');
     if (inp.key('shift')) c.throttle = Math.min(1.1, c.throttle + THROTTLE_RATE * dt);
@@ -292,6 +309,17 @@ class Game {
   showOverlay(which) {
     $('help').hidden = which !== 'help';
     $('pause').hidden = which !== 'pause';
+  }
+  cycleWeapon(dir) {
+    if (!this.canAct()) return;
+    const p = this.player;
+    const keys = p.weaponKeys();
+    const loaded = keys.filter((k) => p.missileCount(k) > 0);
+    const list = loaded.length ? loaded : keys;
+    if (!list.length) return;
+    const i = list.indexOf(p.selected);
+    const next = list[((i < 0 ? 0 : i + (dir > 0 ? 1 : -1)) % list.length + list.length) % list.length];
+    if (next !== p.selected && p.select(next)) this.hud.message(`${next}  (${p.missileCount(next)})`, 'info', 1);
   }
   respawn() {
     if (this.player && !this.player.alive) {

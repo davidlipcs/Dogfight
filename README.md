@@ -77,7 +77,8 @@ python main.py --air-start                       # levegőben indulás, felszál
 | Billentyű | Funkció |
 |---|---|
 | **Egér** | War Thunder-féle egeres célzás: a gép a fehér kör felé repül |
-| W / S, A / D, Q / E | magassági, csűrő, oldalkormány kézi felülbírálása |
+| S / W | orr fel / orr le (magassági kormány kézi felülbírálása) |
+| A / D, Q / E | csűrő, oldalkormány kézi felülbírálása |
 | Shift / Ctrl | gáz fel / le (100% felett **utánégető**) |
 | **G** | futómű ki / be |
 | B (tartva) | a földön **kerékfék**, a levegőben légfék |
@@ -86,6 +87,7 @@ python main.py --air-start                       # levegőben indulás, felszál
 | V | kabin (HUD) / külső nézet |
 | **Bal egérgomb** | gépágyú |
 | **Space** | rakéta indítása |
+| Egérgörgő | fegyverváltás (a következő / előző rakétatípus) |
 | 1 / 2 | AIM-9M / AIM-120A kiválasztása |
 | X (tartva) | flare + chaff |
 | R | radar be / ki |
@@ -107,7 +109,7 @@ megközelítési fények). Az ellenség csak a felszállás után érkezik.
 
 **Felszállás**
 1. **Shift**-tel told fel a gázt 100% fölé (utánégető). A hajtómű pár másodperc alatt pörög fel.
-2. ~**250–280 km/h**-nál emeld meg az egeret (vagy nyomd a **W**-t): a gép felemeli az orrát.
+2. ~**250–280 km/h**-nál emeld meg az egeret (vagy nyomd az **S**-t): a gép felemeli az orrát.
    Vigyázz, 13° felett a farok a betonhoz ér (farokütés)!
 3. ~**320 km/h** körül elemelkedik (utánégetővel kb. 450 m nekifutás, katonai teljesítménnyel kb. 700 m).
 4. **G** = futómű be. Kiengedett futóművel ne menj 550 km/h fölé (GEAR SPEED).

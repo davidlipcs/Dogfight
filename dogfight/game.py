@@ -167,6 +167,8 @@ class DogfightApp:
         b.accept("r", self._radar_power)
         b.accept("1", self._select, ["AIM-9M"])
         b.accept("2", self._select, ["AIM-120A"])
+        b.accept("wheel_up", self._cycle_weapon, [-1])
+        b.accept("wheel_down", self._cycle_weapon, [1])
         b.accept("v", self.cam.toggle_view)
         b.accept("m", self._toggle_markers)
         b.accept("h", self._toggle_help)
@@ -226,6 +228,20 @@ class DogfightApp:
         if self._can_act():
             self.player.radar.toggle_power()
             self.hud.message("RADAR %s" % ("BE" if self.player.radar.on else "KI"), "info", 1.2)
+
+    def _cycle_weapon(self, step):
+        if not self._can_act():
+            return
+        p = self.player
+        keys = p.weapon_keys()
+        loaded = [k for k in keys if p.missile_count(k) > 0]
+        order = loaded or keys
+        if not order:
+            return
+        i = order.index(p.selected) + step if p.selected in order else 0
+        key = order[i % len(order)]
+        if key != p.selected and p.select(key):
+            self.hud.message("%s  (%d)" % (key, p.missile_count(key)), "info", 1.0)
 
     def _select(self, key):
         if self._can_act() and self.player.select(key):

@@ -7,7 +7,7 @@ F-16C VIPER  -  IRÁNYÍTÁS
 
 REPÜLÉS (War Thunder "egeres célzás")
   Egér ............ ide repül a gép (fehér kör)
-  W / S ........... magassági kormány felülbírálás
+  S / W ........... orr fel / orr le (magassági kormány)
   A / D ........... orsózás   Q / E: oldalkormány
   Shift / Ctrl .... gáz fel / le (100% felett: UTÁNÉGETŐ)
   B (tartva) ...... földön kerékfék, levegőben légfék
@@ -17,7 +17,7 @@ REPÜLÉS (War Thunder "egeres célzás")
 
 FELSZÁLLÁS ÉS LESZÁLLÁS
   Shift-tel told a gázt 100% fölé (utánégető), ~280 km/h-nál
-  emeld meg az egeret (vagy W) -> elemelkedik. Utána G.
+  emeld meg az egeret (vagy S) -> elemelkedik. Utána G.
   Leszállás: G (futómű ki), ~270 km/h, lassú süllyedés
   (< 4 m/s!), szárnyak vízszintesen, földön B = fék.
   A bázison megállva: újrafegyverzés, tankolás, javítás.
@@ -25,6 +25,7 @@ FELSZÁLLÁS ÉS LESZÁLLÁS
 FEGYVEREK
   Bal egér ........ M61A1 gépágyú
   Space ........... rakéta indítása
+  Görgő ........... fegyverváltás
   1 / 2 ........... AIM-9M / AIM-120A kiválasztása
   X (tartva) ...... flare + chaff
 

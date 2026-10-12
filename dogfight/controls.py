@@ -71,7 +71,7 @@ class InputReader:
         """Copy the held keys onto the player's aircraft for this frame."""
         ac = pilot.ac
         pilot.aim = cam.aim_direction()
-        pilot.pitch = self.axis("w", "s")
+        pilot.pitch = self.axis("s", "w")      # S = nose up (pull), W = nose down (push)
         pilot.roll = self.axis("d", "a")
         pilot.yaw = self.axis("e", "q")
         c = ac.controls
