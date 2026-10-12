@@ -95,8 +95,16 @@
   <div class="card">
     <div class="eyebrow">F-16C Block 50 · AIM-9M · AIM-120A</div>
     <h1>Dogfight <span>Viper</span></h1>
-    <p>Egeres célzás, mint a War Thunderben: oda repül a gép, ahová az egérrel nézel. Radar- és hőkövető lock, gépágyú, flare és chaff. Az ellenség hullámokban jön, a bázison leszállva újratölthetsz.</p>
+    <p>Egeres célzás, mint a War Thunderben: oda repül a gép, ahová az egérrel nézel. Radar- és hőkövető lock, gépágyú, flare és chaff. Az ellenség hullámokban jön. Arkád módban a rakéták maguktól újratöltődnek, realisztikusban csak a bázison leszállva.</p>
     <div class="opts">
+      <div class="row">
+        <span class="label">Játékmód</span>
+        <div class="seg" role="radiogroup" aria-label="Játékmód">
+          <input type="radio" name="mode" id="m-arcade" value="arcade" checked><label for="m-arcade">Arkád</label>
+          <input type="radio" name="mode" id="m-real" value="realistic"><label for="m-real">Realisztikus</label>
+        </div>
+        <span class="hint" id="mode-hint">rakéták 10 s alatt újratöltődnek</span>
+      </div>
       <div class="row">
         <span class="label">Nehézség</span>
         <div class="seg" role="radiogroup" aria-label="Nehézség">
@@ -150,12 +158,12 @@
           <dt>S / W</dt><dd>orr fel / orr le (magassági kormány)</dd>
           <dt>A / D</dt><dd>orsózás</dd>
           <dt>Q / E</dt><dd>oldalkormány</dd>
-          <dt>Shift / Z</dt><dd>gáz fel / le (100% felett utánégető); Z egyszer: utánégető ki</dd>
+          <dt>Shift / Z, Ctrl</dt><dd>gáz fel / le: koppintás 5%, tartva folyamatos; 100%-nál megáll, újra Shift = utánégető, Z/Ctrl = utánégető ki</dd>
           <dt>B</dt><dd>földön fék, levegőben légfék (tartva)</dd>
           <dt>G</dt><dd>futómű ki / be</dd>
           <dt>C, jobb egér</dt><dd>szabad körülnézés</dd>
           <dt>Középső egér</dt><dd>zoom (3 fokozat)</dd>
-          <dt>V</dt><dd>kabin / külső nézet</dd>
+          <dt>V</dt><dd>kabin / külső nézet (a kabin együtt mozog a géppel; C-vel körülnézel)</dd>
         </dl>
       </div>
       <div>
@@ -176,7 +184,7 @@
       </div>
       <div class="tip">
         <h3 style="margin:0 0 6px;font:600 12px var(--mono);letter-spacing:.14em;color:var(--hud)">FELSZÁLLÁS</h3>
-        Tartsd a <b>Shiftet</b>, amíg a gáz 100% fölé megy (utánégető). <b>~280 km/h</b>-nál emeld az egeret (vagy S), a gép elemelkedik, utána <b>G</b>. Leszállás: futómű ki, ~270 km/h, lassú süllyedés (&lt; 4 m/s), a földön <b>B</b> fékez. A bázison megállva újratölt, tankol és javít.
+        Tartsd a <b>Shiftet</b>: a gáz 100%-nál megáll, ott még egy <b>Shift</b> = utánégető. <b>~280 km/h</b>-nál emeld az egeret (vagy S), a gép elemelkedik, utána <b>G</b>. Leszállás: futómű ki, ~270 km/h, lassú süllyedés (&lt; 4 m/s), a földön <b>B</b> fékez. A bázis betonján lelassulva azonnal újratölt, tankol és javít.
       </div>
       <div class="tip">
         <h3 style="margin:0 0 6px;font:600 12px var(--mono);letter-spacing:.14em;color:var(--hud)">HOGYAN LOCKOLJ?</h3>

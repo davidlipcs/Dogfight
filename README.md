@@ -77,6 +77,16 @@ python main.py --clouds 20 --no-aa --no-shaders  # gyengébb gépre
 python main.py --air-start                       # levegőben indulás, felszállás nélkül
 ```
 
+## Játékmódok
+
+* **Arkád** (alapértelmezett, `--mode arcade`): minden kilőtt rakéta 10 s múlva magától visszakerül a sínre
+  (a HUD alján látszik: `AIM-9M x3 +1 (7s)`).
+* **Realisztikus** (`--mode realistic`): újratöltés csak leszállás után – a bázis betonján lelassulva azonnal
+  újrafegyvereznek, tankolnak és megjavítanak.
+
+Minden rád kilőtt rakétánál (a hőkövetőknél is) szól a rakétaközelítés-jelző: egyre gyorsuló sípolás, „MISSILE!”,
+piros jel a rakétán a távolsággal és a becsapódásig hátralévő idővel, az RWR-en `M`.
+
 ## Irányítás
 
 | Billentyű | Funkció |
@@ -84,12 +94,12 @@ python main.py --air-start                       # levegőben indulás, felszál
 | **Egér** | War Thunder-féle egeres célzás: a gép a fehér kör felé repül |
 | S / W | orr fel / orr le (magassági kormány kézi felülbírálása) |
 | A / D, Q / E | csűrő, oldalkormány kézi felülbírálása |
-| Shift / Ctrl | gáz fel / le (100% felett **utánégető**) |
+| Shift / Ctrl (böngészőben Z is) | gáz fel / le: koppintás = 5%, tartva folyamatos. 100%-nál (MIL) megáll, ott még egy **Shift** = **utánégető**; lefelé az első nyomás kikapcsolja |
 | **G** | futómű ki / be |
 | B (tartva) | a földön **kerékfék**, a levegőben légfék |
 | C vagy jobb egérgomb (tartva) | szabad körülnézés |
 | Z (tartva) | zoom |
-| V | kabin (HUD) / külső nézet |
+| V | kabin / külső nézet. A kabin a géppel együtt mozog (orsózik, bólint), G alatt a fej lesüllyed, nagy G-nél elsötétül a kép, negatív G-nél bevörösödik |
 | **Bal egérgomb** | gépágyú |
 | **Space** | rakéta indítása |
 | Egérgörgő | fegyverváltás (a következő / előző rakétatípus) |

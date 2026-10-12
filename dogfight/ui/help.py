@@ -9,11 +9,12 @@ REPÜLÉS (War Thunder "egeres célzás")
   Egér ............ ide repül a gép (fehér kör)
   S / W ........... orr fel / orr le (magassági kormány)
   A / D ........... orsózás   Q / E: oldalkormány
-  Shift / Ctrl .... gáz fel / le (100% felett: UTÁNÉGETŐ)
+  Shift / Ctrl .... gáz fel / le: koppintás 5%, tartva folyamatos;
+                    100%-nál megáll, újra Shift = UTÁNÉGETŐ
   B (tartva) ...... földön kerékfék, levegőben légfék
   G ............... futómű ki / be
   C vagy jobb egér  szabad körülnézés
-  Z (tartva) ...... zoom      V: kabin / külső nézet
+  Z (tartva) ...... zoom      V: kabin (együtt mozog a géppel)
 
 FELSZÁLLÁS ÉS LESZÁLLÁS
   Shift-tel told a gázt 100% fölé (utánégető), ~280 km/h-nál

@@ -83,7 +83,9 @@ export class Sounds {
     this.loop('growl', tone === 'growl', 0.22);
     this.loop('lock_tone', tone === 'lock', 0.25);
     const level = player.rwr.maxLevel;
-    this.loop('rwr_launch', level >= 3, 0.4);
+    // missile warning: the warble speeds up as the nearest missile closes in
+    const near = player.rwr.incoming.length ? player.rwr.incoming[0].dist : 1e9;
+    this.loop('rwr_launch', level >= 3, 0.45, 1 + 0.8 * Math.max(0, Math.min(1, (8000 - near) / 8000)));
     this.loop('rwr_lock', level === 2, 0.3);
     if (player.rwr.newSearch && !this.prevNew) this.play('rwr_new', 0.3);
     this.prevNew = player.rwr.newSearch;

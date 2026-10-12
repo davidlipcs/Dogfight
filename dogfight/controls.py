@@ -1,10 +1,15 @@
 """Player input: keyboard / mouse polling and the player's "pilot" (mouse aim instructor)."""
 
+import math
+
 from panda3d.core import KeyboardButton, MouseButton, Vec3
 
 from .ai.steering import steer_towards
 
-THROTTLE_RATE = 0.55          # per second while Shift / Ctrl is held
+THROTTLE_RATE = 0.40          # per second while Shift / Ctrl is held (after the first 5 % step)
+THROTTLE_STEP = 0.05
+MAX_AB = 1.1
+HOLD_DELAY = 0.3
 
 
 class PlayerPilot:
@@ -35,6 +40,9 @@ class PlayerPilot:
 class InputReader:
     def __init__(self, base):
         self.base = base
+        self._thr_dir = 0
+        self._thr_hold = 0.0
+        self.message = None           # callback(text, level) for throttle notices
 
     def key(self, ch):
         return self.button(KeyboardButton.asciiKey(ch))
@@ -67,6 +75,40 @@ class InputReader:
             return -1.0
         return None
 
+    def _throttle(self, dt, c):
+        """Throttle lever with a MIL detent: a tap moves it 5 %, holding slews it.  Going up it stops at
+        100 % (MIL); the afterburner needs a new press of Shift there.  Down from AB goes straight to MIL."""
+        up, down = self.shift, self.ctrl
+        direction = 1 if up and not down else (-1 if down and not up else 0)
+        if direction != self._thr_dir:
+            self._thr_dir = direction
+            self._thr_hold = 0.0
+            if direction > 0:
+                if c.throttle >= 0.999:
+                    if c.throttle < MAX_AB:
+                        c.throttle = MAX_AB
+                        if self.message:
+                            self.message("UTÁNÉGETŐ BE", "warn")
+                else:
+                    c.throttle = min(1.0, math.floor(c.throttle / THROTTLE_STEP + 1e-6) * THROTTLE_STEP + THROTTLE_STEP)
+            elif direction < 0:
+                if c.throttle > 1.001:
+                    c.throttle = 1.0
+                    if self.message:
+                        self.message("UTÁNÉGETŐ KI", "info")
+                else:
+                    c.throttle = max(0.0, math.ceil(c.throttle / THROTTLE_STEP - 1e-6) * THROTTLE_STEP - THROTTLE_STEP)
+            return
+        if direction == 0:
+            return
+        self._thr_hold += dt
+        if self._thr_hold < HOLD_DELAY:
+            return
+        if direction > 0 and c.throttle < 1.0:
+            c.throttle = min(1.0, c.throttle + THROTTLE_RATE * dt)
+        elif direction < 0:
+            c.throttle = 1.0 if c.throttle > 1.0 else max(0.0, c.throttle - THROTTLE_RATE * dt)
+
     def apply(self, dt, pilot, cam):
         """Copy the held keys onto the player's aircraft for this frame."""
         ac = pilot.ac
@@ -75,10 +117,7 @@ class InputReader:
         pilot.roll = self.axis("d", "a")
         pilot.yaw = self.axis("e", "q")
         c = ac.controls
-        if self.shift:
-            c.throttle = min(1.1, c.throttle + THROTTLE_RATE * dt)
-        if self.ctrl:
-            c.throttle = max(0.0, c.throttle - THROTTLE_RATE * dt)
+        self._throttle(dt, c)
         c.airbrake = self.key("b")
         c.brakes = self.key("b") and ac.on_ground
         ac.trigger = self.left_mouse

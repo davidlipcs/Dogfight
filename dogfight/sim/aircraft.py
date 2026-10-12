@@ -21,7 +21,7 @@ ASSIST_IR_CONE = 30.0      # ... and the cone the F key searches when nothing is
 
 
 class Station:
-    __slots__ = ("number", "key", "spec", "mount", "loaded")
+    __slots__ = ("number", "key", "spec", "mount", "loaded", "reload")
 
     def __init__(self, number, key, mount):
         self.number = number
@@ -29,6 +29,7 @@ class Station:
         self.spec = MISSILES[key]
         self.mount = Vec3(*mount)
         self.loaded = True
+        self.reload = None            # arcade mode: seconds until this rail is reloaded
 
 
 class Aircraft:

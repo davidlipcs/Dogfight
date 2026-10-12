@@ -22,10 +22,11 @@ from .ui.help import HelpOverlay
 from .ui.hud import HUD
 
 PLAYER_START = Vec3(0.0, -26000.0, 4500.0)
-TAKEOFF_HINT = "FELSZÁLLÁS: Shift = gáz (100% felett utánégető)  ·  ~280 km/h-nál emeld az egeret  ·  G = futómű"
+TAKEOFF_HINT = ("FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret"
+                "  ·  G = futómű")
 WAVE_DELAY = 5.0
 FIRST_WAVE_DELAY = 25.0    # s of flying after take-off before the first bandits show up
-REARM_TIME = 6.0           # s standing still on the base to rearm / refuel / repair
+RELOAD_TIME = 10.0         # arcade mode: s until a fired missile is back on its rail
 MAX_ENEMIES = 6
 
 
@@ -38,7 +39,6 @@ class GameState:
         self.sub_banner = ""
         self.paused = True
         self.wave_timer = FIRST_WAVE_DELAY
-        self.rearm_timer = 0.0
         self.wave_active = False
 
 
@@ -95,6 +95,7 @@ class DogfightApp:
         self.help = HelpOverlay(base, self.fonts)
         self.sounds = SoundBank(base, volume=options.volume, enabled=not (options.mute or options.offscreen))
         self.input = InputReader(base)
+        self.input.message = lambda text, level: self.hud.message(text, level, 1.2, key="thr")
         self.state = GameState()
         self.player = None
         self.pilot = None
@@ -206,7 +207,7 @@ class DogfightApp:
         if not self._can_act():
             return
         # lock the enemy closest to where you are looking (mouse aim, or free look)
-        view = self.cam.look.getForward() if self.cam.free_look else self.cam.aim_direction()
+        view = self.base.camera.getQuat(self.base.render).getForward()
         result = self.player.radar.quick_lock(self.world, view)
         text = {"unlocked": ("UNLOCK", "info"), "locking": ("LOCKOLÁS...", "info"), "keep": ("Nincs másik cél", "info"),
                 "none": ("Nincs cél a nézési irányban - fordulj felé", "warn")}.get(result)
@@ -275,7 +276,6 @@ class DogfightApp:
         if self.player is not None and not self.player.alive:
             self.state.banner = ""
             self.state.sub_banner = ""
-            self.state.rearm_timer = 0.0
             self.spawn_player()
 
     def quit(self):
@@ -373,23 +373,31 @@ class DogfightApp:
             if st.wave_timer <= 0.0:
                 self.spawn_wave()
 
-        # rearm / refuel / repair while standing on the base
+        # arcade: every fired missile comes back on its rail RELOAD_TIME seconds later
+        if self.options.mode == "arcade":
+            for station in p.stations:
+                if station.loaded:
+                    station.reload = None
+                    continue
+                station.reload = (RELOAD_TIME if station.reload is None else station.reload) - dt
+                if station.reload <= 0.0:
+                    station.loaded = True
+                    station.reload = None
+                    p._update_stores()
+                    if p.selected is None or p.missile_count(p.selected) == 0:
+                        p.select(station.key)
+                    self.hud.message("%s ÚJRATÖLTVE" % station.key, "good", 1.5, key="reload")
+        # both modes: landing on the base (on the concrete, slowed down) rearms, refuels and repairs at once
         needs_service = (p.hp < p.spec.hp or p.fm.fuel < p.spec.internal_fuel * 0.95 or p.gun.ammo < p.spec.gun.ammo
                          or any(not st_.loaded for st_ in p.stations) or p.flares < p.spec.countermeasures.flares)
-        if p.on_ground and p.speed < 1.0 and needs_service and field.on_paved(p.pos.x, p.pos.y):
-            st.rearm_timer += dt
-            if st.rearm_timer >= REARM_TIME:
-                st.rearm_timer = -1e9          # once per stop
-                p.rearm()
-                p.hp = p.spec.hp
-                p.burning = False
-                p.fm.fuel = p.spec.internal_fuel
-                self.hud.message("ÚJRAFEGYVERZÉS, TANKOLÁS, JAVÍTÁS KÉSZ", "good", 4.0, key="service")
-            elif st.rearm_timer > 0.5:
-                self.hud.message("Kiszolgálás... %d s" % (REARM_TIME - st.rearm_timer + 1), "info", 0.3,
-                                 key="service")
-        else:
-            st.rearm_timer = 0.0
+        if p.on_ground and p.speed < 25.0 and needs_service and field.on_paved(p.pos.x, p.pos.y):
+            p.rearm()
+            p.hp = p.spec.hp
+            p.burning = False
+            p.fm.fuel = p.spec.internal_fuel
+            for station in p.stations:
+                station.reload = None
+            self.hud.message("ÚJRAFEGYVERZÉS, TANKOLÁS, JAVÍTÁS KÉSZ", "good", 4.0, key="service")
 
     def run(self):
         self.base.run()

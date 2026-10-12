@@ -29,6 +29,7 @@ class RWR:
         self.owner = owner
         self.threats = []
         self.new_search = False       # a new emitter appeared this update (beep)
+        self.incoming = []            # (distance, missile) of every missile flying at the player
         self._known = set()
 
     @property
@@ -57,6 +58,21 @@ class RWR:
                 found[m] = Threat(m, "M", "launch", self._bearing(m.pos), (m.pos - owner.pos).length())
             elif m.datalink and m.shooter in found:
                 found[m.shooter].level = "launch"
+        # missile approach warning (player only): every missile flying at us, IR ones included
+        self.incoming = []
+        if owner.is_player:
+            for m in world.missiles:
+                if not m.alive or m.shooter is None or m.shooter.team == owner.team:
+                    continue
+                if m.guided_target is not owner and m.intended is not owner:
+                    continue
+                dist = (m.pos - owner.pos).length()
+                if dist > 15000.0:
+                    continue
+                self.incoming.append((dist, m))
+                if m not in found:
+                    found[m] = Threat(m, "M", "launch", self._bearing(m.pos), dist)
+            self.incoming.sort(key=lambda e: e[0])
         self.threats = sorted(found.values(), key=lambda t: -LEVELS[t.level])
         keys = set(found)
         self.new_search = bool(keys - self._known)

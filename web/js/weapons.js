@@ -293,7 +293,7 @@ export class Radar {
 // -------------------------------------------------------------------------- RWR
 const LEVELS = { search: 1, lock: 2, launch: 3 };
 export class RWR {
-  constructor(owner) { this.owner = owner; this.threats = []; this.newSearch = false; this.known = new Set(); }
+  constructor(owner) { this.owner = owner; this.threats = []; this.incoming = []; this.newSearch = false; this.known = new Set(); }
   get maxLevel() { return this.threats.reduce((m, t) => Math.max(m, LEVELS[t.level]), 0); }
   bearing(pos) { const l = toLocal(this.owner.quat, sub(pos, this.owner.pos)); return Math.atan2(l.x, l.y); }
   update(world) {
@@ -307,6 +307,20 @@ export class RWR {
       if (!m.alive || m.spec.guidance !== ARH || m.guidedTarget !== o) continue;
       if (m.active) found.set(m, { source: m, symbol: 'M', level: 'launch', bearing: this.bearing(m.pos) });
       else if (m.datalink && found.has(m.shooter)) found.get(m.shooter).level = 'launch';
+    }
+    // missile approach warning (player only): every missile flying at us, IR ones included, that the
+    // radar warner alone would miss
+    this.incoming = [];
+    if (o.isPlayer) {
+      for (const m of world.missiles) {
+        if (!m.alive || !m.shooter || m.shooter.team === o.team) continue;
+        if (m.guidedTarget !== o && m.intended !== o) continue;
+        const d = len(sub(m.pos, o.pos));
+        if (d > 15000) continue;
+        this.incoming.push({ missile: m, dist: d });
+        if (!found.has(m)) found.set(m, { source: m, symbol: 'M', level: 'launch', bearing: this.bearing(m.pos) });
+      }
+      this.incoming.sort((a, b) => a.dist - b.dist);
     }
     this.threats = [...found.values()].sort((a, b) => LEVELS[b.level] - LEVELS[a.level]);
     const keys = new Set(found.keys());

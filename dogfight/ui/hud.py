@@ -10,7 +10,8 @@
 
 import math
 
-from panda3d.core import Point2, Point3, TextNode, Vec3
+import numpy as np
+from panda3d.core import CardMaker, Point2, Point3, Texture, TextNode, TransparencyAttrib, Vec3
 
 from ..mathutil import DEG, angle_between, clamp, heading_deg, safe_normalized
 from ..sim.guns import gun_lead
@@ -24,10 +25,40 @@ from .scopes import draw_radar, draw_rwr
 MESSAGE_COLORS = {"good": GREEN, "warn": AMBER, "bad": RED, "info": WHITE}
 
 
+
+def _vignette_texture(size=256):
+    """White texture whose alpha grows from the centre to the edges."""
+    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
+    r = np.hypot(xx / (size - 1) * 2 - 1, yy / (size - 1) * 2 - 1)
+    a = np.clip((r - 0.45) / 0.55, 0.0, 1.0) ** 1.5
+    img = np.dstack([np.full_like(a, 255), np.full_like(a, 255), np.full_like(a, 255), a * 255]).astype(np.uint8)
+    tex = Texture("g_vignette")
+    tex.setup2dTexture(size, size, Texture.T_unsigned_byte, Texture.F_rgba)
+    tex.setRamImage(img[:, :, [2, 1, 0, 3]].tobytes())
+    tex.setWrapU(Texture.WM_clamp)
+    tex.setWrapV(Texture.WM_clamp)
+    return tex
+
+
+def _overlay_card(base, texture):
+    cm = CardMaker("g_overlay")
+    cm.setFrame(-1, 1, -1, 1)
+    card = base.aspect2d.attachNewNode(cm.generate())
+    if texture is not None:
+        card.setTexture(texture)
+    card.setTransparency(TransparencyAttrib.MAlpha)
+    card.hide()
+    return card
+
 class HUD:
     def __init__(self, base, fonts):
         self.base = base
         self.fonts = fonts
+        # G effect overlays (below the symbology): a radial vignette and a full screen tint per colour
+        self.g_black = self.g_red = 0.0
+        vignette = _vignette_texture()
+        self._g_black_cards = (_overlay_card(base, vignette), _overlay_card(base, None))
+        self._g_red_cards = (_overlay_card(base, vignette), _overlay_card(base, None))
         self.root = base.aspect2d.attachNewNode("hud")
         self.canvas = Canvas(self.root, 1.6)
         self.labels = TextPool(self.root, fonts.mono, 0.034, fonts.t)
@@ -112,7 +143,9 @@ class HUD:
         self.titles.begin()
         aspect = self.base.getAspectRatio()
 
+        self._g_effects(player, dt, aspect)
         if player is not None and player.alive:
+            self._incoming_missiles(player)
             self._flight_symbols(player, world, cam)
             self._targets(player, world)
             self._weapons_symbols(player, world, dt)
@@ -130,9 +163,12 @@ class HUD:
     # ------------------------------------------------------------ symbology
     def _flight_symbols(self, ac, world, cam):
         c = self.canvas
-        aim = self.project(cam.position + cam.aim_direction() * 3000.0)
-        if aim is not None and not cam.free_look:
+        aim_pos = cam.position + cam.aim_direction() * 3000.0
+        aim = self.project(aim_pos)
+        if aim is not None and not (cam.free_look and not cam.cockpit):
             c.circle(aim[0], aim[1], 0.022, WHITE, segments=24)
+        elif aim is None and cam.cockpit:
+            self.edge_arrow(aim_pos, WHITE)
         nose = self.project(ac.pos + ac.forward * 800.0)
         if nose is not None:
             c.cross(nose[0], nose[1], 0.035, 0.009, GREEN)
@@ -406,8 +442,9 @@ class HUD:
         fm = ac.fm
         L = self.labels
         ias = fm.ias * 3.6
-        thr = fm.engine
+        thr = ac.controls.throttle
         thr_text = "AB" if thr > 1.0 else "%3d%%" % (thr * 100)
+        eng_text = "AB" if fm.engine > 1.001 else "%3d%%" % (fm.engine * 100)
         x = -0.78
         y = 0.22
         L.text("IAS %5d km/h" % ias, x, y, GREEN)
@@ -418,6 +455,7 @@ class HUD:
         aoa_col = AMBER if fm.alpha / DEG > 20 else GREEN
         L.text("AoA %5.1f" % (fm.alpha / DEG), x, y - 0.20, aoa_col)
         L.text("THR  %s" % thr_text, x, y - 0.25, AMBER if thr > 1.0 else GREEN)
+        L.text("MOT  %s" % eng_text, x + 0.24, y - 0.25, DIM if abs(fm.engine - thr) > 0.02 else GREEN)
         gear = fm.gear_pos
         if gear > 0.98:
             L.text("GEAR DOWN", x, y - 0.30, GREEN)
@@ -447,7 +485,11 @@ class HUD:
         parts = []
         for key in ac.weapon_keys():
             n = ac.missile_count(key)
-            parts.append(("[%s x%d]" if key == ac.selected else " %s x%d ") % (key, n))
+            text = "%s x%d" % (key, n)
+            pending = [s.reload for s in ac.stations if s.key == key and not s.loaded and s.reload is not None]
+            if pending:
+                text += " +%d (%ds)" % (len(pending), math.ceil(min(pending)))
+            parts.append(("[%s]" if key == ac.selected else " %s ") % text)
         L.text("   ".join(parts), 0.0, y, GREEN, align=TextNode.ACenter)
         L.text("GUN %3d    FLR %2d   CHF %2d" % (ac.gun.ammo, ac.flares, ac.chaff), 0.0, y - 0.05, GREEN,
                align=TextNode.ACenter)
@@ -481,6 +523,50 @@ class HUD:
                    0.0, y - 0.15, AMBER if note else GREEN, align=TextNode.ACenter)
         elif radar.mode == ACM:
             L.text("ACM: tedd az orrod elé a célt", 0.0, y - 0.15, AMBER, align=TextNode.ACenter)
+
+    def _g_effects(self, ac, dt, aspect):
+        """Grey-out / blackout under sustained positive G, red-out under negative G."""
+        if ac is None or not ac.alive:
+            self.g_black = self.g_red = 0.0
+        else:
+            g = ac.fm.g_load
+            rate = (g - 6.5) * 0.11 if g > 6.5 else (-0.45 if g < 5.0 else 0.0)
+            self.g_black = clamp(self.g_black + rate * dt, 0.0, 1.0)
+            rate = (-g - 1.8) * 0.35 if g < -1.8 else -0.6
+            self.g_red = clamp(self.g_red + rate * dt, 0.0, 1.0)
+        for (vignette, fill), level, rgb in ((self._g_black_cards, self.g_black, (0, 0, 0)),
+                                             (self._g_red_cards, self.g_red, (0.6, 0, 0))):
+            if level <= 0.01:
+                vignette.hide()
+                fill.hide()
+                continue
+            vignette.show()
+            vignette.setScale(aspect * (1.3 - level * 0.45), 1, 1.3 - level * 0.45)
+            vignette.setColor(rgb[0], rgb[1], rgb[2], min(0.97, level * 1.4))
+            fill.setScale(aspect, 1, 1)
+            if level > 0.6:
+                fill.show()
+                fill.setColor(rgb[0], rgb[1], rgb[2], (level - 0.6) * 2.2)
+            else:
+                fill.hide()
+
+    def _incoming_missiles(self, ac):
+        """Missiles flying at the player: red marker (or edge arrow) with distance and time to impact."""
+        c = self.canvas
+        blink = int(self.time * 6) % 2 == 0
+        for dist, m in ac.rwr.incoming:
+            p = self.project(m.pos)
+            if p is None:
+                self.edge_arrow(m.pos, RED)
+                continue
+            closing = (m.vel - ac.vel).dot(safe_normalized(ac.pos - m.pos))
+            c.diamond(p[0], p[1], 0.022, RED)
+            if blink:
+                c.circle(p[0], p[1], 0.034, RED, segments=20)
+            text = "RAKÉTA %.1f km" % (dist / 1000.0)
+            if closing > 1.0 and dist / closing < 60.0:
+                text += "  %.1f s" % (dist / closing)
+            self.labels.text(text, p[0] + 0.045, p[1] - 0.01, RED, scale=0.028)
 
     def _warnings(self, ac, world):
         T = self.titles

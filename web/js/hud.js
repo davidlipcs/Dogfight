@@ -70,7 +70,9 @@ export class HUD {
     this.time += dt; this.hitmarker = Math.max(0, this.hitmarker - dt);
     for (const l of [this.messages, this.killfeed]) for (const m of l) m.t -= dt;
     this.messages = this.messages.filter((m) => m.t > 0); this.killfeed = this.killfeed.filter((m) => m.t > 0);
+    this.gEffects(player, dt);
     if (player && player.alive) {
+      this.incomingMissiles(player, cam);
       this.flightSymbols(player, cam, camCtl);
       this.targets(player, world, cam);
       this.weaponSymbols(player, world, cam, dt);
@@ -86,7 +88,8 @@ export class HUD {
   flightSymbols(ac, cam, camCtl) {
     const u = this.u;
     const aim = this.project(cam, add(camCtl.position, mul(camCtl.aimDirection(), 3000)));
-    if (aim && !camCtl.freeLook) this.circle(aim[0], aim[1], 14 * u, WHITE);
+    if (aim && !(camCtl.freeLook && !camCtl.cockpit)) this.circle(aim[0], aim[1], 14 * u, WHITE);
+    else if (!aim && camCtl.cockpit) this.edgeArrow(cam, add(camCtl.position, mul(camCtl.aimDirection(), 3000)), WHITE);
     const nose = this.project(cam, add(ac.pos, mul(ac.forward, 800)));
     if (nose) {
       const [x, y] = nose, r = 22 * u, gap = 6 * u;
@@ -292,11 +295,12 @@ export class HUD {
   panels(ac, world) {
     const fm = ac.fm, u = this.u, fs = 13 * u + 3, lh = fs * 1.35;
     const x = this.w / 2 - 330 * u, y = this.h / 2 - 90 * u;
-    const thr = fm.engine > 1 ? 'AB' : `${Math.round(fm.engine * 100)}%`;
+    const cmd = ac.controls.throttle, thr = cmd > 1 ? 'AB' : `${Math.round(cmd * 100)}%`;
+    const eng = fm.engine > 1.001 ? 'AB' : `${Math.round(fm.engine * 100)}%`;
     const rows = [
       [`IAS ${String(Math.round(fm.ias * 3.6)).padStart(5)} km/h`, GREEN], [`TAS ${String(Math.round(ac.speed * 3.6)).padStart(5)}`, DIM],
       [`M   ${fm.mach.toFixed(2).padStart(5)}`, GREEN], [`G   ${fm.gLoad.toFixed(1).padStart(5)}`, fm.gLoad > 7.5 ? AMBER : GREEN],
-      [`AoA ${(fm.alpha / DEG).toFixed(1).padStart(5)}`, fm.alpha / DEG > 20 ? AMBER : GREEN], [`THR  ${thr}`, fm.engine > 1 ? AMBER : GREEN],
+      [`AoA ${(fm.alpha / DEG).toFixed(1).padStart(5)}`, fm.alpha / DEG > 20 ? AMBER : GREEN], [`THR  ${thr}`, cmd > 1 ? AMBER : GREEN], [`MOT  ${eng}`, Math.abs(fm.engine - cmd) > 0.02 ? DIM : GREEN],
       [fm.gearPos > 0.98 ? 'GEAR DOWN' : fm.gearPos > 0.02 ? 'GEAR TRANSIT' : 'GEAR UP', fm.gearPos > 0.98 ? GREEN : fm.gearPos > 0.02 ? AMBER : DIM],
     ];
     if (ac.onGround) rows.push([`GS  ${String(Math.round(ac.speed * 3.6)).padStart(5)} km/h`, GREEN]);
@@ -312,7 +316,14 @@ export class HUD {
     ];
     right.forEach(([t, c], i) => this.text(t, xr, y + i * lh, c, fs));
     // weapons
-    const yb = this.h - 78 * u, parts = ac.weaponKeys().map((k) => (k === ac.selected ? `[${k} ×${ac.missileCount(k)}]` : ` ${k} ×${ac.missileCount(k)} `));
+    const reloadText = (k) => {
+      const r = ac.stations.filter((s) => s.key === k && !s.loaded && s.reload !== undefined).map((s) => s.reload);
+      return r.length ? ` +${r.length} (${Math.ceil(Math.min(...r))}s)` : '';
+    };
+    const yb = this.h - 78 * u, parts = ac.weaponKeys().map((k) => {
+      const t = `${k} ×${ac.missileCount(k)}${reloadText(k)}`;
+      return k === ac.selected ? `[${t}]` : ` ${t} `;
+    });
     this.text(parts.join('   '), this.w / 2, yb, GREEN, fs, 'center');
     this.text(`GUN ${ac.gun.ammo}    FLR ${ac.flares}   CHF ${ac.chaff}`, this.w / 2, yb + lh, GREEN, fs, 'center');
     const sp = ac.selectedSpec;
@@ -406,6 +417,35 @@ export class HUD {
       const ttg = timeToImpact(m), col = ['TRACK', 'ACTIVE', 'DATALINK'].includes(m.status) ? CYAN : AMBER;
       this.text(`${m.spec.name} ${m.status.padEnd(8)} ${ttg !== null && ttg < 99 ? ttg.toFixed(1) + 's' : '--'}`, this.w - 20 * this.u, y, col, 11 * this.u + 3, 'right');
       y += 18 * this.u + 3;
+    }
+  }
+  // G-LOC grey-out / blackout under sustained positive G, red-out under negative G
+  gEffects(ac, dt) {
+    if (!ac || !ac.alive) { this.black = 0; this.red = 0; return; }
+    const g = ac.fm.gLoad;
+    this.black = clamp((this.black || 0) + (g > 6.5 ? (g - 6.5) * 0.11 : g < 5 ? -0.45 : 0) * dt, 0, 1);
+    this.red = clamp((this.red || 0) + (g < -1.8 ? (-g - 1.8) * 0.35 : -0.6) * dt, 0, 1);
+    const gfx = this.g, w = this.w, h = this.h, R = Math.hypot(w, h) / 2;
+    for (const [lvl, rgb] of [[this.black, '0,0,0'], [this.red, '150,0,0']]) {
+      if (lvl <= 0.01) continue;
+      const grd = gfx.createRadialGradient(w / 2, h / 2, R * Math.max(0.05, 0.75 - lvl * 0.8), w / 2, h / 2, R * (1.05 - lvl * 0.25));
+      grd.addColorStop(0, `rgba(${rgb},0)`); grd.addColorStop(1, `rgba(${rgb},${Math.min(0.97, lvl * 1.4)})`);
+      gfx.fillStyle = grd; gfx.fillRect(0, 0, w, h);
+      if (lvl > 0.6) { gfx.fillStyle = `rgba(${rgb},${(lvl - 0.6) * 2.2})`; gfx.fillRect(0, 0, w, h); }
+    }
+  }
+  // missiles flying at the player: red marker (or edge arrow) with distance and time to impact
+  incomingMissiles(ac, cam) {
+    const u = this.u, blink = Math.floor(this.time * 6) % 2 === 0;
+    for (const { missile: m, dist } of ac.rwr.incoming) {
+      const p = this.project(cam, m.pos);
+      const closing = dot(sub(m.vel, ac.vel), norm(sub(ac.pos, m.pos)));
+      const tti = closing > 1 ? dist / closing : null;
+      if (!p) { this.edgeArrow(cam, m.pos, RED); continue; }
+      const k = 14 * u;
+      this.poly([[p[0], p[1] - k], [p[0] + k, p[1]], [p[0], p[1] + k], [p[0] - k, p[1]]], RED);
+      if (blink) this.circle(p[0], p[1], 22 * u, RED);
+      this.text(`RAKÉTA ${(dist / 1000).toFixed(1)} km${tti !== null && tti < 60 ? '  ' + tti.toFixed(1) + ' s' : ''}`, p[0] + 26 * u, p[1], RED, 12 * u + 2);
     }
   }
   overlay(game) {

@@ -177,7 +177,8 @@ class SoundBank:
         self._loop("growl", tone == "growl", 0.25)
         self._loop("lock_tone", tone == "lock", 0.3)
         level = player.rwr.max_level
-        self._loop("rwr_launch", level >= 3, 0.45)
+        near = player.rwr.incoming[0][0] if player.rwr.incoming else 1e9
+        self._loop("rwr_launch", level >= 3, 0.45, 1.0 + 0.8 * max(0.0, min(1.0, (8000.0 - near) / 8000.0)))
         self._loop("rwr_lock", level == 2, 0.35)
         if player.rwr.new_search:
             self.play("rwr_new", 0.35)

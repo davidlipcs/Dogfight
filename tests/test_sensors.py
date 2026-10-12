@@ -146,3 +146,16 @@ def test_ir_without_assist_needs_target_in_narrow_fov(world, make_aircraft):
     me.select("AIM-9M")
     run(world, 0.3)
     assert me.ir_seeker.candidate is None and not me.ir_seeker.locked
+
+
+def test_missile_warning_includes_ir_missiles_for_player(world, make_aircraft):
+    me = make_aircraft(is_player=True)
+    bandit = make_aircraft(pos=(0, -3000, 5000), heading=0.0, team="red")
+    bandit.radar.toggle_power()
+    assert bandit.select("AIM-9M")
+    bandit.ir_seeker.candidate = me
+    assert bandit.ir_seeker.lock()
+    assert bandit.fire_missile(world) is not None
+    run(world, 0.2)
+    assert me.rwr.max_level == 3
+    assert me.rwr.incoming and me.rwr.incoming[0][1].shooter is bandit

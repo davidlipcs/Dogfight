@@ -5,6 +5,8 @@ import argparse
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="F-16C légiharc (War Thunder stílus)")
+    p.add_argument("--mode", choices=("arcade", "realistic"), default="arcade",
+                   help="arcade: a rakéták 10 s alatt újratöltődnek; realistic: csak leszállás után")
     p.add_argument("--difficulty", choices=("easy", "normal", "hard"), default="normal", help="AI nehézség")
     p.add_argument("--enemies", type=int, default=2, help="ellenségek száma az első hullámban")
     p.add_argument("--loadout", choices=("default", "amraam", "fox2"), default="default",

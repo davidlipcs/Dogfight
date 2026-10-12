@@ -10,8 +10,8 @@ import { HUD } from './hud.js';
 import { Sounds } from './audio.js';
 
 const PLAYER_START = V(0, -26000, 4500);
-const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift = gáz (100% felett utánégető)  ·  ~280 km/h-nál emeld az egeret  ·  G = futómű';
-const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, REARM_TIME = 6, MAX_ENEMIES = 6, THROTTLE_RATE = 0.55;
+const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret (vagy S)  ·  G = futómű';
+const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, RELOAD_TIME = 10, MAX_ENEMIES = 6, THROTTLE_RATE = 0.4, MAX_AB = 1.1;
 const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5;
 const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look down -Z with +Y up
 
@@ -24,11 +24,17 @@ class FlightCamera {
     this.sensitivity = 0.09; this.invertY = false;
     this.aim = new THREE.Quaternion(); this.look = new THREE.Quaternion();
     this.freeLook = false; this.cockpit = false; this.position = V(); this.fov = 70; this.phase = 0; this.zoom = 0;
+    this.headYaw = 0; this.headPitch = 0; this.headG = 0;   // cockpit: head turn (rad) and G sag (m)
   }
   reset(ac) { this.aim = qlook(ac.forward); this.look = this.aim.clone(); }
   aimDirection() { return fwdOf(this.aim); }
-  setFreeLook(on) { if (on && !this.freeLook) this.look = this.aim.clone(); this.freeLook = on; }
+  setFreeLook(on) { if (on && !this.freeLook && !this.cockpit) this.look = this.aim.clone(); this.freeLook = on; }
   rotate(yawDeg, pitchDeg) {
+    if (this.cockpit && this.freeLook) {             // turning the head inside the cockpit
+      this.headYaw = clamp(this.headYaw + yawDeg * DEG, -2.7, 2.7);
+      this.headPitch = clamp(this.headPitch + pitchDeg * DEG, -0.9, 1.4);
+      return;
+    }
     let q = this.freeLook ? this.look : this.aim;
     q = qmul(qaxis(V(0, 0, 1), yawDeg * DEG), q);           // yaw around world up
     q = qmul(q, qaxis(V(1, 0, 0), pitchDeg * DEG)).normalize();  // pitch around local right
@@ -47,9 +53,16 @@ class FlightCamera {
     this.aim = FlightCamera.level(this.aim, dt);
     if (this.freeLook) this.look = FlightCamera.level(this.look, dt);
     if (!ac) return;
-    const view = this.freeLook ? this.look : this.aim;
-    if (this.cockpit && ac.alive) this.position = add(ac.pos, xform(ac.quat, this.eye));
-    else {
+    let view = this.freeLook ? this.look : this.aim;
+    if (this.cockpit && ac.alive) {
+      // the pilot's head is part of the jet: the view rolls, pitches and yaws with it.  Under G the head
+      // sags (positive) or lifts (negative) a few centimetres.
+      if (!this.freeLook) { const k = Math.exp(-6 * dt); this.headYaw *= k; this.headPitch *= k; }
+      const sag = clamp(-(ac.fm.gLoad - 1) * 0.012, -0.06, 0.09);
+      this.headG += (sag - this.headG) * Math.min(1, dt * 6);
+      view = qmul(ac.quat, qmul(qaxis(V(0, 0, 1), this.headYaw), qaxis(V(1, 0, 0), this.headPitch)));
+      this.position = add(ac.pos, xform(ac.quat, add(this.eye, V(0, 0, this.headG))));
+    } else {
       const dist = ac.alive ? CHASE_DISTANCE : 70;
       this.position = add(sub(ac.pos, mul(fwdOf(view), dist)), mul(upOf(view), CHASE_HEIGHT));
       const ground = this.terrain.height(this.position.x, this.position.y);
@@ -81,6 +94,10 @@ class Input {
       if (['Space', 'Tab', 'F1', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) || name.length === 1) {
         if (!e.ctrlKey && !e.metaKey) e.preventDefault();
       }
+      if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+        if (!this.held.has('control') && this.handlers.press) this.handlers.press('control');
+        this.codeName.set(e.code, 'control'); this.held.add('control'); return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       this.codeName.set(e.code, name);
       if (!this.held.has(name) && this.handlers.press) this.handlers.press(name);
@@ -93,7 +110,7 @@ class Input {
     document.addEventListener('pointerlockchange', releaseAll);
     // a lost Shift key-up (Windows Sticky Keys popup, alt-tab...) would leave the throttle (afterburner)
     // running up forever: every key and mouse event carries the real Shift state, so resync from it
-    const syncShift = (e) => { if (!e.shiftKey) this.held.delete('shift'); };
+    const syncShift = (e) => { if (!e.shiftKey) this.held.delete('shift'); if (!e.ctrlKey) this.held.delete('control'); };
     addEventListener('keydown', syncShift, true);
     addEventListener('mousedown', syncShift, true);
     el.addEventListener('mousedown', (e) => {
@@ -154,7 +171,7 @@ class Game {
     this.hud = new HUD($('hud'));
     this.sounds = new Sounds(0.7);
     this.input = new Input(canvas);
-    this.state = { wave: 0, kills: 0, deaths: 0, banner: '', subBanner: '', paused: true, waveTimer: FIRST_WAVE_DELAY, rearmTimer: 0, waveActive: false };
+    this.state = { wave: 0, kills: 0, deaths: 0, banner: '', subBanner: '', paused: true, waveTimer: FIRST_WAVE_DELAY, waveActive: false };
     this.player = null; this.pilot = null; this.helpVisible = false; this.locked = false;
     this.input.handlers.press = (k) => this.onKey(k);
     this.input.handlers.wheel = (s) => this.cycleWeapon(s);
@@ -236,13 +253,10 @@ class Game {
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
     if (k === 'Enter' || k === 'NumpadEnter') { this.respawn(); return; }
     if (k === 'm') { this.hud.markers = !this.hud.markers; return; }
-    if (k === 'z' && this.canAct() && this.player.controls.throttle > 1) {
-      this.player.controls.throttle = 1;                     // one tap of Z: afterburner off, 100 % dry
-      this.hud.message('UTÁNÉGETŐ KI', 'info', 1.2);
-      return;
-    }
     if (k === 'v') { this.cam.cockpit = !this.cam.cockpit; return; }
     if (!this.canAct()) return;
+    if (k === 'shift') { this.throttleStep(1); return; }
+    if (k === 'z' || k === 'control') { this.throttleStep(-1); return; }
     const p = this.player, msg = (t, l = 'info', d = 1.5) => this.hud.message(t, l, d);
     switch (k) {
       case 'Space': {
@@ -258,7 +272,7 @@ class Game {
         break;
       case 't': {
         // lock the enemy closest to where you are looking (mouse aim, or free look)
-        const view = this.cam.freeLook ? fwdOf(this.cam.look) : this.cam.aimDirection();
+        const view = V(0, 0, -1).applyQuaternion(this.cam.camera.quaternion);
         const res = p.radar.quickLock(this.world, view);
         const t = { unlocked: ['UNLOCK', 'info'], locking: ['LOCKOLÁS...', 'info'], keep: ['Nincs másik cél', 'info'],
           none: ['Nincs cél a nézési irányban - fordulj felé', 'warn'] }[res];
@@ -288,13 +302,31 @@ class Game {
     this.pilot.pitch = inp.axis('s', 'w');      // S = nose up (pull), W = nose down (push)
     this.pilot.roll = inp.axis('d', 'a');
     this.pilot.yaw = inp.axis('e', 'q');
-    if (inp.key('shift')) c.throttle = Math.min(1.1, c.throttle + THROTTLE_RATE * dt);
-    if (inp.key('z')) c.throttle = Math.max(0, c.throttle - THROTTLE_RATE * dt);
+    this.throttleInput(dt, inp.key('shift'), inp.key('z') || inp.key('control'));
     c.airbrake = inp.key('b');
     c.brakes = inp.key('b') && p.onGround;
     p.trigger = inp.mouse[0];
     p.cmHold = inp.key('x');
     cam.setFreeLook(inp.key('c') || inp.mouse[2]);
+  }
+
+  // Throttle like a real lever with a MIL detent: a tap moves it 5 % (taken from the key event itself, so
+  // even a very short tap counts), holding slews it 40 %/s.  Going up it stops at 100 % (MIL); the
+  // afterburner needs a new press of Shift there.  Down from AB goes straight to MIL.
+  throttleStep(dir) {
+    const c = this.player.controls;
+    this.thrPress = performance.now();
+    if (dir > 0) {
+      if (c.throttle >= 0.999) { if (c.throttle < MAX_AB) { c.throttle = MAX_AB; this.hud.message('UTÁNÉGETŐ BE', 'warn', 1.2, 'thr'); } }
+      else c.throttle = Math.min(1, Math.floor(c.throttle * 20 + 1e-6) / 20 + 0.05);
+    } else if (c.throttle > 1.001) { c.throttle = 1; this.hud.message('UTÁNÉGETŐ KI', 'info', 1.2, 'thr'); }
+    else c.throttle = Math.max(0, Math.ceil(c.throttle * 20 - 1e-6) / 20 - 0.05);
+  }
+  throttleInput(dt, up, down) {
+    const c = this.player.controls, dir = up && !down ? 1 : down && !up ? -1 : 0;
+    if (!dir || performance.now() - (this.thrPress || 0) < 300) return;
+    if (dir > 0 && c.throttle < 1) c.throttle = Math.min(1, c.throttle + THROTTLE_RATE * dt);
+    else if (dir < 0) c.throttle = c.throttle > 1 ? 1 : Math.max(0, c.throttle - THROTTLE_RATE * dt);
   }
 
   // ------------------------------------------------------------ pause/help
@@ -340,7 +372,7 @@ class Game {
   respawn() {
     if (this.player && !this.player.alive) {
       const st = this.state;
-      st.banner = st.subBanner = ''; st.rearmTimer = 0;
+      st.banner = st.subBanner = '';
       this.spawnPlayer();
     }
   }
@@ -399,16 +431,26 @@ class Game {
       st.waveTimer -= dt;
       if (st.waveTimer <= 0) this.spawnWave();
     }
+    // arcade: every fired missile comes back on its rail RELOAD_TIME seconds later
+    if (this.opts.mode === 'arcade') {
+      for (const s of p.stations) {
+        if (s.loaded) { s.reload = undefined; continue; }
+        s.reload = (s.reload ?? RELOAD_TIME) - dt;
+        if (s.reload <= 0) {
+          s.loaded = true; s.reload = undefined; p.updateStores();
+          if (!p.selected || p.missileCount(p.selected) === 0) p.select(s.key);
+          this.hud.message(`${s.key} ÚJRATÖLTVE`, 'good', 1.5, 'reload');
+        }
+      }
+    }
+    // both modes: landing on the base (on the concrete, slowed down) rearms, refuels and repairs at once
     const needs = p.hp < p.spec.hp || p.fm.fuel < p.spec.internalFuel * 0.95 || p.gun.ammo < p.spec.gun.ammo ||
       p.stations.some((s) => !s.loaded) || p.flares < p.spec.cm.flares;
-    if (p.onGround && p.speed < 1 && needs && field.onPaved(p.pos.x, p.pos.y)) {
-      st.rearmTimer += dt;
-      if (st.rearmTimer >= REARM_TIME) {
-        st.rearmTimer = -1e9;
-        p.rearm(); p.hp = p.spec.hp; p.burning = false; p.fm.fuel = p.spec.internalFuel;
-        this.hud.message('ÚJRAFEGYVERZÉS, TANKOLÁS, JAVÍTÁS KÉSZ', 'good', 4, 'service');
-      } else if (st.rearmTimer > 0.5) this.hud.message(`Kiszolgálás... ${Math.floor(REARM_TIME - st.rearmTimer + 1)} s`, 'info', 0.3, 'service');
-    } else st.rearmTimer = 0;
+    if (p.onGround && p.speed < 25 && needs && field.onPaved(p.pos.x, p.pos.y)) {
+      p.rearm(); p.hp = p.spec.hp; p.burning = false; p.fm.fuel = p.spec.internalFuel;
+      for (const s of p.stations) s.reload = undefined;
+      this.hud.message('ÚJRAFEGYVERZÉS, TANKOLÁS, JAVÍTÁS KÉSZ', 'good', 4, 'service');
+    }
   }
 }
 
@@ -448,9 +490,10 @@ async function boot() {
   const start = (airStart) => {
     const difficulty = document.querySelector('input[name=diff]:checked').value;
     const enemies = Number($('enemies').value);
+    const mode = document.querySelector('input[name=mode]:checked').value;
     $('menu').hidden = true;
     let game;
-    try { game = new Game(assets, { airStart, difficulty, enemies }); }
+    try { game = new Game(assets, { airStart, difficulty, enemies, mode }); }
     catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
     window.game = game;
     $('sens').addEventListener('input', (e) => { game.cam.sensitivity = Number(e.target.value); });
@@ -458,6 +501,11 @@ async function boot() {
     game.cam.invertY = $('invert').checked;
     game.resume();
   };
+  for (const el of document.querySelectorAll('input[name=mode]')) {
+    el.addEventListener('change', () => {
+      $('mode-hint').textContent = el.value === 'arcade' ? 'rakéták 10 s alatt újratöltődnek' : 'újratöltés csak leszállás után';
+    });
+  }
   $('start-ground').addEventListener('click', () => start(false));
   $('start-air').addEventListener('click', () => start(true));
   $('pause').addEventListener('click', () => window.game && window.game.resume());
@@ -468,5 +516,10 @@ async function boot() {
     if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
   });
 }
+
+// leaving by accident (Ctrl+W while Ctrl is the throttle key) asks first
+addEventListener('beforeunload', (e) => {
+  if (window.game && !window.game.state.paused) { e.preventDefault(); e.returnValue = ''; }
+});
 
 boot();
