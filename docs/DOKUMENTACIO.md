@@ -27,7 +27,7 @@ ugyanazokkal a számokkal.
 | Mód | Link / parancs | Megjegyzés |
 |---|---|---|
 | **GitHub Pages** | https://davidlipcs.github.io/Dogfight/ | bárki megnyithatja; a gyökér átirányít a `web/` oldalra; a `main` ágra pusholás után ~1 perc alatt frissül |
-| **Letöltött fájl** | https://davidlipcs.github.io/Dogfight/web/dogfight-offline.html | `Dogfight-F16.html`, ~14 MB, dupla kattintással indul, internet sem kell; a menüben „Letöltés egy fájlban” link is van |
+| **Letöltött fájl** | https://davidlipcs.github.io/Dogfight/web/dogfight-offline.html | `Dogfight-F16.html`, ~18 MB, dupla kattintással indul, internet sem kell; a menüben „Letöltés egy fájlban” link is van |
 | **claude.ai artifact** | https://claude.ai/artifact/KAfUJ7Wu7RVBsrRqSdVNGE | privát (csak a tulajdonos látja, a Share menüből osztható); itt nincs letöltés link |
 | **Python** | `pip install -r requirements.txt` → `python main.py` | Python 3.9+, Panda3D, numpy |
 
@@ -180,8 +180,13 @@ pályahatár-kerülés. A játékos a teljes DLZ-t kihasználhatja, így mindig 
 
 ### 5.8 Grafika és hang
 
-* F-16 kódból épített modell: Catmull-Rom törzs, LERX, NACA profilok, csuklós kormányfelületek, háromszínű
-  szürke festés textúra-atlasszal, fények, páracsóva, szárnyvég-örvények, utánégető-láng.
+* **Külső nézet (böngésző):** Blenderben, szkriptből épített F-16C (`tools/blender/build_f16.py` →
+  `web/assets/f16.glb`): valós méretek, összeolvadó szárny-törzs, kb. 70 ezer háromszög, festés panelvonalakkal,
+  normal- és roughness-térkép, csuklóra tett mozgó felületek, futómű, fúvócső, kabin; AIM-9M és AIM-120 külön
+  `.glb`-ben. A `web/js/glb.js` saját, kis `.glb`-olvasó (a csomagolt three.js-ben nincs GLTFLoader).
+* **Kabinnézet és Python változat:** a kódból épített modell (Catmull-Rom törzs, LERX, NACA profilok, csuklós
+  kormányfelületek, háromszínű szürke festés textúra-atlasszal) – ennek van részletes műszerfala.
+* Fények, páracsóva, szárnyvég-örvények, utánégető-láng.
 * 102 × 102 km-es sziget LOD-terepen, légibázis (pálya, gurulóút, fedezékek, torony, fények), felhők,
   tenger, részecske-effektek (füst, robbanás, flare), nyomjelzők.
 * Minden shader az első képkockán lefordul (nincs akadás az első utánégetőnél / rakétánál).
@@ -206,6 +211,7 @@ pályahatár-kerülés. A játékos a teljes DLZ-t kihasználhatja, így mindig 
 | `camera.py` | `game.js` (FlightCamera) | követő és kabin kamera |
 | `game.py` | `game.js` (Game) | játékmenet, módok, hullámok, kiszolgálás |
 | `render/*` | `render.js` | modellek, terep, reptér, effektek, kabin-menet |
+| – | `glb.js` | a Blender-modell (`.glb`) beolvasása |
 | `ui/hud.py`, `ui/scopes.py`, `ui/help.py` | `hud.js`, `index.html` | HUD, radar, RWR, G-hatások, súgó |
 | `audio.py` | `audio.js` | hangok |
 
@@ -215,10 +221,17 @@ pályahatár-kerülés. A játékos a teljes DLZ-t kihasználhatja, így mindig 
 |---|---|
 | `python tools/export_web_assets.py` | a Python modellből / terepből előállítja a `web/assets/*` fájlokat (f16.json, festések, terep, kabin-textúra) |
 | `python tools/make_cockpit_texture.py` | megrajzolja a kabin-textúrát (`dogfight/render/cockpit.png`, Pillow kell) |
-| `python tools/build_offline.py` | elkészíti a `web/dogfight-offline.html` egyfájlos változatot (Node.js kell; az esbuild-et npx tölti le) |
+| `python tools/build_offline.py` | elkészíti a `web/dogfight-offline.html` egyfájlos változatot (Node.js-szel az esbuild tömörít; nélküle a beépített csomagoló dolgozik) |
+| `tools/blender/build_f16.py` | **Blenderben** futtatandó: megépíti az új F-16-ot, megfesti a textúrákat, és kiírja a `models/f16/*.glb` (teljes felbontás) és a `web/assets/*.glb` (kisebb textúrák) fájlokat |
 
-Ha a modell vagy a terep változik: `make_cockpit_texture.py` (ha a kabin változott) →
-`export_web_assets.py` → `build_offline.py`.
+Ha a kódból épített modell vagy a terep változik: `make_cockpit_texture.py` (ha a kabin változott) →
+`export_web_assets.py` → `build_offline.py`. Ha a Blender-modell változik: `build_f16.py` Blenderben →
+`build_offline.py`.
+
+A Blender-modell tengelyei megegyeznek a játékéval (+Y előre, +Z fel). A mozgó részek (`lef_*`, `flap_*`,
+`stab_*`, `rudder`, `sb_up_*`, `sb_lo_*`) origója a csuklón van, a helyi X tengelyük a csuklóvonal. A `ref_*`
+és `store_*` üres csomópontok adják a fúvócső, a futók és a fegyverfelfüggesztések helyét; a játék a
+találat-dobozokat és az indítási pontokat (`specs.js`) is ehhez a modellhez igazítja.
 
 ### 6.3 Tesztek
 
@@ -261,6 +274,7 @@ utánégető), világ (hullámok, találatok).
 | 17 | Kontroller, flare és lőszer újratöltés | Gamepad (böngésző + Python), arkád lőszer / flare töltés | `2bc5829` |
 | 18 | AI ugyanolyan gép, kicsit gyengébb; én is lőhessek messziről | azonos F-16, gyengébb AI, DLZ alapú AI-lövés, 80 km-es jelölők | `b8c41ae` |
 | 19 | Dokumentáció | ez a dokumentum, README frissítés, új képek | – |
+| 20 | High quality F-16 modell Blenderben, GLB-ben, bekötve a játékba | Blender-szkriptből épített modell és rakéták, saját `.glb`-olvasó, új külső nézet, Node nélküli offline építés | – |
 
 ---
 
@@ -275,13 +289,20 @@ utánégető), világ (hullámok, találatok).
 * A claude.ai artifact privát; másnak a Share menüből kell megosztani. Ott a letöltés link nem működik.
 * Ha egy hálózat a `github.io`-t is tiltja, csak a letöltött egyfájlos változat működik.
 * Az offline fájl pillanatkép: változtatás után újra kell építeni (`build_offline.py`) és újra letölteni.
-* Az „aggressor” sivatagi festés még benne van a kódban, de jelenleg nem használja semmi.
+* Az „aggressor” sivatagi festés még benne van a kódban, de jelenleg nem használja semmi (az új modellhez is
+  elkészül a textúrája a `models/f16/textures/` mappába, de a játék nem tölti be).
+* Az új Blender-modell csak a böngészős változat **külső** nézeteiben látszik. A kabinnézet a régi modellt
+  mutatja (annak van részletes kabinja), ezért belülről az orr és a szárnyak formája kicsit más; a Python
+  változat teljesen a régi modellt használja.
+* Az új modell gépenként kb. 70 ezer háromszög (a régi kb. 18 ezer). GTX 1060-on egy látszó gépnél a
+  rajzolási idő érdemben nem nőtt (~0,8 ms képkockánként); gyenge, integrált videokártyán, sok egyszerre
+  látszó gépnél lassabb lehet – ezt nem mértük.
 
 ## 9. Ötletek a folytatáshoz
 
-* **Valódi 3D modell:** egy jó licencű F-16 `.glb` / `.blend` fájl beépítése (a mozgó kormányfelületek a
-  meglévő csuklópont-rendszerre köthetők). Blenderrel (pl. Blender MCP a Claude asztali alkalmazásában)
-  a modellezés vizuálisan ellenőrizhető lenne.
+* Részletes kabin az új Blender-modellbe, hogy a kabinnézet is azt használhassa (és a régi modell
+  kikerülhessen a böngészős változatból).
+* Az új modell a Python (Panda3D) változatban is; aggressor festés az ellenfeleknek.
 * Több repülőgép (pl. MiG-29, Su-27) saját adatokkal.
 * Beállítások mentése (egér-érzékenység, mód, nehézség) a böngészőben.
 * Többjátékos mód.

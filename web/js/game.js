@@ -6,6 +6,7 @@ import { Terrain } from './terrain.js';
 import { Aircraft, World } from './sim.js';
 import { PlayerPilot, AIPilot } from './ai.js';
 import { Models, SceneView } from './render.js';
+import { parseGLB } from './glb.js';
 import { HUD } from './hud.js';
 import { Sounds } from './audio.js';
 
@@ -191,7 +192,7 @@ class Game {
     this.terrain = new Terrain(assets.terrain);
     this.world = new World(this.terrain, Math.floor(Math.random() * 1e9));
     this.rnd = this.world.rnd;
-    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex, cockpit: assets.cockpitTex });
+    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex, cockpit: assets.cockpitTex }, assets.glb);
     this.view = new SceneView(this.renderer, this.models, this.terrain, this.world);
     this.cam = new FlightCamera(this.view.camera, this.terrain);
     if (this.models.eye) this.cam.eye = V(...this.models.eye);
@@ -536,6 +537,11 @@ async function fetchJSON(url, onDone) {
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
   const j = await r.json(); onDone(); return j;
 }
+async function fetchGLB(url, onDone) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  const g = await parseGLB(await r.arrayBuffer()); onDone(); return g;
+}
 function loadTexture(url, onDone) {
   return new Promise((res, rej) => new THREE.TextureLoader().load(url, (t) => { onDone(); res(t); }, undefined, () => rej(new Error(url))));
 }
@@ -544,14 +550,15 @@ async function boot() {
   const status = $('status'), bar = $('bar');
   if (!THREE) { status.textContent = 'A three.js nem töltődött be - ellenőrizd az internetkapcsolatot.'; return; }
   let done = 0;
-  const tick = () => { done++; bar.style.width = `${done / 6 * 100}%`; };
+  const tick = () => { done++; bar.style.width = `${done / 9 * 100}%`; };
   let assets;
   try {
-    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex] = await Promise.all([
+    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex, glbF16, glbAim9, glbAim120] = await Promise.all([
       fetchJSON(assetUrl('f16.json'), tick), fetchJSON(assetUrl('terrain.json'), tick),
       loadTexture(assetUrl('livery_viper.jpg'), tick), loadTexture(assetUrl('livery_aggressor.jpg'), tick),
-      loadTexture(assetUrl('terrain_color.jpg'), tick), loadTexture(assetUrl('cockpit.png'), tick)]);
-    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex };
+      loadTexture(assetUrl('terrain_color.jpg'), tick), loadTexture(assetUrl('cockpit.png'), tick),
+      fetchGLB(assetUrl('f16.glb'), tick), fetchGLB(assetUrl('aim9m.glb'), tick), fetchGLB(assetUrl('aim120c.glb'), tick)]);
+    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex, glb: { f16: glbF16, aim9m: glbAim9, aim120c: glbAim120 } };
   } catch (e) {
     status.textContent = 'Betöltési hiba: ' + e.message; console.error(e); return;
   }

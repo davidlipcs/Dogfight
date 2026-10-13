@@ -5,11 +5,11 @@
 > ## ▶ Játék a böngészőben: **https://davidlipcs.github.io/Dogfight/**
 >
 > Telepítés nélkül, bármelyik gépről (iskolában is): nyisd meg a linket Chrome-ban, és kattints a
-> „Felszállás a kifutóról” gombra. Minden a GitHubról töltődik be (kb. 10 MB), külső oldal nem kell hozzá.
+> „Felszállás a kifutóról” gombra. Minden a GitHubról töltődik be (kb. 13 MB), külső oldal nem kell hozzá.
 > **Letöltés:** [Dogfight-F16.html](https://davidlipcs.github.io/Dogfight/web/dogfight-offline.html) – az egész játék
-> egyetlen fájlban (kb. 14 MB). Mentsd el (jobb klikk → *Hivatkozás mentése másként*, vagy a játék menüjében a
+> egyetlen fájlban (kb. 18 MB). Mentsd el (jobb klikk → *Hivatkozás mentése másként*, vagy a játék menüjében a
 > „Letöltés egy fájlban” link), és dupla kattintással megnyílik Chrome-ban – internet sem kell hozzá.
-> Újragenerálás: `python tools/build_offline.py` (Node.js kell hozzá).
+> Újragenerálás: `python tools/build_offline.py` (Node.js nélkül is megy).
 >
 > A kódja a [`web/`](web/) mappában van (Three.js), ugyanaz a repülésmodell, radar, rakéták és AI,
 > JavaScriptre átírva; a gépet és a terepet a `tools/export_web_assets.py` exportálja a Python változatból.
@@ -29,6 +29,14 @@ a hatótávjuk biztonságosabb részéből lőnek (a te DLZ-d messzebbre enged).
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
 ## A gép
+
+![Az új, Blenderben épített F-16C](models/f16/previews/f16_front.png)
+
+A böngészős változatban a gép kívülről egy **Blenderben, szkriptből épített** modell
+([tools/blender/build_f16.py](tools/blender/build_f16.py) → `web/assets/f16.glb`): valós méretek (15,03 m hossz),
+kb. 70 ezer háromszög, panelvonalas festés normal- és roughness-térképpel, külön mozgó kormányfelületek,
+futómű, részletes fúvócső, valamint AIM-9M és AIM-120 rakéták. A pilótafülke-nézet és a Python változat
+továbbra is az alábbi, kódból épített modellt használja:
 
 ![F-16C](docs/f16_front.png)
 
@@ -280,13 +288,16 @@ dogfight/
   ui/                   HUD, radar B-scope, RWR, G-hatások, súgó
 web/                    böngészős változat (Three.js) - ugyanaz a játék JavaScriptben
   index.html            menü, súgó, a játék oldala (GitHub Pages: /Dogfight/web/)
-  js/                   util, specs, flight, terrain, weapons, sim, ai, render, hud, audio, game (+ three.min.js)
-  assets/               exportált gép-geometria, festések, terep, kabin-textúra
+  js/                   util, specs, flight, terrain, weapons, sim, ai, render, glb, hud, audio, game (+ three.min.js)
+  assets/               Blender-modell és rakéták (.glb), exportált gép-geometria (kabinnézet), festések, terep,
+                        kabin-textúra
   dogfight-offline.html az egész játék egy fájlban (tools/build_offline.py készíti)
 tools/
   export_web_assets.py  a Python modell / terep exportja a web/assets-be
   make_cockpit_texture.py  a kabin-textúra (műszerfal, MFD-k, konzolok) megrajzolása
-  build_offline.py      egyfájlos offline változat (esbuild + data: URI-k)
+  build_offline.py      egyfájlos offline változat (esbuild vagy beépített csomagoló + data: URI-k)
+  blender/              az új F-16 modell: build_f16.py (Blenderben futtatandó), f16_shape.py, f16_paint.py
+models/f16/             a modell teljes felbontásban (f16.glb), a rakéták és renderképek
 tests/                  pytest tesztek (repülés, földi fizika, rakéták, szenzorok, instruktor, gázkar)
 docs/                   képek + DOKUMENTACIO.md (teljes dokumentáció, fejlesztési napló)
 index.html              átirányít a böngészős játékra (GitHub Pages gyökér)

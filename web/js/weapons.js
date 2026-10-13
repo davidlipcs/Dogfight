@@ -516,7 +516,7 @@ export function flyoutTime(spec, launchSpeed, altitude, range) {
 }
 
 // -------------------------------------------------------------------------- gun
-export const GUN_OFFSET = V(-0.75, 2.6, 0.55);
+export const GUN_OFFSET = V(-0.70, 3.95, -0.20);       // the gun port in the left strake
 export class Gun {
   constructor(spec, rnd) { this.spec = spec; this.ammo = spec.ammo; this.rnd = rnd; this.firing = false; this.acc = 0; this.count = 0; }
   reload() { this.ammo = this.spec.ammo; }

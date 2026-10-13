@@ -1,6 +1,7 @@
 // Three.js scene: aircraft, terrain, sky, clouds, airfield, particles, tracers.
 import { THREE, V, add, mul, xform, b64ToArray, DEG, clamp, rng, copy } from './util.js';
 import { GUN_OFFSET } from './weapons.js';
+import { GEAR_HEIGHT } from './flight.js';
 import { RUNWAY_LENGTH, RUNWAY_WIDTH, TAXIWAY_OFFSET, TAXIWAY_WIDTH, APRON } from './terrain.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.55, 0.70).normalize();
@@ -57,13 +58,24 @@ function puffTexture(seed = 3) {
 }
 
 // ------------------------------------------------------------------- models
+// Two F-16s live here.  Everything seen from outside is the Blender model (tools/blender/build_f16.py ->
+// assets/f16.glb).  The pilot's own view still uses the older model built from code (assets/f16.json): it
+// has the detailed cockpit with the instrument panel.
+const MOVING = ['lef_L', 'lef_R', 'flap_L', 'flap_R', 'stab_L', 'stab_R', 'rudder', 'sb_up_L', 'sb_up_R', 'sb_lo_L', 'sb_lo_R'];
+const STORE_NODES = { 1: 'store_tip_L', 2: 'store_outer_L', 3: 'store_mid_L', 7: 'store_mid_R', 8: 'store_outer_R', 9: 'store_tip_R' };
+const MISSILE_MODELS = { 'AIM-9M': 'aim9m', 'AIM-120A': 'aim120c' };
+const COCKPIT_STATIONS = {      // where the missiles hang on the cockpit view model
+  1: [-4.88, -0.55, 0.10], 2: [-3.75, -0.95, -0.38], 3: [-2.60, -0.55, -0.45],
+  7: [2.60, -0.55, -0.45], 8: [3.75, -0.95, -0.38], 9: [4.88, -0.55, 0.10],
+};
+
 export class Models {
-  constructor(data, textures) {
+  constructor(data, textures, glb) {
     this.data = data;
     this.tex = textures;
     this.geo = {
       skin: geom(data.skin), plain: geom(data.plain), glass: geom(data.glass), lights: geom(data.lights),
-      cockpit: geom(data.cockpit), screens: geom(data.screens), gear: geom(data.gear), missiles: { 'AIM-9M': geom(data.missiles['AIM-9M']), 'AIM-120A': geom(data.missiles['AIM-120A']) },
+      cockpit: geom(data.cockpit), screens: geom(data.screens), missiles: { 'AIM-9M': geom(data.missiles['AIM-9M']), 'AIM-120A': geom(data.missiles['AIM-120A']) },
     };
     this.parts = data.parts.map((p) => ({ ...p, geo: geom(p.geom) }));
     this.env = this.makeEnv();
@@ -90,6 +102,58 @@ export class Models {
     this.flameCoreGeo = new THREE.ConeGeometry(0.28, 0.55, 14, 1, true).rotateX(Math.PI).translate(0, -0.275, 0);
     this.flameMat = new THREE.MeshBasicMaterial({ color: 0xff8a3c, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     this.flameCoreMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    this.glb = glb;
+    this.glbMat = {};
+    for (const [key, g] of Object.entries(glb)) this.glbMat[key] = g.materials.map((m) => this.material(m));
+    // Reference points of the Blender model in the aircraft frame (+Y forward, +Z up).  The flight model's
+    // origin sits GEAR_HEIGHT above the ground; the model's wheels are lower than that under its own origin.
+    const marks = glb.f16.root.children.filter((n) => !n.prims.length && !n.children.length);
+    this.modelZ = -(GEAR_HEIGHT + marks.find((n) => n.name === 'ref_gear_main_R').position[1]);
+    this.ref = {};
+    for (const n of marks) this.ref[n.name] = V(n.position[0], -n.position[2], n.position[1] + this.modelZ);
+  }
+  // glTF material -> three.js: painted skin (textures), glass, lamps (unlit) or vertex coloured details
+  material(m) {
+    const def = m.def, pbr = def.pbrMetallicRoughness || {}, base = pbr.baseColorFactor || [1, 1, 1, 1];
+    if (def.emissiveFactor) {
+      const e = def.emissiveFactor;
+      return new THREE.MeshBasicMaterial({ color: new THREE.Color(...[0, 1, 2].map((k) => Math.min(1, e[k] + 0.5 * base[k]))) });
+    }
+    const common = { metalness: pbr.metallicFactor ?? 1, roughness: pbr.roughnessFactor ?? 1, envMap: this.env };
+    if (def.alphaMode === 'BLEND') {
+      return new THREE.MeshStandardMaterial({ ...common, color: new THREE.Color(base[0], base[1], base[2]), opacity: base[3], transparent: true,
+        envMapIntensity: 1.2, side: THREE.FrontSide, depthWrite: false });
+    }
+    if (m.map) {
+      const mat = new THREE.MeshStandardMaterial({ ...common, map: m.map, normalMap: m.normalMap, roughnessMap: m.ormMap, metalnessMap: m.ormMap, envMapIntensity: 0.35 });
+      mat.normalScale.set(1, -1);                       // glTF UVs run top-down
+      return mat;
+    }
+    return new THREE.MeshStandardMaterial({ ...common, vertexColors: true, envMapIntensity: common.metalness > 0.5 ? 0.9 : 0.3 });
+  }
+  // A copy of a .glb scene (geometry and materials are shared).  Moving parts are registered in `parts`:
+  // each one hangs on its hinge and turns about its local X axis.
+  instance(key, parts) {
+    const mats = this.glbMat[key];
+    const build = (n) => {
+      const o = new THREE.Object3D();
+      o.name = n.name; o.position.fromArray(n.position); o.quaternion.fromArray(n.quaternion); o.scale.fromArray(n.scale);
+      if (n.prims.length) {
+        const surf = new THREE.Group();
+        for (const p of n.prims) {
+          const mesh = new THREE.Mesh(p.geometry, mats[p.material]);
+          if (mats[p.material].transparent) mesh.renderOrder = 2;
+          surf.add(mesh);
+        }
+        o.add(surf);
+        if (parts && MOVING.includes(n.name)) parts[n.name] = { surf, sign: 1, angle: 0 };
+      }
+      for (const c of n.children) o.add(build(c));
+      return o;
+    };
+    const model = build(this.glb[key].root);
+    model.rotation.x = Math.PI / 2;                     // glTF: +Y up, -Z forward; the game: +Z up, +Y forward
+    return model;
   }
   makeEnv() {
     // tiny equirect sky for reflections (canopy, paint sheen)
@@ -107,7 +171,17 @@ export class Models {
     t.mapping = THREE.EquirectangularReflectionMapping;
     return t;
   }
-  aircraft(livery) {
+  aircraft() {
+    const root = new THREE.Group(), parts = {};
+    const model = this.instance('f16', parts);
+    model.position.z = this.modelZ;
+    root.add(model);
+    root.userData.parts = parts;
+    root.userData.gear = model.getObjectByName('gear');   // still in glTF axes: scale.y squashes it upwards
+    return root;
+  }
+  missile(key) { const g = new THREE.Group(); g.add(this.instance(MISSILE_MODELS[key])); return g; }
+  cockpitAircraft(livery) {
     const root = new THREE.Group();
     const add_ = (geo, mat) => { const m = new THREE.Mesh(geo, mat); root.add(m); return m; };
     add_(this.geo.skin, this.skin[livery]);
@@ -129,8 +203,7 @@ export class Models {
     root.userData.parts = parts;
     return root;
   }
-  missile(key) { return new THREE.Mesh(this.geo.missiles[key], this.mat.missile); }
-  gear() { return new THREE.Mesh(this.geo.gear, this.mat.plain); }
+  cockpitMissile(key) { return new THREE.Mesh(this.geo.missiles[key], this.mat.missile); }
 }
 
 // control surfaces like the FLCS moves them (rate limited actuators)
@@ -212,10 +285,6 @@ class Particles {
 }
 
 // --------------------------------------------------------------------- scene
-const WINGTIPS = [V(-4.9, -2.4, 0.12), V(4.9, -2.4, 0.12)];
-const STRAKE = [V(-0.92, 2.2, 0.22), V(0.92, 2.2, 0.22), V(-1.15, 1.4, 0.2), V(1.15, 1.4, 0.2)];
-const NAV = [[V(-0.62, 2.0, -0.78), 0xff2a1a], [V(0.62, 2.0, -0.78), 0x33ff55], [V(0, -6.7, 3.74), 0xfffff0]];
-
 export class SceneView {
   constructor(renderer, models, terrain, world) {
     this.renderer = renderer; this.models = models; this.terrain = terrain; this.world = world;
@@ -239,6 +308,13 @@ export class SceneView {
     this.smoke = new Particles(scene, softTexture(64, 1.4), false, 2500);
     this.fire = new Particles(scene, this.glowTex, true, 1200);
     this.visuals = new Map(); this.missileVis = new Map();
+    // effect positions on the Blender model
+    const ref = models.ref, z = models.modelZ;
+    this.wingtips = [ref.ref_wingtip_L, ref.ref_wingtip_R];
+    this.strake = [V(-0.93, 2.9, 0.08 + z), V(0.93, 2.9, 0.08 + z), V(-1.2, 1.9, 0.05 + z), V(1.2, 1.9, 0.05 + z)];
+    this.nav = [[V(-0.66, 3.6, -0.55 + z), 0xff2a1a], [V(0.66, 3.6, -0.55 + z), 0x33ff55], [V(-4.70, -1.44, z), 0xff2a1a],
+      [V(4.70, -1.44, z), 0x33ff55], [V(0, -5.34, 0.665 + z), 0xfffff0]];
+    this.strobePos = V(0, -4.88, 3.34 + z);
     this.buildSky(); this.buildSea(); this.buildTerrain(); this.buildClouds(); this.buildAirfield();
     this.warmup = true;            // first update(): compile every shader once, so nothing stalls later
     const tg = new THREE.BufferGeometry();
@@ -445,10 +521,9 @@ export class SceneView {
     }
     // parked F-16s
     for (let k = 0; k < 3; k++) {
-      const ac = this.models.aircraft('viper');
-      ac.position.set(tx + TAXIWAY_WIDTH + 45, ay0 + 90 + k * 45, 2.05);
+      const ac = this.models.aircraft();
+      ac.position.set(tx + TAXIWAY_WIDTH + 45, ay0 + 90 + k * 45, GEAR_HEIGHT);
       ac.rotation.z = Math.PI / 2;
-      ac.add(this.models.gear());
       g.add(ac);
     }
     // runway edge, threshold and approach lights
@@ -484,24 +559,40 @@ export class SceneView {
   visualFor(ac) {
     let v = this.visuals.get(ac);
     if (v) return v;
-    const root = this.models.aircraft(ac.livery);
+    const root = new THREE.Group(), outside = this.models.aircraft();
+    root.add(outside);
     const stores = new Map();
-    for (const st of ac.stations) { const m = this.models.missile(st.key); m.position.copy(st.mount); root.add(m); stores.set(st.number, m); }
-    const gear = this.models.gear(); root.add(gear);
+    for (const st of ac.stations) {
+      const m = this.models.missile(st.key);
+      m.position.copy(this.models.ref[STORE_NODES[st.number]] || st.mount); outside.add(m); stores.set(st.number, m);
+    }
+    const gear = outside.userData.gear;
     const flame = new THREE.Group();
     flame.add(new THREE.Mesh(this.models.flameGeo, this.models.flameMat), new THREE.Mesh(this.models.flameCoreGeo, this.models.flameCoreMat));
-    flame.position.set(0, -7.45, 0.07);
+    flame.position.copy(this.models.ref.ref_nozzle);
     root.add(flame);
-    const lamps = NAV.map(([p, col]) => {
+    const lamps = this.nav.map(([p, col]) => {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: col, blending: THREE.AdditiveBlending, depthWrite: false }));
       s.position.copy(p); s.scale.set(0.8, 0.8, 1); root.add(s); return s;
     });
     const strobe = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false }));
-    strobe.position.set(0, -5.85, 3.8); strobe.scale.set(1.3, 1.3, 1); root.add(strobe);
+    strobe.position.copy(this.strobePos); strobe.scale.set(1.3, 1.3, 1); root.add(strobe);
     this.scene.add(root);
-    v = { root, stores, gear, flame, strobe, lamps, trail: 0, phase: Math.random() * 1.2, layer: 0 };
+    v = { root, outside, stores, gear, flame, strobe, lamps, trail: 0, phase: Math.random() * 1.2, layer: 0 };
     this.visuals.set(ac, v);
     return v;
+  }
+  // the player's aircraft as the pilot sees it: the model with the detailed cockpit, shown only in cockpit view
+  addInside(ac, v) {
+    const inside = this.models.cockpitAircraft(ac.livery);
+    v.insideStores = new Map();
+    for (const st of ac.stations) {
+      const m = this.models.cockpitMissile(st.key);
+      m.position.set(...COCKPIT_STATIONS[st.number]); inside.add(m); v.insideStores.set(st.number, m);
+    }
+    inside.visible = false;
+    v.root.add(inside);
+    v.inside = inside;
   }
   update(dt, player) {
     this.time += dt;
@@ -512,18 +603,28 @@ export class SceneView {
       const visible = !ac.crashed;
       v.root.visible = visible;
       if (!visible) continue;
-      const layer = this.cockpitView && ac === player ? 1 : 0;
+      if (ac === player && !v.inside) this.addInside(ac, v);
+      const inside = this.cockpitView && ac === player;
+      const layer = inside ? 1 : 0;
       if (v.layer !== layer) { v.root.traverse((o) => o.layers.set(layer)); v.layer = layer; }
+      v.outside.visible = !inside;
+      if (v.inside) v.inside.visible = inside;
       v.root.position.copy(ac.pos); v.root.quaternion.copy(ac.quat);
-      for (const st of ac.stations) { const m = v.stores.get(st.number); if (m) m.visible = st.loaded; }
-      v.gear.visible = ac.fm.gearPos > 0.03; v.gear.scale.z = Math.max(ac.fm.gearPos, 0.03);
+      for (const st of ac.stations) {
+        const m = v.stores.get(st.number), mi = v.insideStores && v.insideStores.get(st.number);
+        if (m) m.visible = st.loaded;
+        if (mi) mi.visible = st.loaded;
+      }
+      v.gear.visible = ac.fm.gearPos > 0.03; v.gear.scale.y = Math.max(ac.fm.gearPos, 0.03);
       const e = ac.engineSetting;
       if (ac.alive && e > 1) {
         const ab = (e - 1) / 0.1, fl = 1 + 0.08 * Math.sin(this.time * 61) + 0.05 * Math.sin(this.time * 23);
-        v.flame.visible = true; v.flame.scale.set(0.85 + 0.15 * ab, (2 + 3.2 * ab) * fl, 0.85 + 0.15 * ab);
+        v.flame.visible = true; v.flame.scale.set(0.78 + 0.14 * ab, (2 + 3.2 * ab) * fl, 0.78 + 0.14 * ab);
       } else v.flame.visible = false;
       if (ac.alive) {
-        animateSurfaces(v.root.userData.parts, dt, ac.controls, ac.fm.alpha / DEG, ac.fm.flaps, ac.controls.airbrake && !ac.onGround ? 1 : 0, ac.onGround);
+        for (const model of [v.outside, v.inside]) {
+          if (model) animateSurfaces(model.userData.parts, dt, ac.controls, ac.fm.alpha / DEG, ac.fm.flaps, ac.controls.airbrake && !ac.onGround ? 1 : 0, ac.onGround);
+        }
         const ph = (this.time + v.phase) % 1.2;
         v.strobe.visible = ph < 0.06 || (ph > 0.18 && ph < 0.24);
       } else v.strobe.visible = false;
@@ -609,7 +710,7 @@ export class SceneView {
       v.trail -= dt;
       if (v.trail <= 0) {
         v.trail = 0.04;
-        const tail = add(ac.pos, xform(q, V(0, -6, 0.3)));
+        const tail = add(ac.pos, xform(q, V(0, -5.3, -0.1)));
         if (ac.burning) {
           this.fire.spawn(tail, mul(ac.vel, 0.7), 0.35, [4, 8], [[1, 0.6, 0.2, 0.9], [0.8, 0.2, 0.05, 0]], 3);
           this.smoke.spawn(tail, mul(ac.vel, 0.5), 7, [4, 22], [[0.12, 0.11, 0.1, 0.8], [0.3, 0.3, 0.3, 0]], 2);
@@ -620,11 +721,11 @@ export class SceneView {
     const alpha = ac.fm.alpha / DEG;
     if (alpha > 13 && ac.speed > 70) {
       const a = 0.38 * Math.min(1, (alpha - 13) / 9);
-      for (const s of STRAKE) this.smoke.spawn(add(ac.pos, xform(q, s)), mul(ac.vel, 0.9), 0.45, [0.7, 2.8], [[1, 1, 1, a], [1, 1, 1, 0]], 1.5);
+      for (const s of this.strake) this.smoke.spawn(add(ac.pos, xform(q, s)), mul(ac.vel, 0.9), 0.45, [0.7, 2.8], [[1, 1, 1, a], [1, 1, 1, 0]], 1.5);
     }
     if (ac.fm.gLoad > 5.5 && ac.speed > 120) {
       const a = Math.min(0.45, (ac.fm.gLoad - 5.5) * 0.12);
-      for (const t of WINGTIPS) this.smoke.spawn(add(ac.pos, xform(q, t)), mul(ac.vel, 0.85), 0.7, [0.5, 1.4], [[1, 1, 1, a], [1, 1, 1, 0]], 2);
+      for (const t of this.wingtips) this.smoke.spawn(add(ac.pos, xform(q, t)), mul(ac.vel, 0.85), 0.7, [0.5, 1.4], [[1, 1, 1, a], [1, 1, 1, 0]], 2);
     }
     if (ac.gun.firing) this.fire.spawn(add(ac.pos, xform(q, add(GUN_OFFSET, V(0, 0.6, 0)))), ac.vel, 0.04, [1.2, 2.2], [[1, 0.85, 0.5, 1], [1, 0.5, 0.1, 0]]);
   }
