@@ -44,8 +44,8 @@ Részletes, valódi méretekből kódból épített F-16C Block 50 (nem kell hoz
   kabinkád: 30°-ban hátradöntött ACES II katapultülés (sárga-fekete katapultfogantyú, hevederek),
   oldalkonzolok kapcsolókkal, oldalsó botkormány és gázkar, műszerfal két világító MFD-vel (radar és
   fegyverállapot), DED kijelző, ICP billentyűzet, tartalék műszerek, takaróernyő és HUD. A kabinnézetben (V)
-  a saját gép külön, közeli renderelési menetben rajzolódik, így a műszerfal nem vágódik le
-  (sisak, napellenző, oxigénmaszk, kezek)
+  a saját gép külön, közeli renderelési menetben rajzolódik, így a műszerfal nem vágódik le.
+  Pilóta szándékosan nincs a gépben
 * **festés:** a valódi F-16 háromszínű szürke sémája (sötét gerinc, középszürke oldalak és szárnyak,
   világos has), panelvonalak, szegecsek, árnyékolás a csatlakozásoknál, koromnyomok,
   USAF felségjelek, farokkód és gyári szám (egy „aggressor" sivatagi terepszín is készül, de most az ellenség
@@ -57,8 +57,9 @@ Közelről a részletes modell, 2,5 km-en túl egy egyszerűbb változat látszi
 
 | | |
 |---|---|
-| ![Aggressor kinyitott légfékkel](docs/f16_aggressor.png) | ![Kabin](docs/f16_cockpit.png) |
+| ![Aggressor festés, kitérített kormányfelületekkel](docs/f16_aggressor.png) | ![Kabin](docs/f16_cockpit.png) |
 | ![Felülnézet](docs/f16_top.png) | ![Páracsóva fordulóban](docs/screenshot_vapor.png) |
+| ![Lock: négyzet a célon, várható találati pont](docs/screenshot_lock.png) | ![Rakétaközelítés-jelző a kabinban](docs/screenshot_missile_warning.png) |
 
 ## Telepítés és indítás
 
@@ -144,7 +145,8 @@ ICAO-jelzésekkel, gurulóút, betonfedezékek, irányítótorony, parkoló F-16
 megközelítési fények). Az ellenség csak a felszállás után érkezik.
 
 **Felszállás**
-1. **Shift**-tel told fel a gázt 100% fölé (utánégető). A hajtómű pár másodperc alatt pörög fel.
+1. Tartsd a **Shift**-et: a gáz 100%-nál (MIL) megáll, ott még egy **Shift** = utánégető. A hajtómű pár
+   másodperc alatt pörög fel (a HUD-on `THR` a gázkar, `MOT` a hajtómű).
 2. ~**250–280 km/h**-nál emeld meg az egeret (vagy nyomd az **S**-t): a gép felemeli az orrát.
    Vigyázz, 13° felett a farok a betonhoz ér (farokütés)!
 3. ~**320 km/h** körül elemelkedik (utánégetővel kb. 450 m nekifutás, katonai teljesítménnyel kb. 700 m).
@@ -157,7 +159,7 @@ megközelítési fények). Az ellenség csak a felszállás után érkezik.
 2. Közelíts ~**270 km/h**-val, lassú süllyedéssel, vízszintes szárnyakkal.
 3. Földet érés: süllyedés **< 4 m/s**, bedöntés < 12°. Különben eltörik a futómű / leér a szárnyvég.
 4. A földön **B** = kerékfék (a gép kb. 700 m alatt áll meg), az egérrel/Q-E-vel kormányzol (orrkerék).
-5. A bázis betonján **megállva** 6 s alatt újrafegyvereznek, tankolnak és megjavítanak.
+5. A bázis betonján **lelassulva** (25 m/s alatt) azonnal újrafegyvereznek, tankolnak és megjavítanak.
 
 ## Hogyan működik a lockolás? (mint a War Thunderben)
 
@@ -171,7 +173,7 @@ A játékos gépén **lockolást segítő mód** van (az AI-n nincs): a hőköve
    **magas, folyamatos sípolásra** vált, és innentől a kereső magától követi – akár 40°-ra is elnézhet
    az orrtól. Az **F** azonnal lockol bármelyik ellenségre az orr előtti ±30°-ban, vagy elengedi a
    lockot (utána 3 s-ig nem lockol magától).
-4. **Space** = indítás. Repülés közben a rakéta saját keresővel, arányos rávezetéssel megy a célra.
+3. **Space** = indítás. Repülés közben a rakéta saját keresővel, arányos rávezetéssel megy a célra.
 
 Tippek: a hátsó félgömbből és utánégetős (AB) célra sokkal messzebbről lockol (≈9–13 km),
 szemből csak ≈3–4 km-ről. Ha van radar lockod, a kereső automatikusan a radarcélra fordul és lockol.
@@ -244,16 +246,19 @@ Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a mod
   elforgatás csak elég légsebességnél, farokütés, kemény / ferde / futómű nélküli földet érés = baleset,
   a futómű a földön nem húzható be, kiengedve ellenállást ad, a fékszárnyak ~240 csomó felett felhúzódnak.
 * **Aerodinamika:** Mach-függő felhajtóerő, transzonikus ellenállás-növekedés M0,88-tól, indukált ellenállás.
-* **Egeres irányítás:** az "instruktor" a **repülési pályát** (sebességvektort) viszi a fehér körre,
-  gravitáció-kompenzációval: vízszintes célnál tartja a magasságot, oldalra mutatva koordinált,
-  helyesen bedöntött fordulót repül, mögötted lévő célnál vízszintes fordulót választ.
+* **Egeres irányítás (War Thunder-féle instruktor):** a **repülési pályát** (sebességvektort) viszi a fehér
+  körre, gravitáció-kompenzációval. A kért fordulási sebesség a szöggel arányos, ezért a kis korrekciók
+  finomak: kevés bedöntés + oldalkormány. A kicsit lejjebb lévő célhoz negatív G-vel lenyom (nem fordul
+  hátára), a húzás/nyomás választásnak hiszterézise van (nem billeg). A játékosnál ~7,6 G-nél megáll
+  (az S-sel kihúzható a 9 G). Amíg W/S/A/D-t nyomsz, elengedi a gépet, a célzókör pedig az orron marad.
+* **G-hatások:** 7,5 G felett tartósan elszürkül / elsötétül a kép, −1,8 G alatt bevörösödik.
 
 Minden adat egy helyen van: `dogfight/sim/specs.py` – itt lehet hangolni.
 
 ## Projekt felépítése
 
 ```
-main.py                 indítás, parancssori kapcsolók
+main.py                 indítás, parancssori kapcsolók (--mode arcade|realistic, --difficulty, ...)
 dogfight/
   game.py               Panda3D alkalmazás, játékmenet (hullámok, újraéledés)
   camera.py             War Thunder-féle egeres kamera, kabin nézet
@@ -270,9 +275,24 @@ dogfight/
     guns.py             gépágyú, ballisztika, találat-doboz, előretartás
     aircraft.py, world.py, terrain.py, signatures.py, countermeasures.py
   ai/                   AI pilóta + közös "instruktor" (irány -> kormánymozdulatok)
-  render/               részletes F-16 (f16_model.py) és rakéta modellek, terep (LOD), reptér, ég, effektek
-  ui/                   HUD, radar B-scope, RWR, súgó
-tests/                  pytest tesztek a szimulációhoz
+  render/               részletes F-16 (f16_model.py), kabin (cockpit.py + cockpit.png), rakéták,
+                        terep (LOD), reptér, ég, effektek
+  ui/                   HUD, radar B-scope, RWR, G-hatások, súgó
+web/                    böngészős változat (Three.js) - ugyanaz a játék JavaScriptben
+  index.html            menü, súgó, a játék oldala (GitHub Pages: /Dogfight/web/)
+  js/                   util, specs, flight, terrain, weapons, sim, ai, render, hud, audio, game (+ three.min.js)
+  assets/               exportált gép-geometria, festések, terep, kabin-textúra
+  dogfight-offline.html az egész játék egy fájlban (tools/build_offline.py készíti)
+tools/
+  export_web_assets.py  a Python modell / terep exportja a web/assets-be
+  make_cockpit_texture.py  a kabin-textúra (műszerfal, MFD-k, konzolok) megrajzolása
+  build_offline.py      egyfájlos offline változat (esbuild + data: URI-k)
+tests/                  pytest tesztek (repülés, földi fizika, rakéták, szenzorok, instruktor, gázkar)
+docs/                   képek + DOKUMENTACIO.md (teljes dokumentáció, fejlesztési napló)
+index.html              átirányít a böngészős játékra (GitHub Pages gyökér)
 ```
+
+A teljes dokumentáció (minden funkció, felépítés, karbantartás, fejlesztési napló):
+**[docs/DOKUMENTACIO.md](docs/DOKUMENTACIO.md)**
 
 Tesztek futtatása: `pip install pytest && python -m pytest`
