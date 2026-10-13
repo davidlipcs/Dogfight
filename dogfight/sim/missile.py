@@ -333,7 +333,7 @@ def launch_zone(spec, launch_speed, altitude, target_closing):
             v += (thrust - drag) / mass * dt
             x += v * dt
             t += dt
-            if v < 300.0 and t > burn:
+            if v < 450.0 and t > burn:          # too slow to still out-turn a target
                 break
             # x is the distance covered; the target covers closure*t towards us
         return max(0.0, x + closure * t)

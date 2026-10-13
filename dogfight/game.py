@@ -149,7 +149,7 @@ class DogfightApp:
             to_player = p.pos - pos
             heading = math.degrees(math.atan2(to_player.x, to_player.y))
             ac = Aircraft(F16C, "Bandita %d" % (i + 1), "red", pos, heading, 240.0, loadout="default",
-                          rng=random.Random(self.rng.random()), livery="aggressor")
+                          rng=random.Random(self.rng.random()), livery="viper")
             AIPilot(ac, skill=self.options.difficulty)
             self.world.add_aircraft(ac)
         st.wave_active = True

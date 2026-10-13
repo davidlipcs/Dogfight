@@ -23,7 +23,9 @@
 
 Alap fegyverzet: 4× AIM-9M + 2× AIM-120A (`--loadout amraam` = 4× AIM-120A + 2× AIM-9M, `--loadout fox2` = 6× AIM-9M).
 
-Az ellenfelek is F-16-osok („aggressor” homokszínű festéssel), AI pilótával: radarral lockolnak,
+Az ellenfelek pontosan ugyanolyan F-16-osok, mint a tiéd (ugyanaz a gép, festés és fegyverzet, piros jelölővel),
+csak a pilótájuk egy kicsit gyengébb: kevesebb G-t húznak, pontatlanabbak, később veszik észre a rakétát, és csak
+a hatótávjuk biztonságosabb részéből lőnek (a te DLZ-d messzebbre enged). Radarral lockolnak,
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
 ## A gép
@@ -46,7 +48,8 @@ Részletes, valódi méretekből kódból épített F-16C Block 50 (nem kell hoz
   (sisak, napellenző, oxigénmaszk, kezek)
 * **festés:** a valódi F-16 háromszínű szürke sémája (sötét gerinc, középszürke oldalak és szárnyak,
   világos has), panelvonalak, szegecsek, árnyékolás a csatlakozásoknál, koromnyomok,
-  USAF felségjelek, farokkód és gyári szám; az ellenség „aggressor" sivatagi terepszínben
+  USAF felségjelek, farokkód és gyári szám (egy „aggressor" sivatagi terepszín is készül, de most az ellenség
+  is a szürke festést kapja)
 * **fények:** formációs fénycsíkok, helyzetjelző fények, villogó stroboszkóp
 * **effektek:** nagy állásszögnél páracsóva a szárnytő-kiterjesztésből, 9 G közelében szárnyvég-örvények
 

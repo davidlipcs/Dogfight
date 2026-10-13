@@ -131,7 +131,7 @@ export class HUD {
     for (const t of world.aircraft) {
       if (t === ac || !t.alive || t.team === ac.team) continue;
       const d = len(sub(t.pos, ac.pos));
-      if (d > 25000) continue;
+      if (d > 80000) continue;
       const p = this.project(cam, t.pos);
       if (!p) continue;
       if (t === this.lockTarget(ac, ac.selectedSpec)) continue;      // drawn by the lock box
@@ -248,6 +248,7 @@ export class HUD {
     this.text(`LOCK  ${sp ? sp.name : ''}`, p[0] - hs, p[1] - hs - 14 * u, col, 13 * u + 3, 'left', 'Oswald, Impact, sans-serif');
     this.text(`${(d / 1000).toFixed(1)} km   Vc ${vc * 3.6 >= 0 ? '+' : ''}${Math.round(vc * 3.6)}`, p[0] - hs, p[1] + hs + 14 * u, col, 11 * u + 2);
     if (inRange && blink) this.text('LŐHETSZ!  (Space)', p[0], p[1] + hs + 34 * u, RED, 15 * u + 4, 'center', 'Oswald, Impact, sans-serif');
+    else if (!inRange && sp && sp.guidance === IR && d > 9000 && ac.missileCount('AIM-120A')) this.text('messze van - válts AIM-120-ra (2)', p[0], p[1] + hs + 34 * u, AMBER, 12 * u + 2, 'center');
     else if (!inRange && sp && d >= this.dlz?.[0]) this.text('még messze', p[0], p[1] + hs + 34 * u, AMBER, 12 * u + 2, 'center');
     else if (!inRange && sp && d <= sp.minRange) this.text('túl közel', p[0], p[1] + hs + 34 * u, AMBER, 12 * u + 2, 'center');
   }

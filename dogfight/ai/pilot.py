@@ -5,14 +5,17 @@ from panda3d.core import Vec3
 from ..mathutil import DEG, angle_between, clamp, safe_normalized
 from ..sim.guns import gun_lead
 from ..sim.radar import STT
-from ..sim.specs import ARH
+from ..sim.missile import launch_zone
+from ..sim.specs import ARH, MISSILES
 from ..sim.world import AI_DT
 from .steering import steer_towards
 
+# The AI flies the very same F-16 as the player; its pilot is a little weaker: less G, less precise,
+# slower to notice missiles, and it only fires inside a cautious part of the launch zone.
 SKILLS = {
-    "easy": dict(g=0.65, precision=0.7, missile_cd=32.0, cm=0.35, aware=0.25, gun_cone=0.8, arh=False),
-    "normal": dict(g=0.85, precision=0.9, missile_cd=20.0, cm=0.7, aware=0.5, gun_cone=1.2, arh=True),
-    "hard": dict(g=1.0, precision=1.0, missile_cd=12.0, cm=1.0, aware=0.85, gun_cone=1.6, arh=True),
+    "easy": dict(g=0.6, precision=0.65, missile_cd=36.0, cm=0.3, aware=0.2, gun_cone=0.7, arh=False, zone=0.5),
+    "normal": dict(g=0.8, precision=0.85, missile_cd=24.0, cm=0.6, aware=0.45, gun_cone=1.0, arh=True, zone=0.7),
+    "hard": dict(g=0.92, precision=0.95, missile_cd=15.0, cm=0.9, aware=0.75, gun_cone=1.4, arh=True, zone=0.8),
 }
 
 MIN_AGL = 450.0
@@ -104,7 +107,11 @@ class AIPilot:
         ir_left = ac.missile_count("AIM-9M")
         arh_left = ac.missile_count("AIM-120A")
         fired = None
-        if ir_left and 900.0 < dist < 7000.0:
+        closing_t = -tgt.vel.dot(safe_normalized(tgt.pos - ac.pos))
+
+        def zone(key):
+            return launch_zone(MISSILES[key], ac.speed, ac.pos.z, closing_t)[0] * self.skill["zone"]
+        if ir_left and 900.0 < dist < min(7000.0, zone("AIM-9M")):
             if ac.selected != "AIM-9M":
                 ac.select("AIM-9M")
             elif ac.ir_seeker.candidate is tgt or ac.ir_seeker.target is tgt:
@@ -113,9 +120,7 @@ class AIPilot:
                 if ac.ir_seeker.target is tgt:
                     fired = ac.fire_missile(world)
         elif arh_left and self.skill["arh"] and ac.radar.mode == STT and ac.radar.locked is tgt:
-            closing = -(tgt.vel - ac.vel).dot(safe_normalized(tgt.pos - ac.pos))
-            max_range = 24000.0 if closing > 150.0 else 11000.0
-            if 2500.0 < dist < max_range:
+            if 2500.0 < dist < zone("AIM-120A"):
                 if ac.selected != "AIM-120A":
                     ac.select("AIM-120A")
                 fired = ac.fire_missile(world)

@@ -220,7 +220,7 @@ class HUD:
             if tgt is ac or not tgt.alive or tgt.team == ac.team:
                 continue
             dist = (tgt.pos - ac.pos).length()
-            if dist > 25000.0:
+            if dist > 80000.0:
                 continue
             p = self.project(tgt.pos)
             if p is None:
@@ -374,6 +374,8 @@ class HUD:
                 note = ("LŐHETSZ!  (Space)", RED, 0.04)
         elif spec is not None and dist <= spec.min_range:
             note = ("túl közel", AMBER, 0.028)
+        elif spec is not None and spec.guidance == IR and dist > 9000.0 and ac.missile_count("AIM-120A"):
+            note = ("messze van - válts AIM-120-ra (2)", AMBER, 0.028)
         elif spec is not None and self._dlz is not None and dist >= self._dlz[0]:
             note = ("még messze", AMBER, 0.028)
         if note is not None:

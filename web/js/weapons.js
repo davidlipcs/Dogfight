@@ -491,7 +491,7 @@ export function launchZone(spec, launchSpeed, altitude, closing) {
       if (t < spec.burnTime) mass -= spec.propellant / spec.burnTime * dt;
       const drag = 0.5 * rho * v * v * spec.refArea * interp(spec.cd, v / aS) * 1.15;
       v += (thrust - drag) / mass * dt; x += v * dt; t += dt;
-      if (v < 300 && t > spec.burnTime) break;
+      if (v < 450 && t > spec.burnTime) break;          // too slow to still out-turn a target
     }
     return Math.max(0, x + closure * t);
   };

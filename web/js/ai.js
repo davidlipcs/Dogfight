@@ -1,7 +1,7 @@
 // Mouse-aim instructor, player pilot and enemy AI (port of dogfight/ai/*.py and controls.py).
 import { G, DEG, V, add, sub, mul, dot, cross, len, norm, clamp, smoothstep, angleBetween, bankAngle, wrap } from './util.js';
-import { ARH } from './specs.js';
-import { STT, gunLead } from './weapons.js';
+import { ARH, MISSILES } from './specs.js';
+import { STT, gunLead, launchZone } from './weapons.js';
 import { AI_DT } from './sim.js';
 
 // Mouse-aim "instructor" (War Thunder style): swings the flight path towards `direction`.
@@ -90,10 +90,12 @@ export class PlayerPilot {
   }
 }
 
+// The AI flies the very same F-16 as the player; its pilot is a little weaker: less G, less precise,
+// slower to notice missiles, and it only fires inside a cautious part of the launch zone.
 const SKILLS = {
-  easy: { g: 0.65, precision: 0.7, missileCd: 32, cm: 0.35, aware: 0.25, gunCone: 0.8, arh: false },
-  normal: { g: 0.85, precision: 0.9, missileCd: 20, cm: 0.7, aware: 0.5, gunCone: 1.2, arh: true },
-  hard: { g: 1, precision: 1, missileCd: 12, cm: 1, aware: 0.85, gunCone: 1.6, arh: true },
+  easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5 },
+  normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7 },
+  hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8 },
 };
 const MIN_AGL = 450;
 
@@ -143,15 +145,16 @@ export class AIPilot {
     if (d < 1100 && angleBetween(ac.forward, this.gunSolution(t)) < this.skill.gunCone * DEG) ac.trigger = true;
     if (this.missileTimer > 0) return;
     let fired = null;
-    if (ac.missileCount('AIM-9M') && d > 900 && d < 7000) {
+    const closingT = -dot(t.vel, norm(sub(t.pos, ac.pos)));
+    const zone = (key) => launchZone(MISSILES[key], ac.speed, ac.pos.z, closingT)[0] * this.skill.zone;
+    if (ac.missileCount('AIM-9M') && d > 900 && d < Math.min(7000, zone('AIM-9M'))) {
       if (ac.selected !== 'AIM-9M') ac.select('AIM-9M');
       else if (ac.irSeeker.candidate === t || ac.irSeeker.target === t) {
         if (!ac.irSeeker.locked) ac.irSeeker.lock();
         if (ac.irSeeker.target === t) fired = ac.fireMissile(world);
       }
     } else if (ac.missileCount('AIM-120A') && this.skill.arh && ac.radar.mode === STT && ac.radar.locked === t) {
-      const closing = -dot(sub(t.vel, ac.vel), norm(sub(t.pos, ac.pos)));
-      if (d > 2500 && d < (closing > 150 ? 24000 : 11000)) {
+      if (d > 2500 && d < zone('AIM-120A')) {
         if (ac.selected !== 'AIM-120A') ac.select('AIM-120A');
         fired = ac.fireMissile(world);
       }

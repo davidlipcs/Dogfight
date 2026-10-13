@@ -265,7 +265,7 @@ class Game {
       pos.z = Math.max(r.uniform(3000, 7500), this.terrain.height(pos.x, pos.y) + 1500);
       const to = sub(p.pos, pos);
       const heading = Math.atan2(to.x, to.y) / DEG;
-      const ac = new Aircraft(F16C, `Bandita ${i + 1}`, 'red', pos, heading, 240, { livery: 'aggressor', rnd: rng(Math.floor(r() * 1e9)) });
+      const ac = new Aircraft(F16C, `Bandita ${i + 1}`, 'red', pos, heading, 240, { livery: 'viper', rnd: rng(Math.floor(r() * 1e9)) });
       new AIPilot(ac, this.opts.difficulty);
       this.world.addAircraft(ac);
     }
