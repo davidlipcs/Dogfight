@@ -1,4 +1,5 @@
-// Point-mass aerodynamics + F-16 FLCS + landing gear (port of dogfight/sim/flight_model.py).
+// Point-mass aerodynamics + fly-by-wire (G command with AoA limiter) + landing gear.  Everything that
+// differs between the aircraft comes from the spec (specs.js): mass, wing, engines, drag polar, limits.
 import { G, DEG, V, add, sub, mul, dot, cross, len, norm, clamp, interp, qaxis, qmul, fwdOf, upOf, rightOf, qheading } from './util.js';
 
 const R_AIR = 287.05, GAMMA = 1.4;
@@ -19,10 +20,10 @@ const K_ALPHA = 6, K_BETA = 3, TAU_PITCH = 0.06, TAU_ROLL = 0.09, TAU_YAW = 0.12
 export const MAX_AB = 1.1;
 const G_ONSET = 10;
 const SPOOL_UP_CORE = 0.30, SPOOL_DOWN_CORE = 0.40, SPOOL_UP_AB = 0.07, SPOOL_DOWN_AB = 0.25;
-export const GEAR_HEIGHT = 2.05;
+export const GEAR_HEIGHT = 2.05;                      // F-16 (each spec has its own gearHeight)
 const GEAR_TIME = 4, GEAR_CD = 0.022, FLAP_CL = 0.22, FLAP_CD = 0.012;
-const MU_PAVED = 0.02, MU_GRASS = 0.07, MU_BRAKE = 0.45, MAX_SINK = 4.2, MAX_BANK = 12, TAIL_STRIKE = 13;
-const ROTATE_IAS = 60, NWS_RATE = 0.45;
+const MU_PAVED = 0.02, MU_GRASS = 0.07, MU_BRAKE = 0.45, MAX_SINK = 4.2, MAX_BANK = 12;
+const NWS_RATE = 0.45;
 
 export class Controls {
   constructor(throttle = 0.85) {
@@ -42,6 +43,7 @@ export class FlightModel {
     this.gLoad = 1; this.thrust = 0; this.accel = V();
     this.gearDown = false; this.gearPos = 0; this.onGround = false; this.groundPitch = 0;
     this.contactEvent = null; this.crashReason = ''; this.sinkRate = 0; this.flaps = 0;
+    this.gearHeight = spec.gearHeight ?? GEAR_HEIGHT; this.drag = 0; this.fuelFlow = 0;
   }
   get mass() { return this.spec.emptyMass + this.fuel + this.storeMass; }
   get speed() { return len(this.vel); }
@@ -50,7 +52,7 @@ export class FlightModel {
   get right() { return rightOf(this.quat); }
 
   placeOnGround(x, y, groundZ, headingDeg) {
-    this.pos = V(x, y, groundZ + GEAR_HEIGHT); this.vel = V();
+    this.pos = V(x, y, groundZ + this.gearHeight); this.vel = V();
     this.quat = qheading(headingDeg, 0); this.omega = V();
     this.gearDown = true; this.gearPos = 1; this.onGround = true; this.groundPitch = 0; this.engine = 0; this.nzCmd = 1;
   }
@@ -108,7 +110,8 @@ export class FlightModel {
     const thrust = this.thrustAt(this.engine, rho, mach);
     this.thrust = thrust;
     const sfc = this.engine <= 1 ? s.fuelFlowDry / s.thrustDry : s.fuelFlowAb / s.thrustAb;
-    this.fuel = Math.max(0, this.fuel - thrust * sfc * dt);
+    this.fuelFlow = thrust * sfc;
+    this.fuel = Math.max(0, this.fuel - this.fuelFlow * dt);
 
     let cl = this.liftCoefficient(alpha, mach);
     const flaps = this.gearPos * clamp((125 - speed * Math.sqrt(rho / RHO0)) / 25, 0, 1);
@@ -116,10 +119,11 @@ export class FlightModel {
     if (flaps > 0 && alpha > -0.05) cl += FLAP_CL * flaps;
     const liftDir = norm(cross(right, vhat), up);
     const sideDir = cross(vhat, liftDir);
-    let cd = s.cd0 + interp(s.waveDrag, mach) + s.kInduced * cl * cl + this.storeCd + 0.8 * Math.sin(alpha) ** 2;
+    let cd = s.cd0 + (s.pylonCd || 0) + interp(s.waveDrag, mach) + s.kInduced * cl * cl + this.storeCd + 0.8 * Math.sin(alpha) ** 2;
     if (c.airbrake) cd += s.airbrakeCd;
     cd += GEAR_CD * this.gearPos + FLAP_CD * flaps;
     const area = s.wingArea;
+    this.drag = qbar * area * cd;
     const force = add(add(add(mul(liftDir, qbar * area * cl), mul(sideDir, -qbar * area * 1.1 * beta)),
       mul(vhat, -qbar * area * cd)), mul(fwd, thrust));
     const acc = add(mul(force, 1 / mass), V(0, 0, -G));
@@ -132,7 +136,7 @@ export class FlightModel {
       const groundZ = terrain.height(this.pos.x, this.pos.y);
       const tele = { force, mass, alpha, mach, rho, qbar, speed };
       if (this.onGround) { this.groundStep(dt, c, acc, terrain, tele); return; }
-      if (this.pos.z - groundZ <= GEAR_HEIGHT) {
+      if (this.pos.z - groundZ <= this.gearHeight) {
         if (this.touchdown(groundZ, terrain)) this.groundStep(dt, c, acc, terrain, tele);
         return;
       }
@@ -171,7 +175,7 @@ export class FlightModel {
   }
 
   touchdown(groundZ, terrain) {
-    const fwd = this.forward;
+    const fwd = this.forward, s = this.spec;
     const pitch = Math.asin(clamp(fwd.z, -1, 1)) / DEG;
     const r = this.right;
     const bank = Math.atan2(-r.z, this.up.z) / DEG;
@@ -181,16 +185,16 @@ export class FlightModel {
     else if (this.sinkRate > MAX_SINK) reason = `túl kemény földetérés (${this.sinkRate.toFixed(1)} m/s)`;
     else if (Math.abs(bank) > MAX_BANK) reason = 'szárnyvéggel értél földet';
     else if (pitch < -3) reason = 'orral értél földet';
-    else if (pitch > TAIL_STRIKE + 7) reason = 'farokkal értél földet';
+    else if (pitch > (s.tailStrike ?? 13) + 7) reason = 'farokkal értél földet';
     else if (terrain.slope(this.pos.x, this.pos.y) > 6 * DEG) reason = 'egyenetlen terep';
     if (reason) {
       this.contactEvent = 'crash'; this.crashReason = reason; this.pos.z = groundZ + 1; return false;
     }
     this.onGround = true;
-    this.contactEvent = pitch > TAIL_STRIKE + 2 ? 'tailstrike' : 'touchdown';
+    this.contactEvent = pitch > (s.tailStrike ?? 13) + 2 ? 'tailstrike' : 'touchdown';
     this.groundPitch = Math.max(0, pitch) * DEG;
     this.omega = V(); this.nzCmd = 1;
-    this.pos.z = groundZ + GEAR_HEIGHT; this.vel.z = 0;
+    this.pos.z = groundZ + this.gearHeight; this.vel.z = 0;
     return true;
   }
 
@@ -218,11 +222,11 @@ export class FlightModel {
     const nws = this.groundPitch < 2 * DEG ? NWS_RATE * Math.min(1, 8 / gs) : 0;
     const yawRate = clamp(c.yaw, -1, 1) * (nws + 0.03 * Math.min(gs / 60, 1)) * (gs > 0.3 ? 1 : 0);
     const ias = t.speed * Math.sqrt(t.rho / RHO0);
-    const auth = clamp((ias - ROTATE_IAS) / 12, 0, 1);
+    const auth = clamp((ias - (this.spec.rotateIas ?? 60)) / 12, 0, 1), tailStrike = this.spec.tailStrike ?? 13;
     const stick = clamp(c.pitch, -1, 1);
     let pitchRate = stick > 0 ? stick * 7 * DEG * auth : 0;
     if (pitchRate <= 0) pitchRate = -3.5 * DEG;
-    this.groundPitch = clamp(this.groundPitch + pitchRate * dt, 0, TAIL_STRIKE * DEG);
+    this.groundPitch = clamp(this.groundPitch + pitchRate * dt, 0, tailStrike * DEG);
 
     this.vel.addScaledVector(acc, dt);
     this.pos.addScaledVector(this.vel, dt);
@@ -231,8 +235,8 @@ export class FlightModel {
     this.omega = V(this.groundPitch > 0 ? pitchRate : 0, 0, 0);
     const ng = terrain.height(this.pos.x, this.pos.y);
     if (normal === 0 && this.vel.z > 0) {
-      if (this.pos.z > ng + GEAR_HEIGHT + 0.3) this.onGround = false;
-    } else { this.pos.z = ng + GEAR_HEIGHT; this.vel.z = 0; }
+      if (this.pos.z > ng + this.gearHeight + 0.3) this.onGround = false;
+    } else { this.pos.z = ng + this.gearHeight; this.vel.z = 0; }
     this.alpha = t.alpha; this.beta = 0; this.mach = t.mach; this.rho = t.rho; this.qbar = t.qbar;
     this.ias = ias; this.accel = acc;
     this.gLoad = dot(mul(t.force, 1 / t.mass), this.up) / G + normal / G;

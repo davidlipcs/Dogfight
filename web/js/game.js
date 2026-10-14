@@ -1,16 +1,20 @@
 // Browser entry point: asset loading, camera, input, game flow and the main loop (port of dogfight/game.py,
 // camera.py and controls.py).
 import { THREE, V, add, sub, mul, dot, cross, len, norm, clamp, DEG, qaxis, qmul, qlook, fwdOf, upOf, xform, rng } from './util.js';
-import { F16C, F16C_BANDIT, PLAYER_MISSILES, BANDIT_MISSILES, IR } from './specs.js';
+import { AIRCRAFT, BANDITS, PLAYER_MISSILES, BANDIT_MISSILES, IR, buildLoadout, loadoutLimits } from './specs.js';
 import { Terrain } from './terrain.js';
 import { Aircraft, World } from './sim.js';
 import { PlayerPilot, AIPilot } from './ai.js';
 import { Models, SceneView } from './render.js';
 import { parseGLB } from './glb.js';
 import { HUD } from './hud.js';
+import { CockpitDisplays } from './mfd.js';
 import { Sounds } from './audio.js';
 
-const PLAYER_START = V(0, -26000, 4500);
+// The fight happens on the far side of the map: the enemies live in the combat zone and never attack anyone
+// near the home base (safe area), so taking off and landing is quiet.  An air start puts the player on the
+// way there, just outside the zone.
+const ZONE = { x: -14000, y: 16000, r: 16000 }, ENGAGE_MARGIN = 12000, SAFE_RADIUS = 14000;
 const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret (vagy S)  ·  G = futómű';
 const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, RELOAD_TIME = 10, MAX_ENEMIES = 6, THROTTLE_RATE = 0.4, MAX_AB = 1.1;
 const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5;
@@ -19,6 +23,7 @@ const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look dow
 // cockpit view: the head turns about the neck (the eyes sit in front of it), and to look back the pilot
 // leans forward and to the side, past the ejection seat's head box
 const NECK = V(0, -0.09, -0.06), EYE_FROM_NECK = V(0, 0.09, 0.06), LEAN_SIDE = 0.18, LEAN_FWD = 0.12;
+const COCKPIT_SHIFT = 0.13;                           // cockpit view: picture shifted down by this part of its height
 const STICK_GAIN = 0.045;                             // mouse joystick: px of mouse travel per full deflection / sensitivity
 const ease = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
@@ -32,10 +37,15 @@ class FlightCamera {
     this.aim = new THREE.Quaternion(); this.look = new THREE.Quaternion();
     this.freeLook = false; this.cockpit = false; this.position = V(); this.fov = 70; this.phase = 0; this.zoom = 0;
     this.headYaw = 0; this.headPitch = 0; this.headG = 0;   // cockpit: head turn (rad) and G sag (m)
+    this.panelLook = false; this.panel = null; this.panelFov = 30;   // N: look down at the displays (panel point, aircraft frame)
   }
   reset(ac) { this.aim = qlook(ac.forward); this.look = this.aim.clone(); }
   aimDirection() { return fwdOf(this.aim); }
-  setFreeLook(on) { if (on && !this.freeLook && !this.cockpit) this.look = this.aim.clone(); this.freeLook = on; }
+  setFreeLook(on) {
+    if (on && !this.freeLook && !this.cockpit) this.look = this.aim.clone();
+    if (on) this.panelLook = false;
+    this.freeLook = on;
+  }
   rotate(yawDeg, pitchDeg) {
     if (this.cockpit && this.freeLook) {             // turning the head inside the cockpit
       this.headYaw = clamp(this.headYaw + yawDeg * DEG, -HEAD_YAW, HEAD_YAW);
@@ -64,7 +74,11 @@ class FlightCamera {
     if (this.cockpit && ac.alive) {
       // the pilot's head is part of the jet: the view rolls, pitches and yaws with it.  Under G the head
       // sags (positive) or lifts (negative) a few centimetres.
-      if (!this.freeLook) { const k = Math.exp(-6 * dt); this.headYaw *= k; this.headPitch *= k; }
+      if (!this.freeLook) {
+        // the head comes back to the front, or with N turns down to the instrument panel
+        const k = Math.exp(-6 * dt), p = this.panelLook && this.panel ? Math.atan2(this.panel.z - this.eye.z, this.panel.y - this.eye.y) : 0;
+        this.headYaw *= k; this.headPitch = p + (this.headPitch - p) * k;
+      }
       const sag = clamp(-(ac.fm.gLoad - 1) * 0.012, -0.06, 0.09);
       this.headG += (sag - this.headG) * Math.min(1, dt * 6);
       const head = qmul(qaxis(V(0, 0, 1), this.headYaw), qaxis(V(1, 0, 0), this.headPitch));
@@ -88,9 +102,16 @@ class FlightCamera {
     if (ac.alive && ac.fm.gLoad > 6) shake += (ac.fm.gLoad - 6) * 0.03;
     if (shake > 0) q = qmul(q, new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(this.phase * 53) * shake * DEG, Math.sin(this.phase * 71) * shake * DEG, 0)));
     cam.quaternion.copy(q);
-    const target = [this.cockpit ? 75 : 70, 45, 28][this.zoom];
+    const panel = this.cockpit && this.panelLook && ac.alive;
+    const target = panel ? this.panelFov : [this.cockpit ? 75 : 70, 45, 28][this.zoom];
     this.fov += (target - this.fov) * Math.min(1, dt * 8);
     if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+    // cockpit: the picture is shifted (lens shift, no rotation) so the HUD sits above the screen centre and
+    // the displays on the instrument panel fit at the bottom
+    const shift = this.cockpit && ac.alive && !panel ? COCKPIT_SHIFT : 0;
+    this.shift = (this.shift || 0) + (shift - (this.shift || 0)) * Math.min(1, dt * 8);
+    if (this.shift > 0.002) cam.setViewOffset(1000 * cam.aspect, 1000, 0, 1000 * this.shift, 1000 * cam.aspect, 1000);
+    else if (cam.view && cam.view.enabled) cam.clearViewOffset();
     cam.updateMatrixWorld();
   }
 }
@@ -202,10 +223,9 @@ class Game {
     this.terrain = new Terrain(assets.terrain);
     this.world = new World(this.terrain, Math.floor(Math.random() * 1e9));
     this.rnd = this.world.rnd;
-    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex, cockpit: assets.cockpitTex }, assets.glb);
+    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex, cockpit: assets.cockpitTex }, assets.glb, AIRCRAFT);
     this.view = new SceneView(this.renderer, this.models, this.terrain, this.world);
     this.cam = new FlightCamera(this.view.camera, this.terrain);
-    if (this.models.eye) this.cam.eye = V(...this.models.eye);
     this.hud = new HUD($('hud'));
     this.sounds = new Sounds(0.7);
     this.input = new Input(canvas);
@@ -225,6 +245,8 @@ class Game {
       if (!this.locked && !this.state.paused && this.lockWanted) this.pause();
     });
     document.addEventListener('pointerlockerror', () => { this.locked = false; this.lockWanted = false; });
+    const field = this.terrain.airfield;
+    this.nav = { zone: { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }, base: { x: field.x, y: field.y, r: SAFE_RADIUS }, wave: 0, enemies: 0 };
     this.spawnPlayer();
     this.resize();
     addEventListener('resize', () => this.resize());
@@ -267,13 +289,21 @@ class Game {
     const air = this.opts.airStart, field = this.terrain.airfield;
     let pos, heading = 0, speed = 0;
     if (air) {
-      pos = PLAYER_START.clone();
+      // between the base and the combat zone, heading for the zone
+      const k = 0.45;
+      pos = V(field.x + (ZONE.x - field.x) * k, field.y + (ZONE.y - field.y) * k, 4500);
       pos.z = Math.max(pos.z, this.terrain.height(pos.x, pos.y) + 1500); speed = 250;
+      heading = Math.atan2(ZONE.x - pos.x, ZONE.y - pos.y) / DEG;
     } else {
       const [x, y, hdg] = field.startPosition();
       pos = V(x, y, 0); heading = hdg;
     }
-    const ac = new Aircraft(F16C, 'Te (Viper 1)', 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', lockAssist: true, missiles: PLAYER_MISSILES, rnd: rng(Math.floor(this.rnd() * 1e9)) });
+    const spec = AIRCRAFT[this.opts.aircraft] || AIRCRAFT.f16;
+    const ac = new Aircraft(spec, `Te (${spec.callsign} 1)`, 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', lockAssist: true,
+      missiles: PLAYER_MISSILES, loadout: this.opts.loadout || 'default', rnd: rng(Math.floor(this.rnd() * 1e9)) });
+    this.cam.eye = this.models.types[spec.model].eye.clone();
+    this.cam.panel = this.models.types[spec.model].panel.clone();
+    this.cam.panelFov = this.models.types[spec.model].panelFov;
     if (air) ac.controls.throttle = 0.95;
     else {
       ac.fm.placeOnGround(pos.x, pos.y, this.terrain.height(pos.x, pos.y), heading);
@@ -285,25 +315,28 @@ class Game {
     this.cam.reset(ac);
   }
 
+  // a wave appears in the combat zone, on its far side from the player, facing the player's way in
   spawnWave() {
     const st = this.state, p = this.player, r = this.rnd;
     st.wave++;
     const count = Math.min(this.opts.enemies + st.wave - 1, MAX_ENEMIES);
-    const ahead = norm(V(p.forward.x, p.forward.y, 0), V(0, 1, 0));
-    const center = add(p.pos, mul(ahead, r.uniform(32000, 40000)));
-    const [cx, cy] = this.terrain.clampInside(center.x, center.y, 9000);
-    const side = V(ahead.y, -ahead.x, 0);
+    const from = norm(V(ZONE.x - p.pos.x, ZONE.y - p.pos.y, 0), V(0, 1, 0));
+    const center = add(V(ZONE.x, ZONE.y, 0), mul(from, ZONE.r * 0.35));
+    const side = V(from.y, -from.x, 0), area = { ...this.nav.zone, safe: this.nav.base };
     for (let i = 0; i < count; i++) {
-      const pos = add(V(cx, cy, 0), mul(side, (i - (count - 1) / 2) * 3500 + r.uniform(-800, 800)));
+      const pos = add(center, mul(side, (i - (count - 1) / 2) * 3500 + r.uniform(-800, 800)));
       pos.z = Math.max(r.uniform(3000, 7500), this.terrain.height(pos.x, pos.y) + 1500);
-      const to = sub(p.pos, pos);
-      const heading = Math.atan2(to.x, to.y) / DEG;
-      const ac = new Aircraft(F16C_BANDIT, `Bandita ${i + 1}`, 'red', pos, heading, 240, { livery: 'viper', missiles: BANDIT_MISSILES, rnd: rng(Math.floor(r() * 1e9)) });
-      new AIPilot(ac, this.opts.difficulty);
+      const heading = Math.atan2(-from.x, -from.y) / DEG + r.uniform(-20, 20);
+      const type = this.opts.enemyType === 'mixed' ? (r() < 0.5 ? 'f16' : 'fa18') : (this.opts.enemyType || 'f16');
+      const spec = BANDITS[type];
+      const loadout = type === 'fa18' ? buildLoadout(spec, 2, 4).layout : 'default';
+      const ac = new Aircraft(spec, `Bandita ${i + 1} (${spec.short})`, 'red', pos, heading, 240, { livery: 'viper', missiles: BANDIT_MISSILES, loadout, rnd: rng(Math.floor(r() * 1e9)) });
+      new AIPilot(ac, this.opts.difficulty, area);
       this.world.addAircraft(ac);
     }
     st.waveActive = true;
-    this.hud.message(`${st.wave}. HULLÁM - ${count} ellenség`, 'warn', 4);
+    const toZone = Math.max(0, Math.hypot(ZONE.x - p.pos.x, ZONE.y - p.pos.y) - ZONE.r);
+    this.hud.message(`${st.wave}. HULLÁM - ${count} ellenség a harci zónában${toZone > 1000 ? ` (${(toZone / 1000).toFixed(0)} km)` : ''}`, 'warn', 5);
   }
   enemiesAlive() { return this.world.aircraft.filter((a) => a.team !== 'blue' && a.alive); }
 
@@ -316,7 +349,17 @@ class Game {
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
     if (k === 'Enter' || k === 'NumpadEnter') { this.respawn(); return; }
     if (k === 'm') { this.hud.markers = !this.hud.markers; return; }
-    if (k === 'v') { this.cam.cockpit = !this.cam.cockpit; return; }
+    if (k === 'v') { this.cam.cockpit = !this.cam.cockpit; this.cam.panelLook = false; return; }
+    if (k === 'n') {
+      if (!this.cam.cockpit) { this.cam.cockpit = true; this.cam.panelLook = true; } else this.cam.panelLook = !this.cam.panelLook;
+      return;
+    }
+    if (k === 'j' || k === 'k' || k === 'l') {
+      const vis = this.view.visuals.get(this.player);
+      const page = vis && vis.displays ? vis.displays.cycle({ j: 'left', k: 'right', l: 'center' }[k]) : null;
+      if (page) this.hud.message(`KIJELZŐ: ${page}`, 'info', 1, 'mfd');
+      return;
+    }
     if (!this.canAct()) return;
     if (k === 'shift') { this.throttleStep(1); return; }
     if (k === 'z' || k === 'control') { this.throttleStep(-1); return; }
@@ -524,6 +567,13 @@ class Game {
     this.cam.update(sdt, this.player);
     this.view.cockpitView = this.cam.cockpit && this.player.alive;
     this.view.update(sdt, this.player);
+    // the cockpit displays of the player's jet (drawn only while they can be seen)
+    const nav = this.nav;
+    nav.wave = st.wave; nav.enemies = this.enemiesAlive().length;
+    this.hud.nav = nav;
+    const vis = this.view.visuals.get(this.player);
+    if (vis && vis.screens && !vis.displays) vis.displays = new CockpitDisplays(this.player.spec, vis.screens);
+    if (vis && vis.displays && this.view.cockpitView) vis.displays.update(sdt, this.player, this.world, nav);
     this.view.render();
     this.hud.update(dt, this.player, this.world, this.view.camera, this.cam, st);
     this.sounds.update(this.player, st.paused);
@@ -615,15 +665,15 @@ async function boot() {
   const status = $('status'), bar = $('bar');
   if (!THREE) { status.textContent = 'A three.js nem töltődött be - ellenőrizd az internetkapcsolatot.'; return; }
   let done = 0;
-  const tick = () => { done++; bar.style.width = `${done / 9 * 100}%`; };
+  const tick = () => { done++; bar.style.width = `${done / 10 * 100}%`; };
   let assets;
   try {
-    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex, glbF16, glbAim9, glbAim120] = await Promise.all([
+    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex, glbF16, glbFa18, glbAim9, glbAim120] = await Promise.all([
       fetchJSON(assetUrl('f16.json'), tick), fetchJSON(assetUrl('terrain.json'), tick),
       loadTexture(assetUrl('livery_viper.jpg'), tick), loadTexture(assetUrl('livery_aggressor.jpg'), tick),
       loadTexture(assetUrl('terrain_color.jpg'), tick), loadTexture(assetUrl('cockpit.png'), tick),
-      fetchGLB(assetUrl('f16.glb'), tick), fetchGLB(assetUrl('aim9m.glb'), tick), fetchGLB(assetUrl('aim120c.glb'), tick)]);
-    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex, glb: { f16: glbF16, aim9m: glbAim9, aim120c: glbAim120 } };
+      fetchGLB(assetUrl('f16.glb'), tick), fetchGLB(assetUrl('fa18.glb'), tick), fetchGLB(assetUrl('aim9m.glb'), tick), fetchGLB(assetUrl('aim120c.glb'), tick)]);
+    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex, glb: { f16: glbF16, fa18: glbFa18, aim9m: glbAim9, aim120c: glbAim120 } };
   } catch (e) {
     status.textContent = 'Betöltési hiba: ' + e.message; console.error(e); return;
   }
@@ -632,13 +682,55 @@ async function boot() {
   $('menu').hidden = false;
   // offer the one-file offline copy where a plain download link works (GitHub Pages or a local server)
   if (!window.DOGFIGHT_ASSETS && /github\.io$|^localhost$|^127\./.test(location.hostname)) $('download').hidden = false;
+  // Loadout editor: how many AIM-9M and AIM-120A; the stations are filled like the real jet would carry them
+  // (specs.js buildLoadout), the row of chips shows where each one hangs.
+  const arms = { 'AIM-9M': 0, 'AIM-120A': 0 };
+  const plane = () => AIRCRAFT[document.querySelector('input[name=plane]:checked').value];
+  const defaults = (spec) => {
+    const l = Object.values(spec.loadouts.default);
+    arms['AIM-9M'] = l.filter((k) => k === 'AIM-9M').length; arms['AIM-120A'] = l.filter((k) => k === 'AIM-120A').length;
+  };
+  const showLoadout = () => {
+    const spec = plane(), lim = loadoutLimits(spec);
+    for (const key of ['AIM-9M', 'AIM-120A']) {
+      const other = key === 'AIM-9M' ? 'AIM-120A' : 'AIM-9M';
+      // a weapon can have as many as its stations, as long as the other one still fits on the rest
+      arms[key] = clamp(arms[key], 0, Math.min(lim[key], lim.total - arms[other]));
+    }
+    let { layout, left } = buildLoadout(spec, arms['AIM-9M'], arms['AIM-120A']);
+    while (left['AIM-9M'] > 0 || left['AIM-120A'] > 0) {          // did not fit: take back what is left over
+      arms['AIM-9M'] -= left['AIM-9M']; arms['AIM-120A'] -= left['AIM-120A'];
+      ({ layout, left } = buildLoadout(spec, arms['AIM-9M'], arms['AIM-120A']));
+    }
+    $('n9').textContent = arms['AIM-9M']; $('n120').textContent = arms['AIM-120A'];
+    const nums = Object.keys(spec.stations).map(Number).sort((a, b) => a - b);
+    $('stations').innerHTML = nums.map((n) => {
+      const w = layout[n], cls = w === 'AIM-9M' ? 'st s9' : w === 'AIM-120A' ? 'st s120' : 'st';
+      return `<span class="${cls}" title="${n}. állomás: ${w || 'üres'}"><i>${n}</i>${w === 'AIM-9M' ? '9M' : w === 'AIM-120A' ? '120' : '–'}</span>`;
+    }).join('');
+    const mass = Object.values(layout).reduce((m, k) => m + (k === 'AIM-9M' ? 86 : 152), 0);
+    $('loadout-hint').textContent = `${arms['AIM-9M'] + arms['AIM-120A']} rakéta · ${mass} kg`;
+    $('brand').textContent = spec.callsign;
+    $('plane-hint').textContent = spec.id === 'fa18'
+      ? '2 × F414 · 196 kN · nagy állásszög, lassabb energia'
+      : '1 × F110 · 132 kN · 9 G, jobb tolóerő/tömeg';
+  };
+  for (const el of document.querySelectorAll('input[name=plane]')) el.addEventListener('change', () => { defaults(plane()); showLoadout(); });
+  for (const [id, key, d] of [['m9', 'AIM-9M', -1], ['p9', 'AIM-9M', 1], ['m120', 'AIM-120A', -1], ['p120', 'AIM-120A', 1]]) {
+    $(id).addEventListener('click', () => { arms[key] += d; showLoadout(); });
+  }
+  $('ld-default').addEventListener('click', () => { defaults(plane()); showLoadout(); });
+  defaults(plane()); showLoadout();
   // The main menu starts a match, and the game can come back to it any time (Esc -> Főmenü), during a match
   // or after it: from there the match continues (Folytatás) or a new one starts on the same scene.
   const start = (airStart) => {
     const difficulty = document.querySelector('input[name=diff]:checked').value;
     const enemies = Number($('enemies').value);
     const mode = document.querySelector('input[name=mode]:checked').value;
-    const opts = { airStart, difficulty, enemies, mode };
+    const aircraft = document.querySelector('input[name=plane]:checked').value;
+    const enemyType = document.querySelector('input[name=foe]:checked').value;
+    const loadout = buildLoadout(AIRCRAFT[aircraft], arms['AIM-9M'], arms['AIM-120A']).layout;
+    const opts = { airStart, difficulty, enemies, mode, aircraft, enemyType, loadout };
     $('menu').hidden = true;
     let game = window.game;
     if (game) game.newMatch(opts);

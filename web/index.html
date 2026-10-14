@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Dogfight F-16 Viper</title>
-<meta name="description" content="F-16C légiharc szimulátor a böngészőben">
+<title>Dogfight Viper &amp; Rhino</title>
+<meta name="description" content="F-16C és F/A-18E légiharc szimulátor a böngészőben">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -73,6 +73,18 @@
   .tip { font-size: 13.5px; color: var(--text); line-height: 1.5; }
   .tip b { color: var(--hud); font-weight: 600; }
   .hint { font: 12px var(--mono); color: var(--muted); }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--panel-edge); border-radius: 4px; overflow: hidden; }
+  .stepper button { padding: 5px 11px; border: 0; border-radius: 0; font: 600 16px var(--mono); letter-spacing: 0; }
+  .stepper b { font: 500 14px var(--body); padding: 0 8px; min-width: 104px; text-align: center; }
+  .stepper b span { font: 600 14px var(--mono); color: var(--hud); }
+  button.small { padding: 6px 12px; font-size: 13px; }
+  .stations { display: flex; gap: 4px; flex-wrap: wrap; }
+  .st { display: grid; justify-items: center; min-width: 30px; padding: 3px 2px; border: 1px solid var(--panel-edge); border-radius: 3px;
+    font: 600 11px var(--mono); color: var(--muted); }
+  .st i { font-style: normal; font-weight: 400; font-size: 10px; opacity: 0.7; }
+  .st.s9 { color: var(--hud); border-color: rgba(107, 255, 133, 0.5); }
+  .st.s120 { color: var(--caution); border-color: rgba(255, 200, 64, 0.5); }
+  #menu .card { width: min(640px, 100%); }
   @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 </style>
 <style>[hidden]{display:none!important} body{margin:0}</style>
@@ -84,19 +96,46 @@
 
 <div id="loading" class="screen dim">
   <div class="card">
-    <div class="eyebrow">F-16C Block 50 · AIM-9M · AIM-120A</div>
+    <div class="eyebrow">F-16C Block 50 · F/A-18E Super Hornet</div>
     <h1>Dogfight <span>Viper</span></h1>
     <div class="bar"><div id="bar"></div></div>
-    <div id="status">Terep, repülőgép és festés betöltése (~13 MB)…</div>
+    <div id="status">Terep, repülőgépek és festés betöltése (~17 MB)…</div>
   </div>
 </div>
 
 <div id="menu" class="screen dim" hidden>
   <div class="card">
-    <div class="eyebrow">F-16C Block 50 · AIM-9M · AIM-120A</div>
-    <h1>Dogfight <span>Viper</span></h1>
-    <p>Külső nézetben a gép orra arra áll, ahová az egérrel célzol; kabinnézetben (V) az egér a botkormány, mintha a gépben ülnél. Radar- és hőkövető lock, gépágyú, flare és chaff. Az ellenség hullámokban jön. Arkád módban a rakéták maguktól újratöltődnek, realisztikusban csak a bázison leszállva.</p>
+    <div class="eyebrow">F-16C Block 50 · F/A-18E Super Hornet · AIM-9M · AIM-120A</div>
+    <h1>Dogfight <span id="brand">Viper</span></h1>
+    <p>Külső nézetben a gép orra arra áll, ahová az egérrel célzol; kabinnézetben (V) az egér a botkormány, a kijelzőkön radar, térkép, fegyverzet és hajtómű adatok. Az ellenség a térkép túloldalán, a harci zónában vár, a bázis körül nem támad. Arkád módban a rakéták maguktól újratöltődnek, realisztikusban csak a bázison leszállva.</p>
     <div class="opts">
+      <div class="row">
+        <span class="label">Saját gép</span>
+        <div class="seg" role="radiogroup" aria-label="Saját gép">
+          <input type="radio" name="plane" id="p-f16" value="f16" checked><label for="p-f16">F-16C Viper</label>
+          <input type="radio" name="plane" id="p-fa18" value="fa18"><label for="p-fa18">F/A-18E Super Hornet</label>
+        </div>
+        <span class="hint" id="plane-hint"></span>
+      </div>
+      <div class="row">
+        <span class="label">Fegyverzet</span>
+        <span class="stepper"><button type="button" id="m9" aria-label="Kevesebb AIM-9M">−</button><b>AIM-9M <span id="n9">0</span></b><button type="button" id="p9" aria-label="Több AIM-9M">+</button></span>
+        <span class="stepper"><button type="button" id="m120" aria-label="Kevesebb AIM-120A">−</button><b>AIM-120A <span id="n120">0</span></b><button type="button" id="p120" aria-label="Több AIM-120A">+</button></span>
+        <button type="button" class="small" id="ld-default">Alap</button>
+      </div>
+      <div class="row">
+        <span class="label"></span>
+        <div id="stations" class="stations" aria-label="Függesztési pontok"></div>
+        <span class="hint" id="loadout-hint"></span>
+      </div>
+      <div class="row">
+        <span class="label">Ellenfél</span>
+        <div class="seg" role="radiogroup" aria-label="Ellenfél típusa">
+          <input type="radio" name="foe" id="f-f16" value="f16" checked><label for="f-f16">F-16C</label>
+          <input type="radio" name="foe" id="f-fa18" value="fa18"><label for="f-fa18">F/A-18E</label>
+          <input type="radio" name="foe" id="f-mixed" value="mixed"><label for="f-mixed">Vegyes</label>
+        </div>
+      </div>
       <div class="row">
         <span class="label">Játékmód</span>
         <div class="seg" role="radiogroup" aria-label="Játékmód">
@@ -172,12 +211,13 @@
           <dt>C, jobb egér</dt><dd>szabad körülnézés</dd>
           <dt>Középső egér</dt><dd>zoom (3 fokozat)</dd>
           <dt>V</dt><dd>kabin / külső nézet (a kabin együtt mozog a géppel; C-vel körülnézel)</dd>
+          <dt>J / K / L</dt><dd>kabinban: bal / jobb / középső kijelző lapozása (radar, térkép, fegyverzet, hajtómű, RWR)</dd>
         </dl>
       </div>
       <div>
         <h3>Fegyverek és radar</h3>
         <dl>
-          <dt>Bal egér</dt><dd>M61A1 gépágyú</dd>
+          <dt>Bal egér</dt><dd>gépágyú (F-16: M61A1, 511 lőszer · F/A-18E: M61A2, 412)</dd>
           <dt>Space</dt><dd>rakéta indítása</dd>
           <dt>Görgő</dt><dd>fegyverváltás</dd>
           <dt>1 / 2</dt><dd>AIM-9M / AIM-120A</dd>
@@ -192,7 +232,7 @@
       </div>
       <div class="tip">
         <h3 style="margin:0 0 6px;font:600 12px var(--mono);letter-spacing:.14em;color:var(--hud)">FELSZÁLLÁS</h3>
-        Tartsd a <b>Shiftet</b>: a gáz 100%-nál megáll, ott még egy <b>Shift</b> = utánégető. <b>~280 km/h</b>-nál emeld az egeret (vagy S), a gép elemelkedik, utána <b>G</b>. Leszállás: futómű ki, ~270 km/h, lassú süllyedés (&lt; 4 m/s), a földön <b>B</b> fékez. A bázis betonján lelassulva azonnal újratölt, tankol és javít.
+        Tartsd a <b>Shiftet</b>: a gáz 100%-nál megáll, ott még egy <b>Shift</b> = utánégető. <b>~280 km/h</b>-nál (Super Hornet: ~300) emeld az egeret (vagy S), a gép elemelkedik, utána <b>G</b>. Leszállás: futómű ki, ~270 km/h, lassú süllyedés (&lt; 4 m/s), a földön <b>B</b> fékez. A bázis betonján lelassulva azonnal újratölt, tankol és javít. A bázis körüli 14 km-es körben az ellenség nem támad; a harci zóna a térkép túloldalán van (borostyán jelölő).
       </div>
       <div class="tip">
         <h3 style="margin:0 0 6px;font:600 12px var(--mono);letter-spacing:.14em;color:var(--hud)">HOGYAN LOCKOLJ?</h3>

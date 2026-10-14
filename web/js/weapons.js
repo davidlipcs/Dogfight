@@ -531,7 +531,7 @@ export class Gun {
     this.acc -= n;
     if (n <= 0) return;
     const q = shooter.quat, fwd = shooter.forward, right = shooter.fm.right, up = shooter.fm.up;
-    const muzzle = add(shooter.pos, xform(q, GUN_OFFSET)), sig = sp.dispersionMrad * 1e-3;
+    const muzzle = add(shooter.pos, xform(q, shooter.spec.gunPos ? V(...shooter.spec.gunPos) : GUN_OFFSET)), sig = sp.dispersionMrad * 1e-3;
     for (let i = 0; i < n; i++) {
       this.ammo--; this.count++;
       const dir = norm(add(add(fwd, mul(right, this.rnd.gauss(0, sig))), mul(up, this.rnd.gauss(0, sig))));
@@ -583,7 +583,7 @@ export function updateBullets(world, dt) {
       if (ac.spec.hitboxes.some(([c, h]) => segHitsBox(p0, p1, c, h))) {
         b.alive = false;
         world.emit('hit', { target: ac, pos: copy(b.pos), shooter: b.owner });
-        ac.takeDamage(b.spec.damage, b.owner, 'M61A1', world);
+        ac.takeDamage(b.spec.damage, b.owner, b.spec.name, world);
         break;
       }
     }

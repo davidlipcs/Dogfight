@@ -93,8 +93,10 @@ export class PlayerPilot {
   }
 }
 
-// The AI flies the very same F-16 as the player; its pilot is a little weaker: less G, less precise,
-// slower to notice missiles, and it only fires inside a cautious part of the launch zone.
+// The AI flies the same jets as the player (with a weaker airframe, specs.js BANDITS); its pilot is a little
+// weaker too: less G, less precise, slower to notice missiles, and it only fires inside a cautious part of the
+// launch zone.  With an `area` (the combat zone) it patrols there and only goes for enemies inside the zone
+// (plus a margin), never for anyone near the home base: taking off and landing is safe.
 const SKILLS = {
   easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5 },
   normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7 },
@@ -103,17 +105,30 @@ const SKILLS = {
 const MIN_AGL = 450;
 
 export class AIPilot {
-  constructor(ac, skill = 'normal') {
-    this.ac = ac; this.skill = SKILLS[skill]; this.rnd = ac.rnd;
+  constructor(ac, skill = 'normal', area = null) {
+    this.ac = ac; this.skill = SKILLS[skill]; this.rnd = ac.rnd; this.area = area;
     this.state = 'patrol'; this.target = null; this.threat = null; this.aware = new Set(); this.defendTimer = 0;
     this.missileTimer = this.rnd.uniform(6, 14); this.patrolAlt = ac.pos.z;
-    this.waypoint = V(this.rnd.uniform(-15000, 15000), this.rnd.uniform(-15000, 15000), this.patrolAlt);
+    this.waypoint = this.patrolPoint();
     ac.pilot = this;
+  }
+  patrolPoint() {
+    const a = this.area, r = this.rnd;
+    if (!a) return V(r.uniform(-20000, 20000), r.uniform(-20000, 20000), this.patrolAlt);
+    const ang = r.uniform(0, 2 * Math.PI), d = a.r * 0.8 * Math.sqrt(r());
+    return V(a.x + Math.sin(ang) * d, a.y + Math.cos(ang) * d, this.patrolAlt);
+  }
+  // may this enemy be attacked?  inside the combat zone (+ margin) and not in the base's safe area
+  fair(t) {
+    const a = this.area;
+    if (!a) return true;
+    if (a.safe && Math.hypot(t.pos.x - a.safe.x, t.pos.y - a.safe.y) < a.safe.r) return false;
+    return Math.hypot(t.pos.x - a.x, t.pos.y - a.y) < a.engage;
   }
   think(world) {
     const ac = this.ac;
     this.missileTimer -= AI_DT; ac.trigger = false;
-    const enemies = world.enemiesOf(ac);
+    const enemies = world.enemiesOf(ac).filter((e) => this.fair(e));
     this.target = enemies.reduce((b, e) => (!b || len(sub(e.pos, ac.pos)) < len(sub(b.pos, ac.pos)) ? e : b), null);
     const threat = this.findThreat(world);
     if (threat) { this.threat = threat; this.state = 'defend'; this.defendTimer = 2.5; }
@@ -176,6 +191,8 @@ export class AIPilot {
     if (aglAhead < MIN_AGL || agl < MIN_AGL * 0.7) { desired = norm(add(norm(V(ac.vel.x, ac.vel.y, 0)), V(0, 0, 0.9))); maxG = 1; }
     else if (agl < 1800 && desired.z < -0.15) desired = norm(V(desired.x, desired.y, -0.15));
     if (Math.abs(ac.pos.x) > 42000 || Math.abs(ac.pos.y) > 42000) desired = norm(add(norm(V(-ac.pos.x, -ac.pos.y, 0)), mul(desired, 0.3)));
+    const a = this.area;
+    if (a && Math.hypot(ac.pos.x - a.x, ac.pos.y - a.y) > a.engage + 4000) desired = norm(add(norm(V(a.x - ac.pos.x, a.y - ac.pos.y, 0)), mul(desired, 0.3)));
     steerTowards(ac.fm, desired, ac.controls, maxG, this.skill.precision);
     ac.controls.throttle = throttle;
   }
@@ -206,7 +223,7 @@ export class AIPilot {
   }
   patrol() {
     const ac = this.ac, to = sub(this.waypoint, ac.pos);
-    if (len(V(to.x, to.y, 0)) < 3000) this.waypoint = V(this.rnd.uniform(-20000, 20000), this.rnd.uniform(-20000, 20000), this.patrolAlt);
+    if (len(V(to.x, to.y, 0)) < 3000) this.waypoint = this.patrolPoint();
     const climb = clamp((this.patrolAlt - ac.pos.z) / 3000, -0.3, 0.3);
     return [norm(add(norm(V(to.x, to.y, 0)), V(0, 0, climb))), 0.95];
   }

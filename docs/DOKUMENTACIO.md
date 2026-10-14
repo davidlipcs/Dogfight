@@ -1,4 +1,4 @@
-# Dogfight – F-16C Viper: teljes dokumentáció
+# Dogfight – F-16C Viper és F/A-18E Super Hornet: teljes dokumentáció
 
 Ez a dokumentum mindent leír, ami a projektben elkészült: hol és hogyan lehet játszani, mit tud a játék,
 hogyan épül fel a kód, hogyan kell karbantartani, és milyen lépésekben készült (fejlesztési napló).
@@ -175,6 +175,14 @@ pályahatár-kerülés. A játékos a teljes DLZ-t kihasználhatja, így mindig 
 
 ### 5.7 Kabin és nézetek
 
+**Kabinkijelzők (`web/js/mfd.js`).** A műszerfal minden képernyője egy-egy canvas-textúra, másodpercenként
+~30-szor újrarajzolva (csak kabinnézetben). F-16: két MFD (bal: RDR / SMS / ENG, jobb: SA / ENG / SMS), DED és
+RWR-szkóp – a régi kabinmodell képernyő-négyszögeire. F/A-18E: bal DDI (ENG / SMS / RWR), jobb DDI
+(RDR / SMS), AMPCD (SA / RWR), UFCD – a Blender-modell `screen_*` objektumaira, a UV-t a JS vetíti rájuk
+(`Models.modelScreens`). Lapozás: J / K / L. **N**: a fej lefordul a műszerfal közepére és 30–40°-os
+látószögre közelít, a HUD-réteg ilyenkor csak a figyelmeztetéseket rajzolja. Kabinnézetben a kép 13%-kal
+lejjebb van tolva (lencseeltolás, `setViewOffset`), így a HUD a középpont fölé kerül és a kijelzők beférnek.
+
 * Kabin-kád a törzsbe vágva, magas buborék-kabintető kerettel és tükrökkel, 30°-ban döntött ACES II ülés,
   oldalkonzolok, oldalsó bot és gázkar, műszerfal két világító MFD-vel, DED, ICP, tartalék műszerek,
   takaróernyő és HUD. Pilóta szándékosan nincs. A textúra: `dogfight/render/cockpit.png`
@@ -288,7 +296,8 @@ utánégető), világ (hullámok, találatok).
 | 19 | Dokumentáció | ez a dokumentum, README frissítés, új képek | – |
 | 20 | High quality F-16 modell Blenderben, GLB-ben, bekötve a játékba | Blender-szkriptből épített modell és rakéták, saját `.glb`-olvasó, új külső nézet, Node nélküli offline építés | `32cf8f4` |
 | 21 | Behúzható futómű aknákkal, kabin ne lógjon ki, orr kövesse a kurzort, fej 160°, erős saját / gyenge ellenséges rakéták, gyengébb ellenséges gép | futóműaknák és -ajtók, behúzás-animáció, ülés- és ernyőjavítás, orr-alapú instruktor, fejforgatás ±160°, `PLAYER_MISSILES` / `BANDIT_MISSILES`, `F16C_BANDIT`, tolóerő-vektorálás | `feefd29` |
-| 22 | Kabinból joystickként irányítani, a kabinnézet ne takarjon, főmenü meccs közben / után | egér-botkormány kabinnézetben, nyak körüli fejforgatás előre-oldalra dőléssel, szünetmenü (Folytatás / Főmenü / Súgó), főmenü Folytatással, új meccs ugyanazon a jeleneten | – |
+| 22 | Kabinból joystickként irányítani, a kabinnézet ne takarjon, főmenü meccs közben / után | egér-botkormány kabinnézetben, nyak körüli fejforgatás előre-oldalra dőléssel, szünetmenü (Folytatás / Főmenü / Súgó), főmenü Folytatással, új meccs ugyanazon a jeleneten | `a4f9287` |
+| 23 | Kabin: több infó olvashatóan (az alapok maradnak); F/A-18E Super Hornet Blenderben saját kabinnal; valós aerodinamika és tolóerő mindkettőnél; gép- és ellenfélválasztás, fegyverzet; a harc a térkép túloldalán | `aircraft_lib.py` + `build_fa18.py` (Super Hornet GLB), élő kabinkijelzők (`web/js/mfd.js`: RDR, SA, SMS, ENG, RWR, DED/UFCD), N = kijelzők nézése, lencseeltolás kabinban; `FA18E` adatok (2× F414, 46,5 m², 7,5 G, 40° AoA), rakéta-ellenállás felület szerint, gépenkénti futómagasság; menü: saját gép, ellenfél, AIM-9M / AIM-120A darabszám állomás-kiosztással; harci zóna (−14, +16 km, r = 16 km) és 14 km-es biztonsági kör a bázis körül | – |
 
 ---
 

@@ -71,10 +71,15 @@ export class HUD {
     for (const l of [this.messages, this.killfeed]) for (const m of l) m.t -= dt;
     this.messages = this.messages.filter((m) => m.t > 0); this.killfeed = this.killfeed.filter((m) => m.t > 0);
     this.gEffects(player, dt);
-    if (player && player.alive) {
+    if (player && player.alive && camCtl.cockpit && camCtl.panelLook) {
+      // looking down at the displays: only the warnings and messages stay over them
+      this.cockpit = true;
+      this.warnings(player, world);
+    } else if (player && player.alive) {
       this.incomingMissiles(player, cam);
       this.flightSymbols(player, cam, camCtl);
       this.targets(player, world, cam);
+      this.navMarks(player, cam);
       this.weaponSymbols(player, world, cam, dt);
       this.panels(player, world);
       this.radarScope(player);
@@ -109,11 +114,12 @@ export class HUD {
         this.line(x - 22 * u, y, x - r, y, GREEN); this.line(x + r, y, x + 22 * u, y, GREEN); this.line(x, y - r, x, y - 17 * u, GREEN);
       }
     }
+    this.cockpit = camCtl.cockpit;
     if (camCtl.cockpit) this.pitchLadder(ac, cam, camCtl);
   }
   // where the mouse joystick is: box = full deflection, dot = the stick (down = pulled back)
   stickGauge(s) {
-    const u = this.u, r = 26 * u, cx = this.w / 2 + 190 * u, cy = this.h - 72 * u;     // beside the weapon status
+    const u = this.u, r = 26 * u, cx = 116 * u, cy = this.h - 270 * u;                 // above the RWR scope
     this.rect(cx, cy, r, r, DIM);
     this.line(cx - r, cy, cx + r, cy, DIM); this.line(cx, cy - r, cx, cy + r, DIM);
     const g = this.g, x = cx + s.x * r, y = cy + s.y * r;
@@ -124,7 +130,7 @@ export class HUD {
     const hdg = Math.atan2(ac.forward.x, ac.forward.y), pitch = Math.asin(clamp(ac.forward.z, -1, 1)) / DEG;
     const dir = (h, e) => V(Math.sin(h) * Math.cos(e), Math.cos(h) * Math.cos(e), Math.sin(e));
     for (let e = -80; e <= 80; e += 10) {
-      if (Math.abs(e - pitch) > 35) continue;
+      if (Math.abs(e - pitch) > 16) continue;          // like the real HUD: only near the boresight
       const [inner, outer] = e === 0 ? [1.5, 25] : [2, 9];
       for (const s of [-1, 1]) {
         const a = this.project(cam, add(camCtl.position, mul(dir(hdg + s * inner * DEG, e * DEG), 5000)));
@@ -147,6 +153,32 @@ export class HUD {
       if (t === this.lockTarget(ac, ac.selectedSpec)) continue;      // drawn by the lock box
       this.poly([[p[0] - 8 * u, p[1] - 20 * u], [p[0] + 8 * u, p[1] - 20 * u], [p[0], p[1] - 10 * u]], ENEMY);
       this.text((d / 1000).toFixed(1), p[0], p[1] - 30 * u, ENEMY, 11 * u + 2, 'center');
+    }
+  }
+  // the combat zone (amber) and the home base (cyan): marker with the distance, and an arrow at the screen
+  // edge towards the zone while it is behind you
+  navMarks(ac, cam) {
+    const n = this.nav, u = this.u;
+    if (!n) return;
+    const dz = Math.hypot(n.zone.x - ac.pos.x, n.zone.y - ac.pos.y), db = Math.hypot(n.base.x - ac.pos.x, n.base.y - ac.pos.y);
+    const where = db < n.base.r ? ['BIZTONSÁGI ZÓNA (bázis) - itt nem támadnak', CYAN] : dz < n.zone.r ? ['HARCI ZÓNA', ENEMY] : null;
+    if (where) this.text(where[0], 20 * u, 62 * u, where[1], 11 * u + 2);
+    if (!this.markers) return;
+    if (dz > n.zone.r) {
+      const pos = V(n.zone.x, n.zone.y, Math.max(ac.pos.z, 3500)), p = this.project(cam, pos);
+      if (p) {
+        const k = 11 * u;
+        this.poly([[p[0], p[1] - k], [p[0] + k, p[1]], [p[0], p[1] + k], [p[0] - k, p[1]]], AMBER);
+        this.text(`HARCI ZÓNA ${((dz - n.zone.r) / 1000).toFixed(0)} km`, p[0], p[1] - 22 * u, AMBER, 12 * u + 2, 'center');
+      } else this.edgeArrow(cam, pos, AMBER);
+    }
+    if (db > 3000) {
+      const p = this.project(cam, V(n.base.x, n.base.y, 300));
+      if (p) {
+        const k = 8 * u;
+        this.rect(p[0], p[1], k, k, CYAN);
+        this.text(`BÁZIS ${(db / 1000).toFixed(0)} km`, p[0], p[1] + 20 * u, CYAN, 11 * u + 2, 'center');
+      }
     }
   }
   edgeArrow(cam, pos, c) {
@@ -310,8 +342,8 @@ export class HUD {
     const eng = fm.engine > 1.001 ? 'AB' : `${Math.round(fm.engine * 100)}%`;
     const rows = [
       [`IAS ${String(Math.round(fm.ias * 3.6)).padStart(5)} km/h`, GREEN], [`TAS ${String(Math.round(ac.speed * 3.6)).padStart(5)}`, DIM],
-      [`M   ${fm.mach.toFixed(2).padStart(5)}`, GREEN], [`G   ${fm.gLoad.toFixed(1).padStart(5)}`, fm.gLoad > 7.5 ? AMBER : GREEN],
-      [`AoA ${(fm.alpha / DEG).toFixed(1).padStart(5)}`, fm.alpha / DEG > 20 ? AMBER : GREEN], [`THR  ${thr}`, cmd > 1 ? AMBER : GREEN], [`MOT  ${eng}`, Math.abs(fm.engine - cmd) > 0.02 ? DIM : GREEN],
+      [`M   ${fm.mach.toFixed(2).padStart(5)}`, GREEN], [`G   ${fm.gLoad.toFixed(1).padStart(5)}`, fm.gLoad > ac.spec.gMax * 0.85 ? AMBER : GREEN],
+      [`AoA ${(fm.alpha / DEG).toFixed(1).padStart(5)}`, fm.alpha / DEG > ac.spec.alphaLimit * 0.8 ? AMBER : GREEN], [`THR  ${thr}`, cmd > 1 ? AMBER : GREEN], [`MOT  ${eng}`, Math.abs(fm.engine - cmd) > 0.02 ? DIM : GREEN],
       [fm.gearPos > 0.98 ? 'GEAR DOWN' : fm.gearPos > 0.02 ? 'GEAR TRANSIT' : 'GEAR UP', fm.gearPos > 0.98 ? GREEN : fm.gearPos > 0.02 ? AMBER : DIM],
     ];
     if (ac.onGround) rows.push([`GS  ${String(Math.round(ac.speed * 3.6)).padStart(5)} km/h`, GREEN]);
@@ -319,7 +351,7 @@ export class HUD {
     else if (ac.controls.airbrake) rows.push(['SPD BRK', AMBER]);
     rows.forEach(([t, c], i) => this.text(t, x, y + i * lh, c, fs));
     const terr = world.terrain.height(ac.pos.x, ac.pos.y), xr = this.w / 2 + 250 * u;
-    const fuelCol = fm.fuel < 400 ? RED : fm.fuel < 900 ? AMBER : GREEN;
+    const fuelCol = fm.fuel < ac.spec.internalFuel * 0.12 ? RED : fm.fuel < ac.spec.internalFuel * 0.28 ? AMBER : GREEN;
     const right = [
       [`ALT ${String(Math.round(ac.pos.z)).padStart(6)} m`, GREEN], [`AGL ${String(Math.round(ac.pos.z - terr)).padStart(6)}`, DIM],
       [`VS  ${(fm.vel.z >= 0 ? '+' : '') + Math.round(fm.vel.z)}`, GREEN], [`HDG    ${String(Math.round(headingDeg(ac.forward))).padStart(3, '0')}`, GREEN],
@@ -331,7 +363,8 @@ export class HUD {
       const r = ac.stations.filter((s) => s.key === k && !s.loaded && s.reload !== undefined).map((s) => s.reload);
       return r.length ? ` +${r.length} (${Math.ceil(Math.min(...r))}s)` : '';
     };
-    const yb = this.h - 78 * u, parts = ac.weaponKeys().map((k) => {
+    // in the cockpit the weapon lines go to the top of the screen: the bottom shows the displays
+    const yb = this.cockpit ? 92 * u : this.h - 78 * u, parts = ac.weaponKeys().map((k) => {
       const t = `${k} ×${ac.missileCount(k)}${reloadText(k)}`;
       return k === ac.selected ? `[${t}]` : ` ${t} `;
     });
@@ -417,7 +450,7 @@ export class HUD {
     if (ac.fm.ias < 70 && !ac.onGround) big('SPEED LOW', AMBER, 22);
     if (!ac.onGround && ac.fm.gearPos < 0.98 && agl < 300 && ac.fm.ias < 95 && ac.vel.z < -2 && blink) big('FUTÓMŰ!', RED, 24);
     if (ac.fm.gearPos > 0.02 && ac.fm.ias > 155 && blink) big('GEAR SPEED', AMBER, 22);
-    if (ac.fm.fuel > 0 && ac.fm.fuel < 400) big('BINGO FUEL', AMBER, 22);
+    if (ac.fm.fuel > 0 && ac.fm.fuel < ac.spec.internalFuel * 0.12) big('BINGO FUEL', AMBER, 22);
     let my = this.h / 2 - 130 * u;
     for (const m of this.messages) { this.text(m.text, this.w / 2, my, m.color, 16 * u + 3, 'center'); my += 22 * u + 4; }
   }
@@ -462,7 +495,7 @@ export class HUD {
   overlay(game) {
     const u = this.u, fs = 12 * u + 3;
     this.text(`HULLÁM ${game.wave}   LELŐVE ${game.kills}   HALÁL ${game.deaths}`, 20 * u, 22 * u, WHITE, fs);
-    this.text('H = súgó   Esc = menü', 20 * u, 42 * u, DIM, 11 * u + 2);
+    this.text(this.cockpit ? 'H = súgó   Esc = menü   N = kijelzők nézése   J / K / L = lapozás' : 'H = súgó   Esc = menü   V = kabin   N = kijelzők', 20 * u, 42 * u, DIM, 11 * u + 2);
     let y = 22 * u;
     for (const k of this.killfeed) { this.text(k.text, this.w - 20 * u, y, k.color, fs, 'right'); y += 20 * u + 3; }
     if (game.banner) this.text(game.banner, this.w / 2, this.h / 2 - 40 * u, WHITE, 44 * u + 6, 'center', 'Oswald, Impact, sans-serif');

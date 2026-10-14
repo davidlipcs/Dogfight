@@ -1,10 +1,13 @@
-// F-16C Block 50 / AIM-9M / AIM-120A / M61A1 / APG-68 data (same numbers as dogfight/sim/specs.py).
+// Aircraft, missile, gun, radar and countermeasure data.  F-16C Block 50 (F110-GE-129, APG-68) and
+// F/A-18E Super Hornet (2 x F414-GE-400, APG-79), AIM-9M / AIM-120A, M61A1 / M61A2.
 export const IR = 'IR', ARH = 'ARH';
 
 export const M61A1 = {
   name: 'M61A1', rateRpm: 6000, ammo: 511, muzzle: 1050, dragK: 3.7e-4, dispersionMrad: 1.6,
   damage: 9, life: 3.0, maxLeadRange: 1800,
 };
+// the Super Hornet's lighter M61A2 in the nose: same 20 mm rounds, 412 of them
+export const M61A2 = { ...M61A1, name: 'M61A2', ammo: 412, dispersionMrad: 1.4 };
 
 export const AIM9M = {
   name: 'AIM-9M', guidance: IR, mass: 86, propellant: 22, diameter: 0.127, length: 2.87,
@@ -61,28 +64,103 @@ export const APG68 = {
   notchSpeed: 25, trackMemory: 0.6, rwrSymbol: '16',
 };
 
+// AESA: the beam jumps electronically, so the whole scan volume is covered much faster and locks are quicker
+export const APG79 = {
+  name: 'AN/APG-79 AESA', searchRange: 90000, scanAz: 60, scanEl: 14, scanRate: 260, sttGimbal: 60,
+  lockRange: 70000, acmRange: 18000, acmAz: 7, acmElLow: -8, acmElHigh: 45, lockTime: 0.35,
+  notchSpeed: 20, trackMemory: 0.8, rwrSymbol: '18',
+};
+
 export const ALE47 = { flares: 30, chaff: 30, flareIntensity: 3.0, flareLife: 4.0, chaffLife: 5.0, interval: 0.35 };
 
+// Station numbers follow the real aircraft (1 = left wingtip).  `pylons`: what each station can carry;
+// `prefer`: the order a weapon fills the stations in (the loadout editor in the menu uses it).
 export const F16C = {
-  name: 'F-16C Block 50', emptyMass: 8900, internalFuel: 3200, wingArea: 27.87, wingSpan: 9.96, length: 15.06,
-  thrustDry: 76300, thrustAb: 131600, fuelFlowDry: 1.35, fuelFlowAb: 6.2,
-  clAlpha: 4.1, clMax: 1.8, alphaStall: 30, alphaLimit: 25, cd0: 0.0205, kInduced: 0.118,
+  id: 'f16', model: 'f16', name: 'F-16C Block 50', short: 'F-16C', callsign: 'Viper',
+  emptyMass: 8900, internalFuel: 3200, wingArea: 27.87, wingSpan: 9.96, length: 15.06,
+  // F110-GE-129: 76.3 kN military, 131.6 kN with afterburner; TSFC ~0.76 / ~1.95 lb/lbf/h
+  engines: 1, thrustDry: 76300, thrustAb: 131600, fuelFlowDry: 1.64, fuelFlowAb: 7.25,
+  clAlpha: 4.1, clMax: 1.8, alphaStall: 30, alphaLimit: 25, cd0: 0.0205, kInduced: 0.118, pylonCd: 0.0010,
   waveDrag: [[0, 0], [0.8, 0], [0.88, 0.004], [0.95, 0.018], [1.0, 0.03], [1.05, 0.035], [1.2, 0.037], [1.6, 0.027], [2.2, 0.02]],
   gMax: 9, gMin: -3, rollRate: 270, yawBeta: 6, airbrakeCd: 0.06, hp: 100, rcsFront: 1.5, rcsSide: 6,
+  gearHeight: 2.05, tailStrike: 13, rotateIas: 60,
   // fuselage, wings, stabilators, fin: [centre], [half size] around the Blender model (assets/f16.glb)
   hitboxes: [
     [[0, 1.3, -0.25], [0.95, 7.3, 0.95]], [[0, -0.4, -0.3], [4.75, 2.0, 0.3]],
     [[0, -4.5, -0.45], [2.8, 1.3, 0.3]], [[0, -3.9, 1.65], [0.3, 1.6, 1.35]],
   ],
-  gun: M61A1, radar: APG68, cm: ALE47,
+  gun: M61A1, gunPos: [-0.70, 3.95, -0.20], radar: APG68, cm: ALE47,
   stations: {       // the store_* points of the model
     1: [-4.80, -0.80, -0.30], 2: [-3.96, -1.41, -0.60], 3: [-3.05, -1.14, -0.80],
     7: [3.05, -1.14, -0.80], 8: [3.96, -1.41, -0.60], 9: [4.80, -0.80, -0.30],
   },
+  pylons: { 1: ['AIM-9M', 'AIM-120A'], 2: ['AIM-9M', 'AIM-120A'], 3: ['AIM-9M', 'AIM-120A'], 7: ['AIM-9M', 'AIM-120A'], 8: ['AIM-9M', 'AIM-120A'], 9: ['AIM-9M', 'AIM-120A'] },
+  prefer: { 'AIM-120A': [3, 7, 1, 9, 2, 8], 'AIM-9M': [1, 9, 2, 8, 3, 7] },
   loadouts: {
     default: { 1: 'AIM-9M', 9: 'AIM-9M', 2: 'AIM-9M', 8: 'AIM-9M', 3: 'AIM-120A', 7: 'AIM-120A' },
   },
+  firingOrder: [9, 1, 8, 2, 7, 3],
 };
-// the enemies fly the same jet with a weaker airframe: less G, slower roll, lower angle of attack limit
-export const F16C_BANDIT = { ...F16C, name: 'F-16C (ellenfél)', gMax: 7, rollRate: 190, alphaLimit: 20 };
-export const FIRING_ORDER = [9, 1, 8, 2, 7, 3];
+
+// F/A-18E: heavier, more wing, two engines.  Lower thrust to weight than the Viper and more drag (the canted
+// pylons are famous for it), but the big LEX and the flight controls let it fly at very high angles of attack:
+// it points its nose better at low speed and loses energy faster.
+export const FA18E = {
+  id: 'fa18', model: 'fa18', name: 'F/A-18E Super Hornet', short: 'F/A-18E', callsign: 'Rhino',
+  emptyMass: 14552, internalFuel: 6530, wingArea: 46.45, wingSpan: 13.62, length: 18.31,
+  // 2 x F414-GE-400: 57.8 kN military, 97.9 kN with afterburner each; TSFC ~0.84 / ~1.85 lb/lbf/h
+  engines: 2, thrustDry: 115600, thrustAb: 195800, fuelFlowDry: 2.75, fuelFlowAb: 10.3,
+  clAlpha: 4.4, clMax: 2.0, alphaStall: 38, alphaLimit: 40, cd0: 0.0235, kInduced: 0.105, pylonCd: 0.0035,
+  waveDrag: [[0, 0], [0.78, 0], [0.86, 0.005], [0.94, 0.024], [1.0, 0.040], [1.05, 0.046], [1.2, 0.047], [1.6, 0.036], [2.0, 0.03]],
+  gMax: 7.5, gMin: -3, rollRate: 220, yawBeta: 8, airbrakeCd: 0.05, hp: 115, rcsFront: 1.0, rcsSide: 8,
+  gearHeight: 1.95, tailStrike: 12, rotateIas: 64,
+  hitboxes: [
+    [[0, 0.6, -0.2], [1.15, 9.0, 0.9]], [[0, -0.8, -0.1], [6.7, 2.3, 0.3]],
+    [[0, -6.7, -0.3], [3.7, 1.3, 0.3]], [[0, -4.3, 1.4], [1.8, 1.6, 1.3]],
+  ],
+  gun: M61A2, gunPos: [0, 8.20, 0.45], radar: APG79, cm: ALE47,
+  stations: {
+    1: [-6.76, -1.57, -0.22], 2: [-4.79, -1.53, -0.68], 3: [-3.64, -1.23, -0.62], 4: [-2.49, -0.92, -0.56], 5: [-0.95, 0.15, -1.26],
+    7: [0.95, 0.15, -1.26], 8: [2.49, -0.92, -0.56], 9: [3.64, -1.23, -0.62], 10: [4.79, -1.53, -0.68], 11: [6.76, -1.57, -0.22],
+  },
+  pylons: {
+    1: ['AIM-9M'], 11: ['AIM-9M'], 5: ['AIM-120A'], 7: ['AIM-120A'],
+    2: ['AIM-9M', 'AIM-120A'], 3: ['AIM-9M', 'AIM-120A'], 4: ['AIM-9M', 'AIM-120A'],
+    8: ['AIM-9M', 'AIM-120A'], 9: ['AIM-9M', 'AIM-120A'], 10: ['AIM-9M', 'AIM-120A'],
+  },
+  prefer: { 'AIM-120A': [5, 7, 4, 8, 3, 9, 2, 10], 'AIM-9M': [1, 11, 2, 10, 3, 9, 4, 8] },
+  loadouts: {
+    default: { 1: 'AIM-9M', 11: 'AIM-9M', 2: 'AIM-9M', 10: 'AIM-9M', 3: 'AIM-120A', 9: 'AIM-120A', 4: 'AIM-120A', 8: 'AIM-120A', 5: 'AIM-120A', 7: 'AIM-120A' },
+  },
+  firingOrder: [11, 1, 10, 2, 9, 3, 8, 4, 7, 5],
+};
+
+export const AIRCRAFT = { f16: F16C, fa18: FA18E };
+
+// the enemies fly the same jets with a weaker airframe: less G, slower roll, lower angle of attack limit
+export const BANDITS = {
+  f16: { ...F16C, name: 'F-16C (ellenfél)', gMax: 7, rollRate: 190, alphaLimit: 20 },
+  fa18: { ...FA18E, name: 'F/A-18E (ellenfél)', gMax: 6.3, rollRate: 150, alphaLimit: 28 },
+};
+export const F16C_BANDIT = BANDITS.f16;
+
+// Station layout for `n9` AIM-9s and `n120` AIM-120s: every weapon first takes the stations only it can use,
+// then the shared ones in its order of preference.  Returns {station: weapon} and what did not fit.
+export function buildLoadout(spec, n9, n120) {
+  const layout = {}, want = { 'AIM-9M': n9, 'AIM-120A': n120 };
+  for (const pass of ['own', 'shared']) {
+    for (const key of ['AIM-120A', 'AIM-9M']) {
+      for (const st of spec.prefer[key]) {
+        if (want[key] <= 0) break;
+        const ok = spec.pylons[st] || [];
+        if (layout[st] || !ok.includes(key) || (pass === 'own') !== (ok.length === 1)) continue;
+        layout[st] = key; want[key]--;
+      }
+    }
+  }
+  return { layout, left: want };
+}
+export function loadoutLimits(spec) {
+  const n = (k) => Object.values(spec.pylons).filter((p) => p.includes(k)).length;
+  return { 'AIM-9M': n('AIM-9M'), 'AIM-120A': n('AIM-120A'), total: Object.keys(spec.pylons).length };
+}

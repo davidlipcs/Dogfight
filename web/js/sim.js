@@ -1,10 +1,10 @@
 // Aircraft + World (port of dogfight/sim/aircraft.py and world.py).
 import { V, add, sub, mul, len, copy, norm, qheading, xform, rng, DEG } from './util.js';
 import { FlightModel, Controls } from './flight.js';
-import { AIM9M, IR, MISSILES, FIRING_ORDER } from './specs.js';
+import { AIM9M, IR, MISSILES } from './specs.js';
 import { IRSeeker, Radar, RWR, Missile, Gun, Flare, Chaff, STT, updateBullets } from './weapons.js';
 
-const STORE_CD = 0.0011;
+const STORE_DRAG_AREA = 0.031;                     // m^2 of drag area per missile with its launcher
 const ASSIST_IR_FOV = 10, ASSIST_IR_CONE = 30;     // player lock assist: seeker search cone / F-key cone (deg)
 export const PHYS_DT = 1 / 100, SENSOR_DT = 1 / 30, AI_DT = 1 / 10;
 
@@ -42,7 +42,8 @@ export class Aircraft {
   get onGround() { return this.fm.onGround; }
 
   rearm() {
-    const layout = this.spec.loadouts[this.loadout] || this.spec.loadouts.default;
+    // a loadout is a name from spec.loadouts or a {station: weapon} table (the menu's loadout editor)
+    const layout = typeof this.loadout === 'object' ? this.loadout : this.spec.loadouts[this.loadout] || this.spec.loadouts.default;
     this.stations = Object.keys(layout).map(Number).sort((a, b) => a - b)
       .map((n) => ({ number: n, key: layout[n], spec: this.missileSpec(layout[n]), mount: V(...this.spec.stations[n]), loaded: true }));
     this.gun.reload();
@@ -53,7 +54,7 @@ export class Aircraft {
   updateStores() {
     const loaded = this.stations.filter((s) => s.loaded);
     this.fm.storeMass = loaded.reduce((m, s) => m + s.spec.mass, 0);
-    this.fm.storeCd = STORE_CD * loaded.length;
+    this.fm.storeCd = STORE_DRAG_AREA * loaded.length / this.spec.wingArea;
   }
   missileCount(key) { return this.stations.filter((s) => s.loaded && s.key === key).length; }
   weaponKeys() { return [...new Set(this.stations.map((s) => s.key))]; }
@@ -125,7 +126,7 @@ export class Aircraft {
   fireMissile(world) {
     if (!this.alive || !this.selected) return null;
     const byNum = new Map(this.stations.map((s) => [s.number, s]));
-    const st = FIRING_ORDER.map((n) => byNum.get(n)).find((s) => s && s.loaded && s.key === this.selected);
+    const st = this.spec.firingOrder.map((n) => byNum.get(n)).find((s) => s && s.loaded && s.key === this.selected);
     if (!st) { world.emit('message', { to: this, text: `NINCS TÖBB ${this.selected}`, level: 'warn' }); return null; }
     const sp = st.spec, q = this.quat;
     const pos = add(this.pos, xform(q, st.mount));

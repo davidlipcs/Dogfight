@@ -1,13 +1,13 @@
-# Dogfight – F-16C légiharc (War Thunder stílusban)
+# Dogfight – F-16C és F/A-18E légiharc (War Thunder stílusban)
 
 3D légiharc-játék **Pythonban**, a [Panda3D](https://www.panda3d.org/) motorral – és ugyanez a böngészőben is játszható (lásd lent).
 
 > ## ▶ Játék a böngészőben: **https://davidlipcs.github.io/Dogfight/**
 >
 > Telepítés nélkül, bármelyik gépről (iskolában is): nyisd meg a linket Chrome-ban, és kattints a
-> „Felszállás a kifutóról” gombra. Minden a GitHubról töltődik be (kb. 13 MB), külső oldal nem kell hozzá.
+> „Felszállás a kifutóról” gombra. Minden a GitHubról töltődik be (kb. 17 MB), külső oldal nem kell hozzá.
 > **Letöltés:** [Dogfight-F16.html](https://davidlipcs.github.io/Dogfight/web/dogfight-offline.html) – az egész játék
-> egyetlen fájlban (kb. 18 MB). Mentsd el (jobb klikk → *Hivatkozás mentése másként*, vagy a játék menüjében a
+> egyetlen fájlban (kb. 22 MB). Mentsd el (jobb klikk → *Hivatkozás mentése másként*, vagy a játék menüjében a
 > „Letöltés egy fájlban” link), és dupla kattintással megnyílik Chrome-ban – internet sem kell hozzá.
 > Újragenerálás: `python tools/build_offline.py` (Node.js nélkül is megy).
 >
@@ -29,7 +29,56 @@ sokkal erősebbek: nehéz kikerülni őket, és közelről is eltalálnak. A pil
 húznak, pontatlanabbak, később veszik észre a rakétát, és csak a hatótávjuk biztonságosabb részéből lőnek. Radarral lockolnak,
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
-## A gép
+## Második gép: F/A-18E Super Hornet
+
+![F/A-18E Super Hornet a játékban](docs/fa18_flight.jpg)
+
+A főmenüben kiválasztható a saját gép (**F-16C Viper** vagy **F/A-18E Super Hornet**), az ellenfél típusa
+(F-16C, F/A-18E vagy vegyes) és a **fegyverzet**: hány AIM-9M és hány AIM-120A legyen a gépen. A rakéták
+úgy kerülnek a függesztési pontokra, ahogy az igazi gépen (a menü mutatja, melyik állomásra mi jut).
+
+A Super Hornet is Blenderben, szkriptből épült ([tools/blender/build_fa18.py](tools/blender/build_fa18.py),
+közös eszközök: `aircraft_lib.py`, alak: `fa18_shape.py`, festés: `fa18_paint.py` → `web/assets/fa18.glb`):
+valós méretek (18,3 m hossz, 13,6 m fesztáv), US Navy kétszínű szürke festés (NG / 200, VFA-jelzések),
+két F414 fúvócső, LEX, döntött kettős függőleges vezérsík, 11 függesztési pont, behúzható futómű aknákkal.
+Mozgó felületek: orrsegédszárny, fékszárny, csűrő, stabilizátor, **két oldalkormány**, LEX-spoiler
+(légfékként a kormányok kifelé, a csűrők fel, a LEX-spoilerek ki; felszálláskor a kormányok befelé állnak).
+
+| | | |
+|---|---|---|
+| ![elöl](models/fa18/previews/fa18_front.png) | ![oldal](models/fa18/previews/fa18_side.png) | ![felül](models/fa18/previews/fa18_top.png) |
+
+**Saját kabin:** a Hornet pilótafülkéje a modell része: NACES katapultülés, keretes szélvédő, HUD, két DDI,
+UFCD és középen a nagy AMPCD – mind élő kijelző.
+
+### Kabinkijelzők (mindkét gépben)
+
+![F/A-18E kabin, kijelzők](docs/fa18_cockpit_displays.jpg)
+
+A HUD és az alap kijelzések megmaradnak; a kabin kijelzői **ennél több** információt adnak:
+
+* **RDR** – radar B-scope: célok magassággal és irányvektorral, lockolt cél adatai (távolság, közeledés,
+  magasság, Mach, aspektus, **NCTR: a cél típusa**), DLZ-csík (Rmax / no-escape / Rmin).
+* **SA** – helyzetkép-térkép (orr felfelé): ellenségek, rakéták, RWR-irányok, a **harci zóna** és a bázis
+  biztonsági köre, irány és távolság mindkettőhöz.
+* **SMS** – fegyverzet: gép-felülnézet az állomásokkal, mi van fent, mi van kiválasztva, lőszer, flare / chaff.
+* **ENG** – hajtómű(vek): fordulatszám, fúvócső, EGT, üzemanyag-fogyasztás, tolóerő; teljesítmény:
+  **tolóerő/tömeg, fajlagos többletteljesítmény (Ps)**, ellenállás, G-tartomány; üzemanyag, hátralévő idő, BINGO.
+* **RWR** – fenyegetések és a rád tartó rakéták távolsággal.
+* **DED / UFCD** – adatsor: zóna és bázis iránya, üzemanyag, fegyverek, hullám.
+
+Kabinban **N** = lenézés a kijelzőkre (ráközelít, olvasható), újra N = vissza; **J / K / L** = a bal / jobb /
+középső kijelző lapozása.
+
+![F-16 kabin, kijelzők](docs/f16_cockpit_displays.jpg)
+
+### Harci zóna
+
+A harc a térkép **túloldalán**, a harci zónában zajlik (a HUD-on borostyán jelölő, a térképen piros kör).
+A bázis körüli **14 km-es biztonsági körben** az ellenség nem támad, és csak a zónában (+12 km) lévő célokra
+megy rá: felszállás és leszállás közben nyugton hagynak. Levegőben indulva a zóna szélénél kezdesz.
+
+## A gép (F-16C)
 
 ![Az új, Blenderben épített F-16C](models/f16/previews/f16_front.png)
 
@@ -226,6 +275,25 @@ utána a gyorsítótárból azonnal betölt):
 ![Hegyek](docs/screenshot_mountains.png)
 
 ## Repülésmodell
+
+Mindkét gép ugyanazzal a repülésmodellel repül, a különbség csak a valós adatokban van (`web/js/specs.js`):
+
+| | F-16C Block 50 | F/A-18E Super Hornet |
+|---|---|---|
+| Hajtómű | 1× F110-GE-129: 76 / 132 kN | 2× F414-GE-400: 2× 58 / 2× 98 kN |
+| Üres tömeg / belső üzemanyag | 8 900 / 3 200 kg | 14 552 / 6 530 kg |
+| Szárnyfelület | 27,9 m² | 46,5 m² |
+| Tolóerő/tömeg (50% üzemanyag, rakéták) | 1,20 | 1,05 |
+| Végsebesség tengerszinten / 11 km-en (rakétákkal) | M1,18 / M1,88 | M1,0 / ~M1,4 |
+| Emelkedés tengerszinten | ~320 m/s | ~230 m/s |
+| Max G / AoA-limit | 9 G / 25° | 7,5 G / 40° |
+| Tartós forduló 3 km, M0,6 | 5,3 G, 14,9°/s | 5,0 G, 14,1°/s |
+| Pillanatnyi forduló 3 km, 600 km/h | 5,8 G, 19,2°/s | 6,3 G, 20,9°/s |
+| Utánégetővel ennyi ideig bírja | ~7,4 perc | ~10,6 perc |
+
+A Hornet több szárnnyal és a LEX-szel lassan jobban fordul és messzebbre fordítja az orrát (nagy állásszög),
+de nehezebb, nagyobb az ellenállása (a döntött pilonok is), ezért lassabban gyorsul és hamarabb elveszti az
+energiáját – mint az igazi.
 
 Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a modellben:
 
