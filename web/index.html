@@ -95,7 +95,7 @@
   <div class="card">
     <div class="eyebrow">F-16C Block 50 · AIM-9M · AIM-120A</div>
     <h1>Dogfight <span>Viper</span></h1>
-    <p>Egeres célzás, mint a War Thunderben: oda repül a gép, ahová az egérrel nézel. Radar- és hőkövető lock, gépágyú, flare és chaff. Az ellenség hullámokban jön. Arkád módban a rakéták maguktól újratöltődnek, realisztikusban csak a bázison leszállva.</p>
+    <p>Külső nézetben a gép orra arra áll, ahová az egérrel célzol; kabinnézetben (V) az egér a botkormány, mintha a gépben ülnél. Radar- és hőkövető lock, gépágyú, flare és chaff. Az ellenség hullámokban jön. Arkád módban a rakéták maguktól újratöltődnek, realisztikusban csak a bázison leszállva.</p>
     <div class="opts">
       <div class="row">
         <span class="label">Játékmód</span>
@@ -128,7 +128,9 @@
         <label class="hint"><input type="checkbox" id="invert"> fordított Y</label>
       </div>
     </div>
+    <div id="current" class="hint" hidden></div>
     <div class="buttons">
+      <button class="primary" id="continue" hidden>Folytatás</button>
       <button class="primary" id="start-ground">Felszállás a kifutóról</button>
       <button id="start-air">Indulás a levegőben</button>
     </div>
@@ -141,9 +143,15 @@
 <div id="pause" class="screen dim" hidden>
   <div class="card">
     <div class="eyebrow">Szünet</div>
-    <h1>Kattints a folytatáshoz</h1>
-    <p>H = irányítás és lockolás súgó · Enter = újraéledés, ha lelőttek</p>
-    <div class="buttons"><button class="primary">Folytatás</button><button id="fullscreen">Teljes képernyő</button></div>
+    <h1>Szünet</h1>
+    <p id="pausestats"></p>
+    <div class="buttons">
+      <button class="primary" id="resume">Folytatás</button>
+      <button id="to-menu">Főmenü</button>
+      <button id="help-btn">Súgó</button>
+      <button id="fullscreen">Teljes képernyő</button>
+    </div>
+    <p class="hint">Főmenü: új játék vagy beállítások, onnan a Folytatással ide jössz vissza · Enter = újraéledés, ha lelőttek</p>
   </div>
 </div>
 
@@ -154,7 +162,7 @@
       <div>
         <h3>Repülés</h3>
         <dl>
-          <dt>Egér</dt><dd>ide repül a gép (fehér kör)</dd>
+          <dt>Egér</dt><dd>külső nézetben: a gép orra a fehér körre áll; kabinban (V): az egér a botkormány – előre tolva orr le, magad felé húzva orr fel, oldalra orsózás (a kijelző alul mutatja)</dd>
           <dt>S / W</dt><dd>orr fel / orr le kézzel (amíg nyomod, a célzókör az orron marad)</dd>
           <dt>A / D</dt><dd>orsózás</dd>
           <dt>Q / E</dt><dd>oldalkormány</dd>
@@ -179,7 +187,7 @@
           <dt>F</dt><dd>AIM-9M lock / elengedés (±30° az orr előtt)</dd>
           <dt>Y</dt><dd>következő radarcél kijelölése</dd>
           <dt>M</dt><dd>célpont jelölők</dd>
-          <dt>P · Enter</dt><dd>szünet · újraéledés</dd>
+          <dt>Esc · P · Enter</dt><dd>menü (főmenü, új játék) · szünet · újraéledés</dd>
         </dl>
       </div>
       <div class="tip">

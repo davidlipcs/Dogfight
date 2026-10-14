@@ -122,7 +122,7 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 
 | Billentyű | Funkció |
 |---|---|
-| **Egér** | War Thunder-féle egeres célzás: a gép a fehér kör felé repül |
+| **Egér** | külső nézetben a gép orra a fehér körre áll; kabinnézetben (V) az egér a botkormány: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás |
 | S / W | orr fel / orr le kézzel: amíg nyomod, az egeres segítő elengedi a gépet, a célzókör az orron marad (mint a War Thunderben); az S a teljes 9 G-t is kihúzza, az egeres segítő ~7,6 G-nél megáll |
 | A / D, Q / E | csűrő, oldalkormány kézi felülbírálása |
 | Shift / Ctrl (böngészőben Z is) | gáz fel / le: koppintás = 5%, tartva folyamatos. 100%-nál (MIL) megáll, ott még egy **Shift** = **utánégető**; lefelé az első nyomás kikapcsolja |
@@ -142,7 +142,8 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 | Y | következő radarcél kijelölése |
 | M | célpont-jelölők ki/be |
 | H vagy F1 | súgó (szünetelteti a játékot) |
-| P | szünet, Esc: kilépés (szünetben) |
+| P | szünet |
+| Esc | menü: Folytatás, Főmenü (új játék, beállítások – onnan a Folytatással vissza a meccsbe), Súgó |
 | Enter | újraéledés, ha lelőttek |
 
 ## Felszállás és leszállás

@@ -88,7 +88,8 @@ export class HUD {
   flightSymbols(ac, cam, camCtl) {
     const u = this.u;
     const aim = this.project(cam, add(camCtl.position, mul(camCtl.aimDirection(), 3000)));
-    if (aim && !(camCtl.freeLook && !camCtl.cockpit)) this.circle(aim[0], aim[1], 14 * u, WHITE);
+    if (camCtl.stick) this.stickGauge(camCtl.stick);
+    else if (aim && !(camCtl.freeLook && !camCtl.cockpit)) this.circle(aim[0], aim[1], 14 * u, WHITE);
     else if (!aim && camCtl.cockpit) this.edgeArrow(cam, add(camCtl.position, mul(camCtl.aimDirection(), 3000)), WHITE);
     const nose = this.project(cam, add(ac.pos, mul(ac.forward, 800)));
     if (nose) {
@@ -109,6 +110,15 @@ export class HUD {
       }
     }
     if (camCtl.cockpit) this.pitchLadder(ac, cam, camCtl);
+  }
+  // where the mouse joystick is: box = full deflection, dot = the stick (down = pulled back)
+  stickGauge(s) {
+    const u = this.u, r = 26 * u, cx = this.w / 2 + 190 * u, cy = this.h - 72 * u;     // beside the weapon status
+    this.rect(cx, cy, r, r, DIM);
+    this.line(cx - r, cy, cx + r, cy, DIM); this.line(cx, cy - r, cx, cy + r, DIM);
+    const g = this.g, x = cx + s.x * r, y = cy + s.y * r;
+    g.fillStyle = WHITE; g.beginPath(); g.arc(x, y, 4 * u + 1, 0, Math.PI * 2); g.fill();
+    this.text('BOTKORMÁNY', cx, cy + r + 12 * u, DIM, 9 * u + 2, 'center');
   }
   pitchLadder(ac, cam, camCtl) {
     const hdg = Math.atan2(ac.forward.x, ac.forward.y), pitch = Math.asin(clamp(ac.forward.z, -1, 1)) / DEG;
@@ -452,7 +462,7 @@ export class HUD {
   overlay(game) {
     const u = this.u, fs = 12 * u + 3;
     this.text(`HULLÁM ${game.wave}   LELŐVE ${game.kills}   HALÁL ${game.deaths}`, 20 * u, 22 * u, WHITE, fs);
-    this.text('H = súgó   Esc = egér elengedése', 20 * u, 42 * u, DIM, 11 * u + 2);
+    this.text('H = súgó   Esc = menü', 20 * u, 42 * u, DIM, 11 * u + 2);
     let y = 22 * u;
     for (const k of this.killfeed) { this.text(k.text, this.w - 20 * u, y, k.color, fs, 'right'); y += 20 * u + 3; }
     if (game.banner) this.text(game.banner, this.w / 2, this.h / 2 - 40 * u, WHITE, 44 * u + 6, 'center', 'Oswald, Impact, sans-serif');

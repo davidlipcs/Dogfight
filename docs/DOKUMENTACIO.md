@@ -43,7 +43,7 @@ Ha egy hálózat a `github.io` címeket is tiltja, a letöltött egyfájlos vál
 
 | Gomb | Funkció |
 |---|---|
-| Egér | War Thunder-féle egeres célzás: a gép a fehér kör felé repül |
+| Egér | külső nézetben egeres célzás: a gép **orra** áll a fehér körre (a zöld kör a valódi repülési irányt mutatja); kabinnézetben (böngésző) az egér a **botkormány**: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás |
 | S / W | orr fel / le kézzel – amíg nyomod, a segítő elengedi a gépet, a célzókör az orron marad |
 | A / D, Q / E | orsózás, oldalkormány |
 | Shift / Z vagy Ctrl | gáz fel / le: koppintás 5%, tartva 40%/s; 100%-nál (MIL) megáll, újabb Shift = utánégető; lefelé az első nyomás kikapcsolja |
@@ -56,7 +56,7 @@ Ha egy hálózat a `github.io` címeket is tiltja, a letöltött egyfájlos vál
 | 1 / 2 | AIM-9M / AIM-120A |
 | X (tartva) | flare + chaff |
 | T / F / Y / R | radar lock / hőkövető lock / következő radarcél / radar be-ki |
-| M, H, P, Enter, Esc | jelölők, súgó, szünet, újraéledés, egér elengedése |
+| M, H, P, Enter, Esc | jelölők, súgó, szünet, újraéledés, menü (böngészőben: Folytatás / Főmenü / Súgó) |
 
 A Python változatban a zoom a **Z** (tartva), a gáz le a **Ctrl**.
 
@@ -179,6 +179,10 @@ pályahatár-kerülés. A játékos a teljes DLZ-t kihasználhatja, így mindig 
   oldalkonzolok, oldalsó bot és gázkar, műszerfal két világító MFD-vel, DED, ICP, tartalék műszerek,
   takaróernyő és HUD. Pilóta szándékosan nincs. A textúra: `dogfight/render/cockpit.png`
   (`tools/make_cockpit_texture.py` rajzolja).
+* Böngészőben kabinnézetben az egér közvetlenül a botkormányt mozgatja (lent kis kijelző mutatja): az orsózás
+  rugózott, elengedve a gép tartja a bedöntést; a húzás ott marad, ahová teszed (fordulóhoz), és csak középen
+  áll vissza. A fej a nyak körül fordul (±160°), hátranézéskor a pilóta előre és oldalra dől, így a fejtámla
+  mellett hátralát.
 * A kabinnézet a géphez rögzített (együtt orsózik, bólint), C / jobb gomb / L3 = fejfordítás; G alatt a
   fej lesüllyed; 7,5 G felett elsötétülés, −1,8 G alatt bevörösödés. Szabad nézelődésnél a fej legfeljebb
   160°-ot fordul mindkét irányba.
@@ -283,7 +287,8 @@ utánégető), világ (hullámok, találatok).
 | 18 | AI ugyanolyan gép, kicsit gyengébb; én is lőhessek messziről | azonos F-16, gyengébb AI, DLZ alapú AI-lövés, 80 km-es jelölők | `b8c41ae` |
 | 19 | Dokumentáció | ez a dokumentum, README frissítés, új képek | – |
 | 20 | High quality F-16 modell Blenderben, GLB-ben, bekötve a játékba | Blender-szkriptből épített modell és rakéták, saját `.glb`-olvasó, új külső nézet, Node nélküli offline építés | `32cf8f4` |
-| 21 | Behúzható futómű aknákkal, kabin ne lógjon ki, orr kövesse a kurzort, fej 160°, erős saját / gyenge ellenséges rakéták, gyengébb ellenséges gép | futóműaknák és -ajtók, behúzás-animáció, ülés- és ernyőjavítás, orr-alapú instruktor, fejforgatás ±160°, `PLAYER_MISSILES` / `BANDIT_MISSILES`, `F16C_BANDIT`, tolóerő-vektorálás | – |
+| 21 | Behúzható futómű aknákkal, kabin ne lógjon ki, orr kövesse a kurzort, fej 160°, erős saját / gyenge ellenséges rakéták, gyengébb ellenséges gép | futóműaknák és -ajtók, behúzás-animáció, ülés- és ernyőjavítás, orr-alapú instruktor, fejforgatás ±160°, `PLAYER_MISSILES` / `BANDIT_MISSILES`, `F16C_BANDIT`, tolóerő-vektorálás | `feefd29` |
+| 22 | Kabinból joystickként irányítani, a kabinnézet ne takarjon, főmenü meccs közben / után | egér-botkormány kabinnézetben, nyak körüli fejforgatás előre-oldalra dőléssel, szünetmenü (Folytatás / Főmenü / Súgó), főmenü Folytatással, új meccs ugyanazon a jeleneten | – |
 
 ---
 

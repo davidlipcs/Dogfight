@@ -16,6 +16,11 @@ const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, RELOAD_TIME = 10, MAX_ENEMIES = 6, 
 const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5;
 const HEAD_YAW = 160 * DEG;                           // a pilot turns the head at most 160 degrees each way
 const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look down -Z with +Y up
+// cockpit view: the head turns about the neck (the eyes sit in front of it), and to look back the pilot
+// leans forward and to the side, past the ejection seat's head box
+const NECK = V(0, -0.09, -0.06), EYE_FROM_NECK = V(0, 0.09, 0.06), LEAN_SIDE = 0.18, LEAN_FWD = 0.12;
+const STICK_GAIN = 0.045;                             // mouse joystick: px of mouse travel per full deflection / sensitivity
+const ease = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
 const $ = (id) => document.getElementById(id);
 
@@ -62,8 +67,12 @@ class FlightCamera {
       if (!this.freeLook) { const k = Math.exp(-6 * dt); this.headYaw *= k; this.headPitch *= k; }
       const sag = clamp(-(ac.fm.gLoad - 1) * 0.012, -0.06, 0.09);
       this.headG += (sag - this.headG) * Math.min(1, dt * 6);
-      view = qmul(ac.quat, qmul(qaxis(V(0, 0, 1), this.headYaw), qaxis(V(1, 0, 0), this.headPitch)));
-      this.position = add(ac.pos, xform(ac.quat, add(this.eye, V(0, 0, this.headG))));
+      const head = qmul(qaxis(V(0, 0, 1), this.headYaw), qaxis(V(1, 0, 0), this.headPitch));
+      view = qmul(ac.quat, head);
+      const lean = ease((Math.abs(this.headYaw) - 40 * DEG) / (100 * DEG));
+      const body = V(-Math.sign(this.headYaw) * LEAN_SIDE * lean, LEAN_FWD * lean, this.headG);
+      const eye = add(add(this.eye, NECK), add(xform(head, EYE_FROM_NECK), body));
+      this.position = add(ac.pos, xform(ac.quat, eye));
     } else {
       const dist = ac.alive ? CHASE_DISTANCE : 70;
       this.position = add(sub(ac.pos, mul(fwdOf(view), dist)), mul(upOf(view), CHASE_HEIGHT));
@@ -202,8 +211,9 @@ class Game {
     this.input = new Input(canvas);
     this.pad = new Pad();
     addEventListener('gamepadconnected', (e) => this.hud.message(`KONTROLLER CSATLAKOZTATVA`, 'good', 3, 'pad'));
-    this.state = { wave: 0, kills: 0, deaths: 0, banner: '', subBanner: '', paused: true, waveTimer: FIRST_WAVE_DELAY, waveActive: false };
-    this.player = null; this.pilot = null; this.helpVisible = false; this.locked = false;
+    this.state = Game.freshState();
+    this.player = null; this.pilot = null; this.helpVisible = false; this.locked = false; this.inMenu = false;
+    this.stick = { x: 0, y: 0, idle: 0 };
     this.input.handlers.press = (k) => this.onKey(k);
     this.input.handlers.wheel = (s) => this.cycleWeapon(s);
     this.input.handlers.mousedown = (e) => {
@@ -221,6 +231,27 @@ class Game {
     this.last = performance.now();
     this.fpsAcc = 0; this.fpsN = 0;
     requestAnimationFrame((t) => this.frame(t));
+  }
+
+  static freshState() {
+    return { wave: 0, kills: 0, deaths: 0, banner: '', subBanner: '', paused: true, waveTimer: FIRST_WAVE_DELAY, waveActive: false };
+  }
+  // a new match on the same scene (terrain, models and the renderer stay)
+  newMatch(opts) {
+    this.opts = opts;
+    const v = this.view;
+    for (const vis of v.visuals.values()) v.scene.remove(vis.root);
+    for (const mv of v.missileVis.values()) v.scene.remove(mv.mesh);
+    v.visuals.clear(); v.missileVis.clear();
+    v.smoke.list = []; v.fire.list = [];
+    this.world = new World(this.terrain, Math.floor(Math.random() * 1e9));
+    this.rnd = this.world.rnd; v.world = this.world;
+    this.state = Game.freshState();
+    this.hud.messages = []; this.hud.killfeed = [];
+    this.cam.cockpit = false; this.cam.headYaw = 0; this.cam.headPitch = 0;
+    this.stick = { x: 0, y: 0, idle: 0 };
+    this.player = null;
+    this.spawnPlayer();
   }
 
   resize() {
@@ -279,6 +310,7 @@ class Game {
   // ------------------------------------------------------------------ input
   canAct() { return !this.state.paused && this.player && this.player.alive; }
   onKey(k) {
+    if (this.inMenu) return;                          // the main menu is open: its buttons do the work
     if (k === 'h' || k === 'F1') { this.toggleHelp(); return; }
     if (k === 'Escape') { if (!this.state.paused) this.pause(); return; }
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
@@ -323,7 +355,11 @@ class Game {
   applyInput(dt) {
     const inp = this.input, p = this.player, c = p.controls, cam = this.cam;
     const [dx, dy] = inp.takeDelta();
-    if (this.locked) cam.mouseDelta(dx, dy);
+    // outside: the mouse moves the aim circle and the jet points its nose there.  In the cockpit the mouse
+    // is the control stick itself (push = nose down, pull = nose up, sideways = roll), seen from the seat.
+    const joystick = cam.cockpit && !cam.freeLook;
+    if (joystick) this.flyStick(dt, dx, dy);
+    else if (this.locked) cam.mouseDelta(dx, dy);
     else if (inp.inside && !this.state.paused) {
       // no pointer lock (e.g. blocked by the page): the cursor works as a joystick around the screen centre
       const dz = (v) => (Math.abs(v) < 0.06 ? 0 : (v - Math.sign(v) * 0.06) / 0.94);
@@ -338,6 +374,11 @@ class Game {
     this.pilot.pitch = inp.axis('s', 'w');      // S = nose up (pull), W = nose down (push)
     this.pilot.roll = inp.axis('d', 'a');
     this.pilot.yaw = inp.axis('e', 'q');
+    if (joystick) {
+      if (this.pilot.pitch === null) this.pilot.pitch = this.stick.y;
+      if (this.pilot.roll === null) this.pilot.roll = this.stick.x;
+    } else { this.stick.x = 0; this.stick.y = 0; }
+    cam.stick = joystick ? this.stick : null;
     if (pad && (pad.lx || pad.ly)) {            // left stick: direct control, stick back = nose up
       if (this.pilot.pitch === null) this.pilot.pitch = pad.ly;
       if (this.pilot.roll === null) this.pilot.roll = pad.lx;
@@ -366,6 +407,25 @@ class Game {
     }
   }
 
+  // Mouse joystick for the cockpit.  Roll is sprung like a real stick: stop moving the mouse and it centres,
+  // the jet stops rolling and the flight computer holds the bank.  Pitch stays where you put it (so a turn
+  // can be held) and only drifts to neutral when it is nearly centred.
+  flyStick(dt, dx, dy) {
+    const s = this.stick, inp = this.input, cam = this.cam, inv = cam.invertY ? -1 : 1;
+    if (this.locked) {
+      const k = cam.sensitivity * STICK_GAIN;
+      s.x = clamp(s.x + dx * k, -1, 1); s.y = clamp(s.y + dy * k * inv, -1, 1);
+      s.idle = dx || dy ? 0 : s.idle + dt;
+      if (s.idle > 0.12) {
+        s.x -= Math.sign(s.x) * Math.min(Math.abs(s.x), 2.5 * dt);
+        if (Math.abs(s.y) < 0.12) s.y -= Math.sign(s.y) * Math.min(Math.abs(s.y), 0.6 * dt);
+      }
+    } else if (inp.inside && !this.state.paused) {   // no pointer lock: the cursor's offset from the centre is the stick
+      const dz = (v) => (Math.abs(v) < 0.04 ? 0 : (v - Math.sign(v) * 0.04) / 0.96);
+      s.x = clamp(dz(inp.mx) * 1.6, -1, 1); s.y = clamp(dz(inp.my) * 1.6 * inv, -1, 1);
+    }
+  }
+
   // Throttle like a real lever with a MIL detent: a tap moves it 5 % (taken from the key event itself, so
   // even a very short tap counts), holding slews it 40 %/s.  Going up it stops at 100 % (MIL); the
   // afterburner needs a new press of Shift there.  Down from AB goes straight to MIL.
@@ -389,9 +449,13 @@ class Game {
   pause() {
     this.state.paused = true;
     if (document.pointerLockElement) document.exitPointerLock();
-    this.showOverlay(this.helpVisible ? null : 'pause');
+    this.showOverlay(this.helpVisible || this.inMenu ? null : 'pause');
+    const st = this.state;
+    $('pausestats').textContent = `${st.wave}. hullám · lelőve ${st.kills} · halál ${st.deaths}`;
   }
   resume() {
+    this.inMenu = false;
+    $('menu').hidden = true;
     this.helpVisible = false;
     this.state.paused = false;
     this.showOverlay(null);
@@ -440,8 +504,8 @@ class Game {
     this.last = t;
     const st = this.state;
     if (this.pad.poll()) {
-      if (this.pad.pressed(PAD.START)) { if (st.paused) this.resume(); else this.pause(); }
-      if (this.pad.pressed(PAD.BACK)) this.toggleHelp();
+      if (!this.inMenu && this.pad.pressed(PAD.START)) { if (st.paused) this.resume(); else this.pause(); }
+      if (!this.inMenu && this.pad.pressed(PAD.BACK)) this.toggleHelp();
       if (!this.player.alive && this.pad.pressed(PAD.A)) this.respawn();
     }
     if (!st.paused) {
@@ -472,7 +536,7 @@ class Game {
     if (d.victim === this.player) {
       st.deaths++;
       st.banner = d.weapon !== 'crash' ? 'LELŐTTEK!' : 'LEZUHANTÁL!';
-      st.subBanner = 'Enter: újraéledés';
+      st.subBanner = 'Enter: újraéledés  ·  Esc: menü (főmenü, új játék)';
     } else if (d.killer === this.player) st.kills++;
   }
   gameFlow(dt) {
@@ -568,39 +632,64 @@ async function boot() {
   $('menu').hidden = false;
   // offer the one-file offline copy where a plain download link works (GitHub Pages or a local server)
   if (!window.DOGFIGHT_ASSETS && /github\.io$|^localhost$|^127\./.test(location.hostname)) $('download').hidden = false;
+  // The main menu starts a match, and the game can come back to it any time (Esc -> Főmenü), during a match
+  // or after it: from there the match continues (Folytatás) or a new one starts on the same scene.
   const start = (airStart) => {
     const difficulty = document.querySelector('input[name=diff]:checked').value;
     const enemies = Number($('enemies').value);
     const mode = document.querySelector('input[name=mode]:checked').value;
+    const opts = { airStart, difficulty, enemies, mode };
     $('menu').hidden = true;
-    let game;
-    try { game = new Game(assets, { airStart, difficulty, enemies, mode }); }
-    catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
-    window.game = game;
-    $('sens').addEventListener('input', (e) => { game.cam.sensitivity = Number(e.target.value); });
+    let game = window.game;
+    if (game) game.newMatch(opts);
+    else {
+      try { game = new Game(assets, opts); }
+      catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
+      window.game = game;
+      $('sens').addEventListener('input', (e) => { game.cam.sensitivity = Number(e.target.value); });
+      $('invert').addEventListener('change', (e) => { game.cam.invertY = e.target.checked; });
+    }
     game.cam.sensitivity = Number($('sens').value);
     game.cam.invertY = $('invert').checked;
     game.resume();
   };
+  const showMenu = () => {
+    const game = window.game;
+    if (!game) return;
+    game.inMenu = true;
+    game.pause();
+    game.showOverlay(null);
+    const st = game.state;
+    $('continue').hidden = false;
+    $('current').hidden = false;
+    $('current').textContent = `Futó játék: ${st.wave}. hullám · lelőve ${st.kills} · halál ${st.deaths}` +
+      (game.player && !game.player.alive ? ' · lelőttek, a Folytatás után Enter = újraéledés' : '');
+    $('start-ground').classList.remove('primary');
+    $('menu').hidden = false;
+    $('continue').focus();
+  };
+  $('continue').addEventListener('click', () => window.game && window.game.resume());
+  $('to-menu').addEventListener('click', (e) => { e.stopPropagation(); showMenu(); });
+  $('resume').addEventListener('click', (e) => { e.stopPropagation(); if (window.game) window.game.resume(); });
+  $('help-btn').addEventListener('click', (e) => { e.stopPropagation(); if (window.game) window.game.toggleHelp(); });
   for (const el of document.querySelectorAll('input[name=mode]')) {
     el.addEventListener('change', () => {
       $('mode-hint').textContent = el.value === 'arcade' ? 'rakéták 10 s alatt újratöltődnek' : 'újratöltés csak leszállás után';
     });
   }
   $('start-ground').addEventListener('click', () => start(false));
-  // controller on the menu: A = take off from the runway, X = start in the air
+  // controller on the main menu: A = continue the match (or take off from the runway), X = start in the air,
+  // B = take off from the runway (new match)
   const menuPad = new Pad();
   const menuPoll = () => {
-    if (window.game) return;
-    if (!$('menu').hidden && menuPad.poll()) {
-      if (menuPad.pressed(PAD.A)) { start(false); return; }
-      if (menuPad.pressed(PAD.X)) { start(true); return; }
-    }
     requestAnimationFrame(menuPoll);
+    if ($('menu').hidden || !menuPad.poll()) return;
+    if (menuPad.pressed(PAD.A)) { if (window.game) window.game.resume(); else start(false); }
+    else if (menuPad.pressed(PAD.X)) start(true);
+    else if (menuPad.pressed(PAD.B) && window.game) start(false);
   };
   requestAnimationFrame(menuPoll);
   $('start-air').addEventListener('click', () => start(true));
-  $('pause').addEventListener('click', () => window.game && window.game.resume());
   $('help').addEventListener('click', () => window.game && window.game.resume());
   $('fullscreen').addEventListener('click', (e) => {
     e.stopPropagation();
