@@ -31,6 +31,30 @@ for (const m of [AIM9M, AIM120A]) {
 }
 export const MISSILES = { 'AIM-9M': AIM9M, 'AIM-120A': AIM120A };
 
+// The game is tuned in the player's favour: the player's missiles are much harder to dodge and deadly up
+// close, the enemies' are weaker.  (motor: thrust scale; the rest replaces the real values)
+function variant(base, motor, changes) {
+  const m = { ...base, ...changes, motor: base.motor.map(([t, f]) => [t, f * motor]) };
+  m.refArea = base.refArea; m.burnTime = base.burnTime;
+  return m;
+}
+export const PLAYER_MISSILES = {
+  'AIM-9M': variant(AIM9M, 1.3, { maxG: 55, cnMax: 32, tvc: 0.7, railTime: 0.1, navGain: 5, guidanceDelay: 0.1, armTime: 0.25, minRange: 150,
+    fuseRadius: 12, lethalRadius: 9, damageRadius: 24, damage: 220, seekerFov: 6, gimbal: 70, trackRate: 120,
+    seekerRange: 12000, ccm: 0.99 }),
+  'AIM-120A': variant(AIM120A, 1.25, { maxG: 55, cnMax: 30, tvc: 0.4, railTime: 0.1, navGain: 5, guidanceDelay: 0.25, armTime: 0.45, minRange: 350,
+    fuseRadius: 14, lethalRadius: 11, damageRadius: 30, damage: 240, seekerFov: 22, gimbal: 70, trackRate: 90,
+    seekerRange: 20000, ccm: 0.98, notch: 8 }),
+};
+export const BANDIT_MISSILES = {
+  'AIM-9M': variant(AIM9M, 0.85, { maxG: 20, cnMax: 13, navGain: 3.2, guidanceDelay: 0.35, armTime: 0.8, minRange: 700,
+    fuseRadius: 4.5, lethalRadius: 2.5, damageRadius: 10, damage: 100, seekerFov: 2, gimbal: 30, trackRate: 18,
+    seekerRange: 6500, ccm: 0.4 }),
+  'AIM-120A': variant(AIM120A, 0.85, { maxG: 25, cnMax: 14, navGain: 3.2, guidanceDelay: 0.6, armTime: 1.3, minRange: 2000,
+    fuseRadius: 7, lethalRadius: 4, damageRadius: 15, damage: 110, seekerFov: 12, gimbal: 40, trackRate: 18,
+    seekerRange: 11000, ccm: 0.3, notch: 40 }),
+};
+
 export const APG68 = {
   name: 'AN/APG-68(V)9', searchRange: 74000, scanAz: 60, scanEl: 12, scanRate: 120, sttGimbal: 60,
   lockRange: 55000, acmRange: 16000, acmAz: 6, acmElLow: -6, acmElHigh: 40, lockTime: 0.5,
@@ -59,4 +83,6 @@ export const F16C = {
     default: { 1: 'AIM-9M', 9: 'AIM-9M', 2: 'AIM-9M', 8: 'AIM-9M', 3: 'AIM-120A', 7: 'AIM-120A' },
   },
 };
+// the enemies fly the same jet with a weaker airframe: less G, slower roll, lower angle of attack limit
+export const F16C_BANDIT = { ...F16C, name: 'F-16C (ellenfél)', gMax: 7, rollRate: 190, alphaLimit: 20 };
 export const FIRING_ORDER = [9, 1, 8, 2, 7, 3];

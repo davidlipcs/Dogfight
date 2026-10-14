@@ -193,6 +193,11 @@ CANOPY_BOW = 3.40                    # frame between the moving canopy and the f
 COCKPIT_Y0, COCKPIT_Y1 = 3.52, 5.22  # the opening in the skin
 COCKPIT_W = 0.31
 
+# landing gear wells (x0, x1, y0, y1): the nose gear folds back under the intake, the main gears forward
+# into the belly (right side; the left one is the mirror image)
+NOSE_WELL = (-0.17, 0.17, 2.70, 3.95)
+MAIN_WELL = (0.05, 0.73, -0.32, 1.12)
+
 #   y, half width, top, bottom of the intake trunk
 _INTAKE = ((4.39, 0.565, -0.245, -0.875), (4.20, 0.585, -0.235, -0.890), (3.80, 0.610, -0.220, -0.895),
            (3.20, 0.650, -0.200, -0.890), (2.60, 0.710, -0.200, -0.870), (2.00, 0.770, -0.200, -0.845),
@@ -360,3 +365,23 @@ def canopy_sill(y):
     """(half width, z) of the canopy base at station y."""
     w = float(CANOPY_W(y))
     return w, float(body_top(y, w)[0]) - 0.012
+
+
+def canopy_z(y, x):
+    """Height of the canopy glass above the point (x, y)."""
+    w, zs = canopy_sill(y)
+    c = min(abs(x) / w, 1.0) ** 1.125
+    return zs + float(CANOPY_H(y)) * max(0.0, 1.0 - c * c) ** (0.5 * 0.889)
+
+
+def cockpit_w(y):
+    """Half width of the opening in the skin: narrower than the canopy everywhere."""
+    y = min(max(y, COCKPIT_Y0), COCKPIT_Y1)
+    return min(COCKPIT_W, float(CANOPY_W(y)) - 0.075)
+
+
+def intake_bottom(y, x):
+    """Height of the underside of the intake trunk."""
+    hw, zt, zb = (float(c(y)) for c in INTAKE)
+    cz, hh = 0.5 * (zt + zb), 0.5 * (zt - zb)
+    return cz - hh * max(0.0, 1.0 - min(abs(x) / hw, 1.0) ** 2.7) ** (1.0 / 2.7)

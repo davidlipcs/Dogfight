@@ -29,7 +29,6 @@ GREY_MID = (0.500, 0.525, 0.540)       # FS 36270
 GREY_LIGHT = (0.625, 0.650, 0.670)     # FS 36375
 RADOME = (0.455, 0.465, 0.470)
 METAL = (0.30, 0.285, 0.27)
-BAY = (0.13, 0.13, 0.14)
 
 LIVERIES = {
     "viper": dict(upper=GREY_MID, dark=GREY_DARK, lower=GREY_LIGHT, fin=GREY_MID, radome=RADOME, code="HL",
@@ -283,9 +282,11 @@ def draw_lines(cv):
         line(bot, [(y, 0.0), (y, 0.80 if y > -3.0 else 0.62)])
     line(bot, [(4.30, 0.30), (-4.60, 0.30)])
     line(bot, [(1.50, 0.62), (-4.20, 0.52)])
-    box(bot, 3.05, 4.08, 0.0, 0.175, width=2.0, strength=1.0)           # nose gear doors
-    box(bot, -0.92, 0.44, 0.20, 0.76, width=2.0, strength=1.0)          # main gear doors
-    line(bot, [(-0.24, 0.20), (-0.24, 0.76)])
+    x0, x1, y0, y1 = S.NOSE_WELL                                        # gear doors (the wells are cut out)
+    box(bot, y0, y1, 0.0, x1, width=2.0, strength=1.0)
+    x0, x1, y0, y1 = S.MAIN_WELL
+    box(bot, y0, y1, x0, x1, width=2.0, strength=1.0)
+    line(bot, [(0.5 * (y0 + y1), x0 + 0.05), (0.5 * (y0 + y1), x1 - 0.05)], 1.3, 0.5)
     box(bot, -3.95, -1.95, 0.0, 0.50, width=1.6, strength=0.8)          # engine access doors
     line(bot, [(-2.95, 0.0), (-2.95, 0.50)])
     for x in (3.05, 3.96):
@@ -387,12 +388,10 @@ def paint_base(cv, L, rng):
                     rr = size * rng.uniform(0.5, 1.0)
                     pts.append((min(cy + math.cos(a) * rr * 1.5, S.Y_RADOME - 0.02), min(max(cx + math.sin(a) * rr, b0), b1)))
                 cv.fill(poly(mapfn, pts), L["camo"][int(rng.integers(len(L["camo"])))])
-    # ---- the skin under the canopy and the gear bays
+    # ---- the skin under the canopy
     ys = np.linspace(S.CANOPY_Y0 + 0.05, S.CANOPY_Y1 - 0.03, 60)
     cv.fill(poly(top, [(yy, 0.0) for yy in (ys[0], ys[-1])] + [(yy, float(S.CANOPY_W(yy)) * 0.96) for yy in ys[::-1]]),
             (0.085, 0.09, 0.095), rough=0.75)
-    cv.fill(rect(bot, 3.07, 4.06, 0.0, 0.165), BAY, rough=0.8)
-    cv.fill(rect(bot, -0.90, 0.42, 0.22, 0.74), BAY, rough=0.8)
     # ---- bare metal around the engine exhaust
     for mapfn, b0, b1 in ((top, 0.0, 0.55), (bot, 0.0, 0.55), (side, -0.78, 0.50)):
         c0 = int((-4.86 - YA0) * PX)

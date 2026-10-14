@@ -103,7 +103,8 @@ X = indulás a levegőben. (Böngésző: Gamepad API; Python: Panda3D input devi
 
 A War Thunder egeres irányításához hasonló robotpilóta; a játékos és az AI ugyanazt használja.
 
-* A **repülési pályát** viszi a cél felé, gravitáció-kompenzációval.
+* Az AI a **repülési pályát** viszi a cél felé; a játékos gépénél (böngésző) az **orrot** állítja a kurzorra,
+  így a gép mindig oda mutat, ahová célzol (nem a sebességvektor). Gravitáció-kompenzációval.
 * Kért fordulási sebesség = 0,9 × szöghiba (max 1 rad/s), a pálya már meglévő fordulásával csillapítva.
 * Kis korrekció (< ~40°): a bedöntés korlátozott (20°-tól nő), a maradékot oldalkormány végzi.
 * Kicsit lejjebb lévő cél (< 40°): negatív G-s nyomás vízszintes szárnyakkal, nem fordul hátára.
@@ -155,7 +156,13 @@ lassul (onnan már nem tud fordulni). Példa 5 km-en szemből: AIM-120 ~37 km, A
 
 ### 5.6 AI (`ai/pilot.py`, `web/js/ai.js`)
 
-Az ellenség **pontosan ugyanolyan F-16** (gép, festés, fegyverzet), csak a pilóta kicsit gyengébb:
+Az ellenség ugyanolyan kinézetű F-16, de a böngészős változatban **gyengébb sárkánnyal** (`F16C_BANDIT`:
+7 G, 190°/s orsózás, 20° állásszög-határ) és **gyengébb rakétákkal** (`BANDIT_MISSILES`: kis G, lassú
+követés, könnyen becsapható flare-rel/chaffal, korán notcholható). A játékos rakétái (`PLAYER_MISSILES`)
+ezzel szemben sokkal erősebbek: nagy G, tolóerő-vektorálás (közelről is fordul), szinte nem téveszthető
+meg, nagyobb gyújtó- és hatósugár. Mérés (kitérő, flare-t/chaffot szóró célra, oldalról): a te AIM-9-ed
+500–1500 m-ről ~90–100 %, az AIM-120 ~90 %; az ellenfél rakétái a kitérő gépet nem találták el, a
+reakció nélkül egyenesen repülőt mind eltalálták. Ezen felül a pilóta is kicsit gyengébb:
 
 | Nehézség | max G | pontosság | rakéta-szünet | flare-esély | észlelés | DLZ-hányad, ahonnan lő |
 |---|---|---|---|---|---|---|
@@ -173,7 +180,8 @@ pályahatár-kerülés. A játékos a teljes DLZ-t kihasználhatja, így mindig 
   takaróernyő és HUD. Pilóta szándékosan nincs. A textúra: `dogfight/render/cockpit.png`
   (`tools/make_cockpit_texture.py` rajzolja).
 * A kabinnézet a géphez rögzített (együtt orsózik, bólint), C / jobb gomb / L3 = fejfordítás; G alatt a
-  fej lesüllyed; 7,5 G felett elsötétülés, −1,8 G alatt bevörösödés.
+  fej lesüllyed; 7,5 G felett elsötétülés, −1,8 G alatt bevörösödés. Szabad nézelődésnél a fej legfeljebb
+  160°-ot fordul mindkét irányba.
 * A saját gép kabinnézetben külön, közeli (3 cm-es near plane) renderelési menetben rajzolódik
   (Three.js layer 1, Panda3D camera mask + display region), így a műszerfal nem vágódik le.
 * Külső nézet: War Thunder-féle követő kamera, a horizontra visszabillenő célzással.
@@ -274,7 +282,8 @@ utánégető), világ (hullámok, találatok).
 | 17 | Kontroller, flare és lőszer újratöltés | Gamepad (böngésző + Python), arkád lőszer / flare töltés | `2bc5829` |
 | 18 | AI ugyanolyan gép, kicsit gyengébb; én is lőhessek messziről | azonos F-16, gyengébb AI, DLZ alapú AI-lövés, 80 km-es jelölők | `b8c41ae` |
 | 19 | Dokumentáció | ez a dokumentum, README frissítés, új képek | – |
-| 20 | High quality F-16 modell Blenderben, GLB-ben, bekötve a játékba | Blender-szkriptből épített modell és rakéták, saját `.glb`-olvasó, új külső nézet, Node nélküli offline építés | – |
+| 20 | High quality F-16 modell Blenderben, GLB-ben, bekötve a játékba | Blender-szkriptből épített modell és rakéták, saját `.glb`-olvasó, új külső nézet, Node nélküli offline építés | `32cf8f4` |
+| 21 | Behúzható futómű aknákkal, kabin ne lógjon ki, orr kövesse a kurzort, fej 160°, erős saját / gyenge ellenséges rakéták, gyengébb ellenséges gép | futóműaknák és -ajtók, behúzás-animáció, ülés- és ernyőjavítás, orr-alapú instruktor, fejforgatás ±160°, `PLAYER_MISSILES` / `BANDIT_MISSILES`, `F16C_BANDIT`, tolóerő-vektorálás | – |
 
 ---
 
@@ -291,6 +300,8 @@ utánégető), világ (hullámok, találatok).
 * Az offline fájl pillanatkép: változtatás után újra kell építeni (`build_offline.py`) és újra letölteni.
 * Az „aggressor” sivatagi festés még benne van a kódban, de jelenleg nem használja semmi (az új modellhez is
   elkészül a textúrája a `models/f16/textures/` mappába, de a játék nem tölti be).
+* A rakéták és az ellenséges gép gyengítése / erősítése, az orr-alapú célzás és a 160°-os fejforgatás csak a
+  böngészős változatban van meg; a Python változat a régi, szimmetrikus értékekkel fut.
 * Az új Blender-modell csak a böngészős változat **külső** nézeteiben látszik. A kabinnézet a régi modellt
   mutatja (annak van részletes kabinja), ezért belülről az orr és a szárnyak formája kicsit más; a Python
   változat teljesen a régi modellt használja.

@@ -23,9 +23,10 @@
 
 Alap fegyverzet: 4× AIM-9M + 2× AIM-120A (`--loadout amraam` = 4× AIM-120A + 2× AIM-9M, `--loadout fox2` = 6× AIM-9M).
 
-Az ellenfelek pontosan ugyanolyan F-16-osok, mint a tiéd (ugyanaz a gép, festés és fegyverzet, piros jelölővel),
-csak a pilótájuk egy kicsit gyengébb: kevesebb G-t húznak, pontatlanabbak, később veszik észre a rakétát, és csak
-a hatótávjuk biztonságosabb részéből lőnek (a te DLZ-d messzebbre enged). Radarral lockolnak,
+Az ellenfelek ugyanúgy néznek ki, mint a te F-16-osod (piros jelölővel), de a böngészős változatban a gépük
+rosszabbul fordul (7 G, lassabb orsózás), a rakétáik gyengébbek és könnyen kicselezhetők, a te rakétáid viszont
+sokkal erősebbek: nehéz kikerülni őket, és közelről is eltalálnak. A pilótájuk is kicsit gyengébb: kevesebb G-t
+húznak, pontatlanabbak, később veszik észre a rakétát, és csak a hatótávjuk biztonságosabb részéből lőnek. Radarral lockolnak,
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
 ## A gép
@@ -254,8 +255,8 @@ Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a mod
   elforgatás csak elég légsebességnél, farokütés, kemény / ferde / futómű nélküli földet érés = baleset,
   a futómű a földön nem húzható be, kiengedve ellenállást ad, a fékszárnyak ~240 csomó felett felhúzódnak.
 * **Aerodinamika:** Mach-függő felhajtóerő, transzonikus ellenállás-növekedés M0,88-tól, indukált ellenállás.
-* **Egeres irányítás (War Thunder-féle instruktor):** a **repülési pályát** (sebességvektort) viszi a fehér
-  körre, gravitáció-kompenzációval. A kért fordulási sebesség a szöggel arányos, ezért a kis korrekciók
+* **Egeres irányítás (War Thunder-féle instruktor):** a böngészőben a gép **orrát** viszi a fehér körre (a
+  Python változatban a repülési pályát), gravitáció-kompenzációval. A kért fordulási sebesség a szöggel arányos, ezért a kis korrekciók
   finomak: kevés bedöntés + oldalkormány. A kicsit lejjebb lévő célhoz negatív G-vel lenyom (nem fordul
   hátára), a húzás/nyomás választásnak hiszterézise van (nem billeg). A játékosnál ~7,6 G-nél megáll
   (az S-sel kihúzható a 9 G). Amíg W/S/A/D-t nyomsz, elengedi a gépet, a célzókör pedig az orron marad.

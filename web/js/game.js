@@ -1,7 +1,7 @@
 // Browser entry point: asset loading, camera, input, game flow and the main loop (port of dogfight/game.py,
 // camera.py and controls.py).
 import { THREE, V, add, sub, mul, dot, cross, len, norm, clamp, DEG, qaxis, qmul, qlook, fwdOf, upOf, xform, rng } from './util.js';
-import { F16C, IR } from './specs.js';
+import { F16C, F16C_BANDIT, PLAYER_MISSILES, BANDIT_MISSILES, IR } from './specs.js';
 import { Terrain } from './terrain.js';
 import { Aircraft, World } from './sim.js';
 import { PlayerPilot, AIPilot } from './ai.js';
@@ -14,6 +14,7 @@ const PLAYER_START = V(0, -26000, 4500);
 const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret (vagy S)  ·  G = futómű';
 const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, RELOAD_TIME = 10, MAX_ENEMIES = 6, THROTTLE_RATE = 0.4, MAX_AB = 1.1;
 const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5;
+const HEAD_YAW = 160 * DEG;                           // a pilot turns the head at most 160 degrees each way
 const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look down -Z with +Y up
 
 const $ = (id) => document.getElementById(id);
@@ -32,7 +33,7 @@ class FlightCamera {
   setFreeLook(on) { if (on && !this.freeLook && !this.cockpit) this.look = this.aim.clone(); this.freeLook = on; }
   rotate(yawDeg, pitchDeg) {
     if (this.cockpit && this.freeLook) {             // turning the head inside the cockpit
-      this.headYaw = clamp(this.headYaw + yawDeg * DEG, -2.7, 2.7);
+      this.headYaw = clamp(this.headYaw + yawDeg * DEG, -HEAD_YAW, HEAD_YAW);
       this.headPitch = clamp(this.headPitch + pitchDeg * DEG, -0.9, 1.4);
       return;
     }
@@ -241,7 +242,7 @@ class Game {
       const [x, y, hdg] = field.startPosition();
       pos = V(x, y, 0); heading = hdg;
     }
-    const ac = new Aircraft(F16C, 'Te (Viper 1)', 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', lockAssist: true, rnd: rng(Math.floor(this.rnd() * 1e9)) });
+    const ac = new Aircraft(F16C, 'Te (Viper 1)', 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', lockAssist: true, missiles: PLAYER_MISSILES, rnd: rng(Math.floor(this.rnd() * 1e9)) });
     if (air) ac.controls.throttle = 0.95;
     else {
       ac.fm.placeOnGround(pos.x, pos.y, this.terrain.height(pos.x, pos.y), heading);
@@ -266,7 +267,7 @@ class Game {
       pos.z = Math.max(r.uniform(3000, 7500), this.terrain.height(pos.x, pos.y) + 1500);
       const to = sub(p.pos, pos);
       const heading = Math.atan2(to.x, to.y) / DEG;
-      const ac = new Aircraft(F16C, `Bandita ${i + 1}`, 'red', pos, heading, 240, { livery: 'viper', rnd: rng(Math.floor(r() * 1e9)) });
+      const ac = new Aircraft(F16C_BANDIT, `Bandita ${i + 1}`, 'red', pos, heading, 240, { livery: 'viper', missiles: BANDIT_MISSILES, rnd: rng(Math.floor(r() * 1e9)) });
       new AIPilot(ac, this.opts.difficulty);
       this.world.addAircraft(ac);
     }

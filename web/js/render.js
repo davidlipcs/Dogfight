@@ -64,6 +64,7 @@ function puffTexture(seed = 3) {
 const MOVING = ['lef_L', 'lef_R', 'flap_L', 'flap_R', 'stab_L', 'stab_R', 'rudder', 'sb_up_L', 'sb_up_R', 'sb_lo_L', 'sb_lo_R'];
 const STORE_NODES = { 1: 'store_tip_L', 2: 'store_outer_L', 3: 'store_mid_L', 7: 'store_mid_R', 8: 'store_outer_R', 9: 'store_tip_R' };
 const MISSILE_MODELS = { 'AIM-9M': 'aim9m', 'AIM-120A': 'aim120c' };
+const FOLD = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0);
 const COCKPIT_STATIONS = {      // where the missiles hang on the cockpit view model
   1: [-4.88, -0.55, 0.10], 2: [-3.75, -0.95, -0.38], 3: [-2.60, -0.55, -0.45],
   7: [2.60, -0.55, -0.45], 8: [3.75, -0.95, -0.38], 9: [4.88, -0.55, 0.10],
@@ -132,12 +133,15 @@ export class Models {
     return new THREE.MeshStandardMaterial({ ...common, vertexColors: true, envMapIntensity: common.metalness > 0.5 ? 0.9 : 0.3 });
   }
   // A copy of a .glb scene (geometry and materials are shared).  Moving parts are registered in `parts`:
-  // each one hangs on its hinge and turns about its local X axis.
-  instance(key, parts) {
+  // each one hangs on its hinge and turns about its local X axis.  Gear legs and doors (extras.retract /
+  // extras.door = degrees about local X that fold them away) go to `gear`.
+  instance(key, parts, gear) {
     const mats = this.glbMat[key];
     const build = (n) => {
       const o = new THREE.Object3D();
       o.name = n.name; o.position.fromArray(n.position); o.quaternion.fromArray(n.quaternion); o.scale.fromArray(n.scale);
+      const fold = n.extras.retract ?? n.extras.door;
+      if (gear && fold !== undefined) gear.push({ o, rest: o.quaternion.clone(), angle: fold * DEG, door: n.extras.door !== undefined });
       if (n.prims.length) {
         const surf = new THREE.Group();
         for (const p of n.prims) {
@@ -172,13 +176,26 @@ export class Models {
     return t;
   }
   aircraft() {
-    const root = new THREE.Group(), parts = {};
-    const model = this.instance('f16', parts);
+    const root = new THREE.Group(), parts = {}, gear = [];
+    const model = this.instance('f16', parts, gear);
     model.position.z = this.modelZ;
     root.add(model);
     root.userData.parts = parts;
-    root.userData.gear = model.getObjectByName('gear');   // still in glTF axes: scale.y squashes it upwards
+    root.userData.gear = gear;
+    root.userData.gearPos = 1;
     return root;
+  }
+  // gearPos 1 = down and locked, 0 = up: the doors open first, the legs swing into their wells, and on the
+  // way up the doors close behind them
+  setGear(root, gearPos) {
+    if (root.userData.gearPos === gearPos) return;
+    root.userData.gearPos = gearPos;
+    const legs = clamp((gearPos - 0.15) / 0.85, 0, 1), eased = legs * legs * (3 - 2 * legs);
+    const doors = clamp(gearPos / 0.2, 0, 1);
+    for (const g of root.userData.gear) {
+      g.o.quaternion.copy(g.rest).multiply(FOLD.setFromAxisAngle(X_AXIS, g.angle * (1 - (g.door ? doors : eased))));
+      if (!g.door) g.o.visible = gearPos > 0.001;
+    }
   }
   missile(key) { const g = new THREE.Group(); g.add(this.instance(MISSILE_MODELS[key])); return g; }
   cockpitAircraft(livery) {
@@ -566,7 +583,6 @@ export class SceneView {
       const m = this.models.missile(st.key);
       m.position.copy(this.models.ref[STORE_NODES[st.number]] || st.mount); outside.add(m); stores.set(st.number, m);
     }
-    const gear = outside.userData.gear;
     const flame = new THREE.Group();
     flame.add(new THREE.Mesh(this.models.flameGeo, this.models.flameMat), new THREE.Mesh(this.models.flameCoreGeo, this.models.flameCoreMat));
     flame.position.copy(this.models.ref.ref_nozzle);
@@ -578,7 +594,7 @@ export class SceneView {
     const strobe = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false }));
     strobe.position.copy(this.strobePos); strobe.scale.set(1.3, 1.3, 1); root.add(strobe);
     this.scene.add(root);
-    v = { root, outside, stores, gear, flame, strobe, lamps, trail: 0, phase: Math.random() * 1.2, layer: 0 };
+    v = { root, outside, stores, flame, strobe, lamps, trail: 0, phase: Math.random() * 1.2, layer: 0 };
     this.visuals.set(ac, v);
     return v;
   }
@@ -615,7 +631,7 @@ export class SceneView {
         if (m) m.visible = st.loaded;
         if (mi) mi.visible = st.loaded;
       }
-      v.gear.visible = ac.fm.gearPos > 0.03; v.gear.scale.y = Math.max(ac.fm.gearPos, 0.03);
+      this.models.setGear(v.outside, ac.fm.gearPos);
       const e = ac.engineSetting;
       if (ac.alive && e > 1) {
         const ab = (e - 1) / 0.1, fl = 1 + 0.08 * Math.sin(this.time * 61) + 0.05 * Math.sin(this.time * 23);

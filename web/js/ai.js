@@ -1,17 +1,18 @@
 // Mouse-aim instructor, player pilot and enemy AI (port of dogfight/ai/*.py and controls.py).
 import { G, DEG, V, add, sub, mul, dot, cross, len, norm, clamp, smoothstep, angleBetween, bankAngle, wrap } from './util.js';
-import { ARH, MISSILES } from './specs.js';
+import { ARH } from './specs.js';
 import { STT, gunLead, launchZone } from './weapons.js';
 import { AI_DT } from './sim.js';
 
-// Mouse-aim "instructor" (War Thunder style): swings the flight path towards `direction`.
+// Mouse-aim "instructor" (War Thunder style): swings the flight path - or with `nose` the nose itself -
+// towards `direction`.
 //  * the demanded turn rate grows with the angle to the target, so small corrections are gentle
 //  * small corrections are flown with little bank plus rudder instead of a big roll
 //  * a target a bit below is reached by pushing (negative G), not by rolling inverted; pull/push is chosen
 //    with hysteresis, so the aircraft never flip-flops between the two
-export function steerTowards(fm, direction, c, maxGFrac = 1, precision = 1) {
+export function steerTowards(fm, direction, c, maxGFrac = 1, precision = 1, nose = false) {
   const s = fm.spec, q = fm.quat, right = fm.right, up = fm.up, fwd = fm.forward;
-  const path = fm.speed > 30 ? norm(fm.vel, fwd) : fwd;
+  const path = nose || fm.speed <= 30 ? fwd : norm(fm.vel, fwd);
   const lift = norm(cross(right, path), up), side = cross(path, lift);
   const d = norm(direction);
   const off = Math.acos(clamp(dot(d, path), -1, 1));
@@ -46,7 +47,8 @@ export function steerTowards(fm, direction, c, maxGFrac = 1, precision = 1) {
   let rollErr = push ? rollPush : rollPull;
   // small corrections: keep the bank small (the rudder below does the rest)
   if (off < 45 * DEG && behind === 0) {
-    const cur = bankAngle(q), lim = (20 + 160 * smoothstep(4 * DEG, 40 * DEG, off)) * DEG;
+    // (nose mode: banks into the turn earlier, so the nose settles on the cursor instead of creeping)
+    const cur = bankAngle(q), lim = (20 + 160 * smoothstep((nose ? 2 : 4) * DEG, (nose ? 22 : 40) * DEG, off)) * DEG;
     const base = push && Math.abs(cur) > Math.PI / 2 ? Math.PI : 0;        // inverted flight: limit around 180
     const want = wrap(cur + rollErr - base);
     rollErr = wrap(clamp(want, -lim, lim) + base - cur);
@@ -58,7 +60,7 @@ export function steerTowards(fm, direction, c, maxGFrac = 1, precision = 1) {
   nz = clamp(nz, s.gMin * 0.85, s.gMax * maxGFrac);
   c.roll = clamp(rollErr * 1.8 - fm.omega.y * 0.3, -1, 1);
   c.pitch = clamp(nz >= 1 ? (nz - 1) / (s.gMax - 1) : (nz - 1) / (1 - s.gMin), -1, 1);
-  const fine = 1 - smoothstep(3 * DEG, 12 * DEG, off);
+  const fine = 1 - smoothstep((nose ? 6 : 3) * DEG, (nose ? 20 : 12) * DEG, off);
   c.yaw = clamp(Math.atan2(dot(d, side), dot(d, path)) * 4 * precision, -1, 1) * fine;
   if (fm.onGround) {
     const he = wrap(Math.atan2(d.x, d.y) - Math.atan2(fwd.x, fwd.y));
@@ -84,8 +86,9 @@ export class PlayerPilot {
       c.yaw = this.yaw !== null ? this.yaw : 0;
       return;
     }
-    // the instructor keeps a little G margin (~7.6 G) so the pilot does not black out; S pulls the full 9 G
-    steerTowards(fm, this.aim, c, PLAYER_G);
+    // the instructor keeps a little G margin (~7.6 G) so the pilot does not black out; S pulls the full 9 G.
+    // It puts the nose on the cursor (not the direction of flight), so the jet always points where you aim.
+    steerTowards(fm, this.aim, c, PLAYER_G, 1.3, true);
     if (this.yaw !== null) c.yaw = this.yaw;
   }
 }
@@ -146,7 +149,7 @@ export class AIPilot {
     if (this.missileTimer > 0) return;
     let fired = null;
     const closingT = -dot(t.vel, norm(sub(t.pos, ac.pos)));
-    const zone = (key) => launchZone(MISSILES[key], ac.speed, ac.pos.z, closingT)[0] * this.skill.zone;
+    const zone = (key) => launchZone(ac.missileSpec(key), ac.speed, ac.pos.z, closingT)[0] * this.skill.zone;
     if (ac.missileCount('AIM-9M') && d > 900 && d < Math.min(7000, zone('AIM-9M'))) {
       if (ac.selected !== 'AIM-9M') ac.select('AIM-9M');
       else if (ac.irSeeker.candidate === t || ac.irSeeker.target === t) {

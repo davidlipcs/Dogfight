@@ -368,7 +368,9 @@ export class Missile {
       if (aim) { acmd = this.proNav(aim[0], aim[1]); acmd.z += G; }
     }
     acmd.addScaledVector(vhat, -dot(acmd, vhat));
-    const aMax = Math.min(sp.maxG * G, qbar * sp.refArea * sp.cnMax / this.mass);
+    // fins, plus thrust vectoring while the motor burns (spec.tvc: share of the thrust that can push sideways)
+    const tvc = sp.tvc && this.thrust > 0 ? this.thrust * sp.tvc / this.mass : 0;
+    const aMax = Math.min(sp.maxG * G, qbar * sp.refArea * sp.cnMax / this.mass + tvc);
     let aLen = len(acmd);
     if (aLen > aMax) { acmd.multiplyScalar(aMax / aLen); aLen = aMax; }
     const drag = qbar * sp.refArea * interp(sp.cd, mach) + aLen * this.mass * sp.inducedDrag;
@@ -377,7 +379,7 @@ export class Missile {
     if (this.age > sp.armTime) {
       const avg = mul(add(this.vel, newVel), 0.5);
       for (const ac of world.aircraft) {
-        if (!ac.alive) continue;
+        if (!ac.alive || ac === this.shooter) continue;            // the fuse never triggers on the launching jet
         const rel = sub(ac.pos, this.pos);
         if (len(rel) > 400) continue;
         const [d, t] = closestApproach(rel, sub(ac.vel, avg), dt);
@@ -432,7 +434,7 @@ export class Missile {
     if (angleBetween(this.dir, rel) > sp.gimbal * DEG) return false;
     if (t.isChaff) return d < sp.seekerRange && t.alive;
     if (!t.alive || d > radarRange(sp.seekerRange, rcs(t, this.pos))) return false;
-    if (Math.abs(radialSpeed(t.vel, this.pos, t.pos)) < 22) return false;
+    if (Math.abs(radialSpeed(t.vel, this.pos, t.pos)) < (sp.notch ?? 22)) return false;        // beaming: Doppler notch
     return world.terrain.lineOfSight(this.pos, t.pos);
   }
   activeSeeker(dt, world) {

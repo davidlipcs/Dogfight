@@ -59,9 +59,9 @@ export async function parseGLB(buffer) {
   const node = (i) => {
     const n = json.nodes[i];
     return { name: n.name, position: n.translation || [0, 0, 0], quaternion: n.rotation || [0, 0, 0, 1], scale: n.scale || [1, 1, 1],
-      prims: n.mesh === undefined ? [] : meshes[n.mesh], children: (n.children || []).map(node) };
+      prims: n.mesh === undefined ? [] : meshes[n.mesh], extras: n.extras || {}, children: (n.children || []).map(node) };
   };
   const roots = json.scenes[json.scene || 0].nodes.map(node);
-  return { root: roots.length === 1 ? roots[0] : { name: 'scene', position: [0, 0, 0], quaternion: [0, 0, 0, 1], scale: [1, 1, 1], prims: [], children: roots },
+  return { root: roots.length === 1 ? roots[0] : { name: 'scene', position: [0, 0, 0], quaternion: [0, 0, 0, 1], scale: [1, 1, 1], prims: [], extras: {}, children: roots },
     materials };
 }

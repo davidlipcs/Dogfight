@@ -22,7 +22,8 @@ export class Aircraft {
     this.loadout = opts.loadout || 'default';
     this.stations = []; this.selected = null;
     this.radar = new Radar(spec.radar, this, this.rnd);
-    this.irSeeker = new IRSeeker(AIM9M, this.rnd);
+    this.missiles = opts.missiles || MISSILES;        // the player's and the enemies' missiles differ
+    this.irSeeker = new IRSeeker(this.missiles['AIM-9M'] || AIM9M, this.rnd);
     this.rwr = new RWR(this);
     this.flares = spec.cm.flares; this.chaff = spec.cm.chaff; this.cmHold = false; this.cmTimer = 0;
     this.hp = spec.hp; this.alive = true; this.burning = false; this.crashed = false; this.deathTime = null;
@@ -43,7 +44,7 @@ export class Aircraft {
   rearm() {
     const layout = this.spec.loadouts[this.loadout] || this.spec.loadouts.default;
     this.stations = Object.keys(layout).map(Number).sort((a, b) => a - b)
-      .map((n) => ({ number: n, key: layout[n], spec: MISSILES[layout[n]], mount: V(...this.spec.stations[n]), loaded: true }));
+      .map((n) => ({ number: n, key: layout[n], spec: this.missileSpec(layout[n]), mount: V(...this.spec.stations[n]), loaded: true }));
     this.gun.reload();
     this.flares = this.spec.cm.flares; this.chaff = this.spec.cm.chaff;
     if (!this.selected || this.missileCount(this.selected) === 0) this.selected = this.stations[0]?.key ?? null;
@@ -56,7 +57,8 @@ export class Aircraft {
   }
   missileCount(key) { return this.stations.filter((s) => s.loaded && s.key === key).length; }
   weaponKeys() { return [...new Set(this.stations.map((s) => s.key))]; }
-  get selectedSpec() { return MISSILES[this.selected] || null; }
+  missileSpec(key) { return this.missiles[key] || MISSILES[key]; }
+  get selectedSpec() { return this.selected ? this.missileSpec(this.selected) : null; }
   select(key) {
     if (!this.weaponKeys().includes(key)) return false;
     this.selected = key; this.irSeeker.reset(); return true;
