@@ -16,15 +16,17 @@
 
 | Fegyver | Típus | Mit tud |
 |---|---|---|
-| **M61A1 Vulcan** 20 mm | gépágyú | 6000 lövés/perc, 511 lőszer, nyomjelzők, előretartás-jelző radar lockkal |
+| **M61A1 / M61A2 Vulcan** 20 mm | gépágyú | 6000 lövés/perc, 511 (F-16) / 412 (Hornet) lőszer, nyomjelzők, előretartás-jelző radar lockkal |
 | **AIM-9M Sidewinder** | hőkövető („Fox 2”) | 2,5°-os keresőmező, 40°-os kardán, IRCCM (flare-szűrés), all-aspect, ~Mach 2,5 |
 | **AIM-120A AMRAAM** | aktív radaros („Fox 3”) | datalink + inerciális középszakasz, 16 km-en „PITBULL”, lofting, ~Mach 4 |
 | **ALE-47** | önvédelem | 30 flare + 30 chaff |
 
-Alap fegyverzet: 4× AIM-9M + 2× AIM-120A (`--loadout amraam` = 4× AIM-120A + 2× AIM-9M, `--loadout fox2` = 6× AIM-9M).
+A böngészőben a fegyverzet a főmenüben állítható (hány AIM-9M és hány AIM-120A); alap: F-16 4× AIM-9M +
+2× AIM-120A, Hornet 4× AIM-9M + 6× AIM-120A. A Python változatban: `--loadout amraam` = 4× AIM-120A + 2× AIM-9M,
+`--loadout fox2` = 6× AIM-9M.
 
-Az ellenfelek ugyanúgy néznek ki, mint a te F-16-osod (piros jelölővel), de a böngészős változatban a gépük
-rosszabbul fordul (7 G, lassabb orsózás), a rakétáik gyengébbek és könnyen kicselezhetők, a te rakétáid viszont
+Az ellenfelek ugyanolyan F-16-osok vagy Super Hornetek (a menüben választható, vegyesen is), de a böngészős
+változatban a gépük rosszabbul fordul (F-16: 7 G, Hornet: 6,3 G, lassabb orsózás), a rakétáik gyengébbek és könnyen kicselezhetők, a te rakétáid viszont
 sokkal erősebbek: nehéz kikerülni őket, és közelről is eltalálnak. A pilótájuk is kicsit gyengébb: kevesebb G-t
 húznak, pontatlanabbak, később veszik észre a rakétát, és csak a hatótávjuk biztonságosabb részéből lőnek. Radarral lockolnak,
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
@@ -171,7 +173,7 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 
 | Billentyű | Funkció |
 |---|---|
-| **Egér** | külső nézetben a gép orra a fehér körre áll; kabinnézetben (V) az egér a botkormány: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás |
+| **Egér** | külső nézetben a gép orra a fehér körre áll; kabinnézetben (V) az egér a botkormány: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás. A bot ott marad, ahová teszed (nem rugózik vissza), középen kis holtsáv, a semleges állást zöld pont jelzi |
 | S / W | orr fel / orr le kézzel: amíg nyomod, az egeres segítő elengedi a gépet, a célzókör az orron marad (mint a War Thunderben); az S a teljes 9 G-t is kihúzza, az egeres segítő ~7,6 G-nél megáll |
 | A / D, Q / E | csűrő, oldalkormány kézi felülbírálása |
 | Shift / Ctrl (böngészőben Z is) | gáz fel / le: koppintás = 5%, tartva folyamatos. 100%-nál (MIL) megáll, ott még egy **Shift** = **utánégető**; lefelé az első nyomás kikapcsolja |
@@ -179,6 +181,7 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 | B (tartva) | a földön **kerékfék**, a levegőben légfék |
 | C vagy jobb egérgomb (tartva) | szabad körülnézés |
 | Z (tartva) | zoom |
+| **N** / **J K L** | kabinban: kijelzők nézése (ráközelít) / a bal, jobb, középső kijelző lapozása |
 | V | kabin / külső nézet. A kabin a géppel együtt mozog (orsózik, bólint), G alatt a fej lesüllyed, nagy G-nél elsötétül a kép, negatív G-nél bevörösödik |
 | **Bal egérgomb** | gépágyú |
 | **Space** | rakéta indítása |
@@ -189,7 +192,7 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 | **T** | radar **lock** arra az ellenségre, amerre nézel (±30°); újra T: következő cél, ha nincs más: unlock |
 | **F** | AIM-9M **lock** / elengedés (ha a keresőben nincs semmi: a legforróbb ellenség ±30°-on belül) |
 | Y | következő radarcél kijelölése |
-| M | célpont-jelölők ki/be |
+| M | célpont-, harci zóna- és bázisjelölők ki/be |
 | H vagy F1 | súgó (szünetelteti a játékot) |
 | P | szünet |
 | Esc | menü: Folytatás, Főmenü (új játék, beállítások – onnan a Folytatással vissza a meccsbe), Súgó |
@@ -200,8 +203,9 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 ![Felszállás előtt](docs/screenshot_runway.png)
 
 A játék a **Viper Base** légibázis 36-os pályájának elején kezdődik (3000 × 45 m-es pálya
-ICAO-jelzésekkel, gurulóút, betonfedezékek, irányítótorony, parkoló F-16-osok, pálya- és
-megközelítési fények). Az ellenség csak a felszállás után érkezik.
+ICAO-jelzésekkel, gurulóút, betonfedezékek, irányítótorony, parkoló F-16-osok és Super Hornetek, pálya- és
+megközelítési fények). Az ellenség csak a felszállás után érkezik, és a térkép túloldalán, a harci zónában vár;
+a bázis 14 km-es körében nem támad.
 
 **Felszállás**
 1. Tartsd a **Shift**-et: a gáz 100%-nál (MIL) megáll, ott még egy **Shift** = utánégető. A hajtómű pár
@@ -209,6 +213,7 @@ megközelítési fények). Az ellenség csak a felszállás után érkezik.
 2. ~**250–280 km/h**-nál emeld meg az egeret (vagy nyomd az **S**-t): a gép felemeli az orrát.
    Vigyázz, 13° felett a farok a betonhoz ér (farokütés)!
 3. ~**320 km/h** körül elemelkedik (utánégetővel kb. 450 m nekifutás, katonai teljesítménnyel kb. 700 m).
+   A Super Hornet nehezebb: ~300–360 km/h-nál emelkedik el, utánégetővel álló helyzetből ~16 s alatt.
 4. **G** = futómű be. Kiengedett futóművel ne menj 550 km/h fölé (GEAR SPEED).
 
 ![Elemelkedés](docs/screenshot_takeoff.png)
@@ -253,7 +258,7 @@ A célpont flare-jei elcsalhatják a rakétát; az AIM-9M IRCCM-je ~65% eséllye
 6. Lock nélkül is kilőheted („maddog”): ilyenkor azonnal aktív, és ami a keresőjébe kerül, arra megy.
 
 ### Védekezés
-* **RWR** (bal lent): `16` = ellenséges F-16 radar. Zöld = pásztáz, sárga = **lockolt rád**,
+* **RWR** (bal lent): `16` = ellenséges F-16, `18` = ellenséges Hornet radar. Zöld = pásztáz, sárga = **lockolt rád**,
   piros villogó = **rakétát indítottak rád**.
 * **Notch**: fordulj 90°-ra a radaros fenyegetéshez képest. A pulzus-Doppler radar kiszűri a
   közel nulla radiális sebességű célokat – kiesel a lockból. Közben szórj **chaffot** (X).
@@ -295,7 +300,7 @@ A Hornet több szárnnyal és a LEX-szel lassan jobban fordul és messzebbre for
 de nehezebb, nagyobb az ellenállása (a döntött pilonok is), ezért lassabban gyorsul és hamarabb elveszti az
 energiáját – mint az igazi.
 
-Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a modellben:
+Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) részletes értékei (a Python változattal mérve):
 
 | | Modell | Valódi F-16C |
 |---|---|---|
@@ -331,7 +336,7 @@ Az F-16C Block 50 (F110-GE-129, 4× AIM-9M + 2× AIM-120A) mért értékei a mod
   (az S-sel kihúzható a 9 G). Amíg W/S/A/D-t nyomsz, elengedi a gépet, a célzókör pedig az orron marad.
 * **G-hatások:** 7,5 G felett tartósan elszürkül / elsötétül a kép, −1,8 G alatt bevörösödik.
 
-Minden adat egy helyen van: `dogfight/sim/specs.py` – itt lehet hangolni.
+Minden adat egy helyen van: böngészőben `web/js/specs.js`, Pythonban `dogfight/sim/specs.py` – itt lehet hangolni.
 
 ## Projekt felépítése
 
@@ -358,16 +363,18 @@ dogfight/
   ui/                   HUD, radar B-scope, RWR, G-hatások, súgó
 web/                    böngészős változat (Three.js) - ugyanaz a játék JavaScriptben
   index.html            menü, súgó, a játék oldala (GitHub Pages: /Dogfight/web/)
-  js/                   util, specs, flight, terrain, weapons, sim, ai, render, glb, hud, audio, game (+ three.min.js)
-  assets/               Blender-modell és rakéták (.glb), exportált gép-geometria (kabinnézet), festések, terep,
-                        kabin-textúra
+  js/                   util, specs, flight, terrain, weapons, sim, ai, render, glb, mfd (kabinkijelzők), hud,
+                        audio, game (+ three.min.js)
+  assets/               Blender-modellek (f16.glb, fa18.glb) és rakéták, az F-16 kabinnézet geometriája,
+                        festések, terep, kabin-textúra
   dogfight-offline.html az egész játék egy fájlban (tools/build_offline.py készíti)
 tools/
   export_web_assets.py  a Python modell / terep exportja a web/assets-be
   make_cockpit_texture.py  a kabin-textúra (műszerfal, MFD-k, konzolok) megrajzolása
   build_offline.py      egyfájlos offline változat (esbuild vagy beépített csomagoló + data: URI-k)
-  blender/              az új F-16 modell: build_f16.py (Blenderben futtatandó), f16_shape.py, f16_paint.py
-models/f16/             a modell teljes felbontásban (f16.glb), a rakéták és renderképek
+  blender/              Blender-szkriptek: aircraft_lib.py (közös), build_f16.py / build_fa18.py (Blenderben
+                        futtatandó), *_shape.py (alak), *_paint.py (festés)
+models/f16/, models/fa18/  a modellek teljes felbontásban (.glb), renderképek
 tests/                  pytest tesztek (repülés, földi fizika, rakéták, szenzorok, instruktor, gázkar)
 docs/                   képek + DOKUMENTACIO.md (teljes dokumentáció, fejlesztési napló)
 index.html              átirányít a böngészős játékra (GitHub Pages gyökér)

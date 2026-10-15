@@ -1,24 +1,28 @@
 # Dogfight – F-16C Viper és F/A-18E Super Hornet: teljes dokumentáció
 
 Ez a dokumentum mindent leír, ami a projektben elkészült: hol és hogyan lehet játszani, mit tud a játék,
-hogyan épül fel a kód, hogyan kell karbantartani, és milyen lépésekben készült (fejlesztési napló).
-A rövidebb, játékosoknak szóló leírás a [README](../README.md)-ben van.
+hogyan épülnek fel a gépek és a kód, hogyan kell karbantartani, és milyen lépésekben készült
+(fejlesztési napló). A rövidebb, játékosoknak szóló leírás a [README](../README.md)-ben van.
+
+**Tartalom:** 1. Áttekintés · 2. Hol lehet játszani · 3. Irányítás · 4. Főmenü és játékmenet ·
+5. A két repülőgép · 6. A rendszerek részletesen · 7. A modellek (Blender) · 8. A kód felépítése ·
+9. Karbantartás és közzététel · 10. Fejlesztési napló · 11. Ismert korlátok · 12. Ötletek
 
 ---
 
 ## 1. Áttekintés
 
-War Thunder-szerű légiharc-játék egyetlen géppel, az **F-16C Block 50 Viperrel**. A repülés, a radar,
-a rakéták és a lockolás valódi adatokra épülnek (War Thunder- és valós F-16 értékek). Két, egymással
-egyenértékű változat van:
+War Thunder-szerű légiharc-játék két géppel: az **F-16C Block 50 Viperrel** és az **F/A-18E Super
+Hornettel**. A repülés, a hajtóművek, a radar, a rakéták és a lockolás valós adatokra épülnek. Két változat van:
 
-| Változat | Hol fut | Mire jó |
+| Változat | Hol fut | Mit tud |
 |---|---|---|
-| **Böngészős** (`web/`, Three.js) | Chrome, telepítés nélkül; GitHub Pages-ről vagy egyetlen letöltött fájlból | ezzel játszik a legtöbb ember, iskolában is |
-| **Python** (`dogfight/`, Panda3D) | saját gépen, `python main.py` | az „eredeti”, ebből készülnek a böngészős változat modelljei és a terep |
+| **Böngészős** (`web/`, Three.js) | Chrome, telepítés nélkül; GitHub Pages-ről vagy egyetlen letöltött fájlból | **a teljes, aktuális játék**: két gép, Blender-modellek, élő kabinkijelzők, menü, fegyverzet-szerkesztő, harci zóna |
+| **Python** (`dogfight/`, Panda3D) | saját gépen, `python main.py` | az „eredeti” változat, csak F-16-tal és a régi, kódból épített modellel; ebből készül a terep és a böngészős F-16 kabinmodellje |
 
-A két változat ugyanazt a szimulációt használja (a JavaScript a Python sorról sorra átírt változata),
-ugyanazokkal a számokkal.
+A böngészős változat a Python-szimuláció JavaScriptre átírt és azóta továbbfejlesztett változata. A
+későbbi fejlesztések (Super Hornet, kabinkijelzők, harci zóna, erősebb saját / gyengébb ellenséges rakéták,
+orr-alapú célzás, egér-botkormány) **csak a böngészős változatban** vannak meg.
 
 ---
 
@@ -27,8 +31,9 @@ ugyanazokkal a számokkal.
 | Mód | Link / parancs | Megjegyzés |
 |---|---|---|
 | **GitHub Pages** | https://davidlipcs.github.io/Dogfight/ | bárki megnyithatja; a gyökér átirányít a `web/` oldalra; a `main` ágra pusholás után ~1 perc alatt frissül |
-| **Letöltött fájl** | https://davidlipcs.github.io/Dogfight/web/dogfight-offline.html | `Dogfight-F16.html`, ~18 MB, dupla kattintással indul, internet sem kell; a menüben „Letöltés egy fájlban” link is van |
-| **claude.ai artifact** | https://claude.ai/artifact/KAfUJ7Wu7RVBsrRqSdVNGE | privát (csak a tulajdonos látja, a Share menüből osztható); itt nincs letöltés link |
+| **Letöltött fájl** | https://davidlipcs.github.io/Dogfight/web/dogfight-offline.html | ~22 MB, dupla kattintással indul Chrome-ban, internet sem kell; a menüben „Letöltés egy fájlban” link is van |
+| **Helyi szerver** | `web/` mappa kiszolgálása bármilyen statikus szerverrel, pl. `python -m http.server` a `web/` mappában | fejlesztéshez; `file://`-ból a moduláris változat nem fut, csak az offline fájl |
+| **claude.ai artifact** | https://claude.ai/artifact/KAfUJ7Wu7RVBsrRqSdVNGE | régebbi, csak F-16-os állapot; privát (a Share menüből osztható) |
 | **Python** | `pip install -r requirements.txt` → `python main.py` | Python 3.9+, Panda3D, numpy |
 
 Az iskolai hálózatokra figyelve a böngészős változat **nem tölt semmit külső szerverről** (a three.js a
@@ -39,130 +44,212 @@ Ha egy hálózat a `github.io` címeket is tiltja, a letöltött egyfájlos vál
 
 ## 3. Irányítás
 
-### Egér és billentyűzet
+### Egér és billentyűzet (böngésző)
 
 | Gomb | Funkció |
 |---|---|
-| Egér | külső nézetben egeres célzás: a gép **orra** áll a fehér körre (a zöld kör a valódi repülési irányt mutatja); kabinnézetben (böngésző) az egér a **botkormány**: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás |
+| **Egér – külső nézet** | egeres célzás: a gép **orra** áll a fehér körre (a zöld kör a valódi repülési irányt mutatja) |
+| **Egér – kabinnézet** | az egér a **botkormány**: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás. A bot **ott marad, ahová teszed**, semmi nem húzza vissza középre; középen 7%-os holtsáv, a bal oldali kis kijelzőn a pont zöld, ha semlegesben vagy |
 | S / W | orr fel / le kézzel – amíg nyomod, a segítő elengedi a gépet, a célzókör az orron marad |
 | A / D, Q / E | orsózás, oldalkormány |
 | Shift / Z vagy Ctrl | gáz fel / le: koppintás 5%, tartva 40%/s; 100%-nál (MIL) megáll, újabb Shift = utánégető; lefelé az első nyomás kikapcsolja |
-| G | futómű |
+| G | futómű ki / be |
 | B (tartva) | földön kerékfék, levegőben légfék |
-| C / jobb egérgomb (tartva) | körülnézés (kabinban a fejet fordítja) |
+| C / jobb egérgomb (tartva) | körülnézés (kabinban a fejet fordítja, ±160°) |
 | V | kabin / külső nézet |
-| Görgő / középső egérgomb | fegyverváltás / zoom (böngésző) |
+| **N** | kabinban: lenézés a **kijelzőkre** (ráközelít, olvasható); újra N = vissza. Külső nézetből egyből a kabinba és a kijelzőkre vált |
+| **J / K / L** | a bal / jobb / középső kabinkijelző lapozása (RDR, SA, SMS, ENG, RWR) |
+| Görgő / középső egérgomb | fegyverváltás / zoom (3 fokozat) |
 | Bal egérgomb / Space | gépágyú / rakéta |
 | 1 / 2 | AIM-9M / AIM-120A |
 | X (tartva) | flare + chaff |
 | T / F / Y / R | radar lock / hőkövető lock / következő radarcél / radar be-ki |
-| M, H, P, Enter, Esc | jelölők, súgó, szünet, újraéledés, menü (böngészőben: Folytatás / Főmenü / Súgó) |
+| M | célpont-, zóna- és bázisjelölők ki / be |
+| H vagy F1, P, Enter, Esc | súgó, szünet, újraéledés, menü (Folytatás / Főmenü / Súgó / Teljes képernyő) |
 
-A Python változatban a zoom a **Z** (tartva), a gáz le a **Ctrl**.
+A Python változatban a zoom a **Z** (tartva), a gáz le a **Ctrl**; ott nincs N / J / K / L és egér-botkormány.
 
 ### Kontroller (Xbox / PlayStation)
 
 Bal kar = közvetlen irányítás (hátra = orr fel) · jobb kar = célzókör · RT / LT = gáz · RB = ágyú ·
 A = rakéta · LB = flare · X / B = radar / hőkövető lock · Y = fegyverváltás · D-pad: futómű / fék / nézet /
-zoom · L3 tartva = körülnézés · R3 = jelölők · Start = szünet · Back = súgó. A menüben A = felszállás,
-X = indulás a levegőben. (Böngésző: Gamepad API; Python: Panda3D input devices.)
+zoom · L3 tartva = körülnézés · R3 = jelölők · Start = szünet · Back = súgó. A menüben A = Folytatás vagy
+felszállás, X = indulás a levegőben, B = új meccs a kifutóról. (Böngésző: Gamepad API; Python: Panda3D.)
 
 ---
 
-## 4. Játékmenet
+## 4. Főmenü és játékmenet
 
-* **Kezdés:** a Viper Base légibázis 36-os pályájának elején (vagy `Indulás a levegőben` / `--air-start`).
-* **Hullámok:** az első ellenséges hullám 25 s-mal a felszállás után érkezik 32–40 km-ről; minden hullám
-  eggyel több ellenséget hoz (legfeljebb 6). Hullám után 5 s szünet.
-* **Játékmódok** (menü / `--mode`):
-  * **Arkád** – minden kilőtt rakéta 10 s múlva visszakerül a sínre; a lőszer és a flare/chaff 2 s
-    szünet után 10 s alatt feltölt.
-  * **Realisztikus** – újratöltés csak leszálláskor.
-* **Kiszolgálás:** mindkét módban, ha a bázis betonján 25 m/s alá lassulsz: azonnal újrafegyverzés,
-  tankolás, javítás.
-* **Nehézség:** könnyű / normál / nehéz (az AI pilóta tudását állítja, lásd 5.6).
-* **Halál / baleset:** „LELŐTTEK!” / „LEZUHANTÁL!”, Enter (kontrolleren A) = újraéledés a kifutón.
+### Főmenü (böngésző)
+
+| Beállítás | Lehetőségek |
+|---|---|
+| **Saját gép** | F-16C Viper · F/A-18E Super Hornet (a cím is vált: „Dogfight Viper” / „Dogfight Rhino”) |
+| **Fegyverzet** | AIM-9M és AIM-120A darabszám (− / +), „Alap” gomb; alatta a függesztési pontok sora mutatja, melyik állomásra mi kerül, mellette a rakéták száma és tömege |
+| **Ellenfél** | F-16C · F/A-18E · Vegyes (hullámonként véletlenszerűen keverve) |
+| **Játékmód** | Arkád · Realisztikus |
+| **Nehézség** | Könnyű · Normál · Nehéz |
+| **Ellenség** | 1–4 ellenség az első hullámban |
+| **Egér** | érzékenység, fordított Y |
+| Gombok | Folytatás (ha fut meccs) · Felszállás a kifutóról · Indulás a levegőben |
+
+**Fegyverzet-kiosztás** (`buildLoadout` a `specs.js`-ben): minden fegyver először azokat az állomásokat
+foglalja el, amelyeket csak ő használhat, utána a közöseket a saját sorrendjében – úgy, ahogy az igazi gépen:
+
+| Gép | Állomások | AIM-9M | AIM-120A | Alap |
+|---|---|---|---|---|
+| F-16C | 1, 2, 3, 7, 8, 9 | mindegyikre (sorrend: 1, 9, 2, 8, 3, 7) | mindegyikre (3, 7, 1, 9, 2, 8) | 4× AIM-9M + 2× AIM-120A |
+| F/A-18E | 1–5, 7–11 (6 = középső, üres) | 1, 11 (szárnyvég, csak AIM-9) + 2–4, 8–10 | 5, 7 (törzs, csak AIM-120) + 2–4, 8–10 | 4× AIM-9M + 6× AIM-120A |
+
+Egy fegyverből legfeljebb annyi lehet, ahány állomás viszi, és a kettő együtt nem lehet több az állomások
+számánál (F-16: 6, Hornet: 10). Az ellenséges Hornetek 2× AIM-9M + 4× AIM-120A, az ellenséges F-16-osok az
+alap fegyverzettel repülnek.
+
+A főmenü meccs közben is elérhető (Esc → Főmenü): onnan a **Folytatás** visszavisz, vagy új meccs indul
+ugyanazon a jeleneten (a terep és a modellek nem töltődnek újra).
+
+### Harci zóna és biztonsági kör
+
+![Helyzetkép a Hornet középső kijelzőjén](fa18_cockpit_displays.jpg)
+
+* A légibázis a térkép **délkeleti** részén van (x = 19 km, y = −26 km). A **harci zóna** a túloldalon:
+  középpontja (−14 km, +16 km), sugara **16 km** – kb. 53 km-re a bázistól.
+* A bázis körüli **14 km-es biztonsági körben** az ellenség senkit nem támad.
+* Az AI csak azokra a célokra megy rá, amelyek a zóna középpontjától **28 km-en belül** vannak (zóna + 12 km),
+  és nincsenek a biztonsági körben. A zónában járőrözik, és ha 32 km-nél messzebbre sodródik, visszafordul.
+  A biztonsági kör széle ~39 km-re van a zóna középpontjától, így felszállás és leszállás közben nem lőnek rád.
+* **Levegőben indulva** a bázis és a zóna között indulsz (a táv 45%-ánál, 4500 m-en, a zóna felé), kb.
+  13 km-re a zóna szélétől. A kifutóról indulva ~37 km az út a zóna széléig.
+* Jelölések: a HUD-on borostyán rombusz „HARCI ZÓNA xx km” (ha mögötted van, nyíl a kép szélén), ciánkék
+  négyzet „BÁZIS xx km”; bal fent „HARCI ZÓNA” vagy „BIZTONSÁGI ZÓNA (bázis)” felirat, ha benne vagy. A
+  kabin SA-térképén piros szaggatott kör a zóna, ciánkék a biztonsági kör; a DED / UFCD sorában irány és távolság.
+
+### Hullámok, módok, kiszolgálás
+
+* **Hullámok:** az első 25 s-mal azután jön, hogy a gép 150 m fölé emelkedett; mindig a zónában, annak a
+  tőled távolabbi oldalán jelenik meg, feléd fordulva, 3000–7500 m-en. Minden hullám eggyel több ellenséget
+  hoz (legfeljebb 6). Hullám után 5 s szünet.
+* **Arkád** – minden kilőtt rakéta 10 s múlva visszakerül a sínre; a lőszer és a flare / chaff 2 s szünet
+  után 10 s alatt feltölt. **Realisztikus** – újratöltés csak leszálláskor.
+* **Kiszolgálás:** mindkét módban, ha a bázis betonján 25 m/s alá lassulsz: azonnal újrafegyverzés (a
+  menüben beállított fegyverzettel), tankolás, javítás.
+* **Halál / baleset:** „LELŐTTEK!” / „LEZUHANTÁL!”, Enter (kontrolleren A) = újraéledés ugyanazzal a géppel.
 
 ---
 
-## 5. A rendszerek részletesen
+## 5. A két repülőgép
 
-### 5.1 Repülésmodell (`sim/flight_model.py`, `web/js/flight.js`)
+Mindkét gép ugyanazzal a repülésmodellel repül (`web/js/flight.js`); a különbség csak az adatokban van
+(`web/js/specs.js`: `F16C`, `FA18E`). Az alábbi értékeket a játék saját modelljével mértük
+(50% üzemanyag, alap fegyverzet):
 
-* ISA légkör 0–32 km; magasság- és Mach-függő tolóerő (F110-GE-129), késleltetett hajtómű-felpörgés,
-  utánégető (~1,5 s), üzemanyag-fogyasztás.
-* FLCS (fly-by-wire): a bot G-t kér (−3 … +9 G), G-felépülés 10 G/s, 25°-os AoA-limiter, ~270°/s orsózás.
-* Transzonikus ellenállás M0,88-tól, indukált ellenállás, külső terhek ellenállása.
-* Futómű és földi fizika: gördülés, kerékfék, orrkerék-kormányzás, farokütés, kemény / ferde / futómű
-  nélküli földet érés = baleset, fékszárnyak a futóművel.
-* Mért értékek (lásd README táblázat): M1,19 tengerszinten, M1,89 11 km-en, plafon ~16 km, 9 G-s forduló
-  ~21°/s, felszállás utánégetővel ~450 m.
+| | F-16C Block 50 | F/A-18E Super Hornet |
+|---|---|---|
+| Hajtómű | 1× F110-GE-129: 76,3 / 131,6 kN | 2× F414-GE-400: 2× 57,8 / 2× 97,9 kN |
+| Fogyasztás MIL / utánégető | 1,64 / 7,25 kg/s | 2,75 / 10,3 kg/s (két hajtómű) |
+| Üres tömeg / belső üzemanyag | 8 900 / 3 200 kg | 14 552 / 6 530 kg |
+| Szárnyfelület / fesztáv / hossz | 27,9 m² / 9,96 m / 15,06 m | 46,5 m² / 13,62 m / 18,31 m |
+| cL,α / cL,max / cD0 / k | 4,1 / 1,8 / 0,0205 / 0,118 | 4,4 / 2,0 / 0,0235 (+0,0035 pilonok) / 0,105 |
+| Max G / min G / AoA-limit / orsózás | 9 / −3 / 25° / 270°/s | 7,5 / −3 / 40° / 220°/s |
+| Tolóerő/tömeg | 1,20 | 1,05 |
+| Végsebesség tengerszinten / 11 km-en | M1,18 / M1,88 | M1,0 / ~M1,4 |
+| Emelkedés tengerszinten | ~320 m/s | ~230 m/s |
+| Tartós forduló 3 km, M0,6 | 5,3 G, 14,9°/s | 5,0 G, 14,1°/s |
+| Pillanatnyi forduló 3 km, 600 km/h | 5,8 G, 19,2°/s | 6,3 G, 20,9°/s |
+| Átesési sebesség tengerszinten | ~215 km/h | ~206 km/h |
+| Utánégetővel bírja | ~7,4 perc | ~10,6 perc |
+| Felszállás utánégetővel (álló helyzetből) | ~14 s | ~16 s |
+| Gépágyú | M61A1, 511 lövés | M61A2 (orrban), 412 lövés |
+| Radar | AN/APG-68(V)9: 74 km keresés, 55 km lock, 0,5 s | AN/APG-79 AESA: 90 km, 70 km, 0,35 s, gyorsabb pásztázás |
+| Futómagasság / farokütés / elforgatás | 2,05 m / 13° / 60 m/s IAS-tól | 1,95 m / 12° / 64 m/s-tól |
+| Találati pont, RCS szemből / oldalról | 100, 1,5 / 6 m² | 115, 1,0 / 8 m² |
+
+**A különbség a játékban:** a Hornet nagyobb szárnnyal és a LEX-szel lassan jobban fordul és messzebbre
+fordítja az orrát (40°-os állásszög), de nehezebb és nagyobb az ellenállása (a döntött pilonok is), ezért
+lassabban gyorsul, és nagy állásszögnél gyorsan elveszti az energiáját – mint az igazi. A Viper több
+tolóerővel és 9 G-vel az energiaharcban erősebb.
+
+**Ellenséges változatok** (`BANDITS`): ugyanazok a gépek gyengébb sárkánnyal – F-16C: 7 G, 190°/s, 20° AoA;
+F/A-18E: 6,3 G, 150°/s, 28° AoA.
+
+**Rakéták mindkét gépen:** AIM-9M és AIM-120A. Ellenállásuk a gépre 0,031 m² rakétánként (indítósínnel),
+ezért nagyobb szárnyú gépen kisebb együtthatót ad (a valóságnak megfelelően).
+
+---
+
+## 6. A rendszerek részletesen
+
+### 6.1 Repülésmodell (`web/js/flight.js`, Pythonban `sim/flight_model.py`)
+
+* ISA légkör 0–32 km; magasság- és Mach-függő tolóerő, késleltetett hajtómű-felpörgés (alapjárat → MIL ~4 s),
+  utánégető (~1,5 s), üzemanyag-fogyasztás a tolóerővel arányosan (TSFC a gép adataiból).
+* Felhajtóerő: cL,α × Mach-tényező, cL,max-nál telítődik, átesés után fokozatosan csökken.
+  Ellenállás: cD0 + pilonok + transzonikus hullám-ellenállás (gépenként külön görbe) + k·cL² + rakéták +
+  0,8·sin²α (nagy állásszög) + légfék + futómű + fékszárny.
+* Fly-by-wire: a bot G-t kér (gMin … gMax), G-felépülés 10 G/s, AoA-limiter (gépenként), orsózás a
+  gép adatai szerint, nagy állásszögnél és kis sebességnél csökkenő kormányhatással.
+* Futómű és földi fizika: gördülés (beton / fű), kerékfék, orrkerék-kormányzás, elforgatás csak elég
+  légsebességnél, farokütés, kemény / ferde / futómű nélküli földet érés = baleset, fékszárnyak a futóművel.
+  A futómagasság, a farokütési szög és az elforgatási sebesség gépenként más.
+* Kijelzéshez számolt értékek: tolóerő, ellenállás, fogyasztás (a kabin ENG oldala ezeket mutatja).
 * Fix lépésköz: fizika 100 Hz, szenzorok 30 Hz, AI 10 Hz.
 
-### 5.2 Egeres „instruktor” (`ai/steering.py`, `web/js/ai.js` – `steerTowards`)
+### 6.2 Egeres „instruktor” (`web/js/ai.js` – `steerTowards`)
 
 A War Thunder egeres irányításához hasonló robotpilóta; a játékos és az AI ugyanazt használja.
 
-* Az AI a **repülési pályát** viszi a cél felé; a játékos gépénél (böngésző) az **orrot** állítja a kurzorra,
-  így a gép mindig oda mutat, ahová célzol (nem a sebességvektor). Gravitáció-kompenzációval.
-* Kért fordulási sebesség = 0,9 × szöghiba (max 1 rad/s), a pálya már meglévő fordulásával csillapítva.
-* Kis korrekció (< ~40°): a bedöntés korlátozott (20°-tól nő), a maradékot oldalkormány végzi.
-* Kicsit lejjebb lévő cél (< 40°): negatív G-s nyomás vízszintes szárnyakkal, nem fordul hátára.
-  A húzás / nyomás döntésnek 20°-os hiszterézise van, így nem billeg oda-vissza.
-* A játékosnál a segítő 0,85 × 9 G-nél (~7,6 G) megáll; az S-sel kihúzható a teljes 9 G.
-* Kézi irányítás (W/S/A/D vagy bal kar): a segítő elenged, a nem nyomott tengely tartja a helyzetét,
-  a célzókör az orron marad (elengedéskor nem rántja vissza a gépet).
+* Az AI a **repülési pályát** viszi a cél felé; a játékos gépénél az **orrot** állítja a kurzorra.
+  Gravitáció-kompenzációval.
+* Kért fordulási sebesség = 0,9 × szöghiba (max 1 rad/s), a pálya meglévő fordulásával csillapítva.
+* Kis korrekció: a bedöntés korlátozott, a maradékot oldalkormány végzi. Kicsit lejjebb lévő cél:
+  negatív G-s nyomás, nem fordul hátára; a húzás / nyomás döntésnek hiszterézise van.
+* A játékosnál a segítő a gép max G-jének 85%-ánál megáll; az S-sel kihúzható a teljes G.
+* Kézi irányítás (W/S/A/D, bal kar vagy kabinban az egér-botkormány): a segítő elenged, a nem nyomott
+  tengely tartja a helyzetét.
 
-### 5.3 Gázkar
+### 6.3 Gázkar
 
 Koppintás = 5%, tartva 0,3 s után 40%/s. Felfelé 100%-nál (MIL) megáll, az utánégetőhöz új nyomás kell;
 lefelé az első nyomás az utánégetőből egyből 100%-ra vált. A HUD `THR` a gázkar, `MOT` a hajtómű valós
-állása (a hajtómű pár másodperc alatt éri utol). A billentyűzet-állapotot minden egér- és billentyű-esemény
-Shift / Ctrl jelzőjéből újraszinkronizálja (elveszett Shift-felengedés ellen, pl. Windows „Beragadó
-billentyűk”). Böngészőben a Ctrl+W előtt a lap rákérdez a kilépésre.
+állása. A Shift / Ctrl állapotot minden esemény újraszinkronizálja (elveszett felengedés ellen).
+Böngészőben a Ctrl+W előtt a lap rákérdez a kilépésre.
 
-### 5.4 Fegyverek és lockolás
+### 6.4 Fegyverek és lockolás
 
 | Fegyver | Adatok |
 |---|---|
-| M61A1 | 6000 lövés/perc, 511 lőszer, 1050 m/s, nyomjelzők, előretartás-jelző radar lockkal |
-| AIM-9M | IR kereső 2,5° FOV, 40° kardán, IRCCM 0,65 (flare-szűrés), ~M2,5, 9 km keresőhatótáv (hőtől függ) |
-| AIM-120A | datalink + inerciális középszakasz, 16 km-en PITBULL (aktív), lofting, ~M4, maddog indítás |
+| M61A1 / M61A2 | 6000 lövés/perc, 511 / 412 lőszer, 1050 m/s, nyomjelzők, előretartás-jelző radar lockkal |
+| AIM-9M | IR kereső, IRCCM (flare-szűrés), ~M2,5 |
+| AIM-120A | datalink + inerciális középszakasz, PITBULL (aktív), lofting, ~M4, maddog indítás |
 | ALE-47 | 30 flare + 30 chaff |
 
-**Lock segítő (csak a játékosnál):**
-* AIM-9M: a kereső 10°-os körben keres, és **magától lockol**, ha ellenség van benne. Az F azonnal lockol
-  bármelyik ellenségre ±30°-on belül, vagy elengedi a lockot (utána 3 s-ig nem lockol magától).
-* Radar: a **T** a nézési irányhoz legközelebbi ellenséget fogja be (±30°, 55 km-ig) ~0,25 s alatt;
-  újra T = következő cél, ha nincs más, unlock. Radar lockkal a hőkövető is ráfordul.
+**Saját és ellenséges rakéták (böngésző):** a játékos rakétái (`PLAYER_MISSILES`) sokkal erősebbek
+(55 G, tolóerő-vektorálás, 0,1 s sínidő, széles kereső, szinte nem téveszthető meg, nagy gyújtó- és
+hatósugár), az ellenségéi (`BANDIT_MISSILES`) gyengébbek (kis G, lassú követés, könnyen becsapható,
+korán notcholható). Mérés kitérő, flare-t / chaffot szóró célra: saját AIM-9 közelről ~90–100%, AIM-120
+~90%; az ellenség rakétái a kitérő gépet nem találták el.
 
-**Lock kijelzés:** vastag négyzet a célon (a gép méretéhez igazodik), „LOCK” + fegyver, távolság, Vc;
-pirosan villogó „LŐHETSZ! (Space)” hatótávon belül; „még messze” / „túl közel” / „messze van – válts
-AIM-120-ra (2)”. Szaggatott vonal a várható találati pontig (⊗, a DLZ fly-out modellből számolt idővel),
-pöttyözött vonal a cél várható pályájáról, a saját rakéták rombusz-jelölője becsapódásig hátralévő idővel.
+**Lock segítő (csak a játékosnál):** AIM-9M: a kereső 10°-os körben keres és magától lockol; az F
+azonnal lockol ±30°-on belül vagy elenged. Radar: a **T** a nézési irányhoz legközelebbi ellenséget fogja
+be (±30°, a radar lock-hatótávján belül: F-16 55 km, Hornet 70 km); újra T = következő cél vagy unlock.
 
-**DLZ** (`launch_zone` / `launchZone`): 1D fly-out modell; Rmax ott ér véget, ahol a rakéta 450 m/s alá
-lassul (onnan már nem tud fordulni). Példa 5 km-en szemből: AIM-120 ~37 km, AIM-9 ~21 km.
+**Lock kijelzés:** négyzet a célon, „LOCK” + fegyver, távolság, Vc; „LŐHETSZ! (Space)” hatótávon belül;
+szaggatott vonal a várható találati pontig; saját rakéták rombusz-jelölővel és becsapódási idővel.
+**DLZ:** 1D fly-out modell, Rmax ott, ahol a rakéta 450 m/s alá lassul.
 
-### 5.5 Szenzorok és figyelmeztetés
+### 6.5 Szenzorok és figyelmeztetés
 
-* **APG-68 radar:** SRCH (±60° pásztázás, B-scope), ACM, STT; pulzus-Doppler notch (25 m/s), chaff a notch
-  közelében hat.
-* **RWR:** keresés (zöld), lock (sárga), indítás (piros) – radaros fenyegetések.
-* **Rakétaközelítés-jelző (MAWS, csak játékos):** minden rád kilőtt rakéta 15 km-en belül, a hőkövetők is:
-  gyorsuló sípolás, „MISSILE!”, piros jel a rakétán távolsággal és becsapódási idővel, kép szélén nyíl,
-  RWR-en `M`.
-* Ellenség-jelölők 80 km-ig.
+* **Radar:** SRCH (±60° pásztázás), ACM, STT; pulzus-Doppler notch, chaff a notch közelében hat.
+  APG-68: 120°/s pásztázás, 25 m/s notch; APG-79: 260°/s, 20 m/s notch, gyorsabb lock.
+* **RWR:** keresés (zöld), lock (sárga), indítás (piros); a jel a fenyegető gép típusa (`16` / `18`).
+* **Rakétaközelítés-jelző (MAWS):** minden rád kilőtt rakéta 15 km-en belül, a hőkövetők is: sípolás,
+  „MISSILE!”, piros jel a rakétán távolsággal és becsapódási idővel, kép szélén nyíl.
+* **HUD-figyelmeztetések:** PULL UP, MISSILE!, RADAR LOCK, SPEED LOW (< 252 km/h), FUTÓMŰ!, GEAR SPEED
+  (> 558 km/h kiengedett futóval), BINGO FUEL (a belső üzemanyag 12%-a alatt); G és AoA sárga a gép
+  határának 85% / 80%-a felett.
+* Ellenség-jelölők 80 km-ig, zóna- és bázisjelölő (lásd 4.).
 
-### 5.6 AI (`ai/pilot.py`, `web/js/ai.js`)
-
-Az ellenség ugyanolyan kinézetű F-16, de a böngészős változatban **gyengébb sárkánnyal** (`F16C_BANDIT`:
-7 G, 190°/s orsózás, 20° állásszög-határ) és **gyengébb rakétákkal** (`BANDIT_MISSILES`: kis G, lassú
-követés, könnyen becsapható flare-rel/chaffal, korán notcholható). A játékos rakétái (`PLAYER_MISSILES`)
-ezzel szemben sokkal erősebbek: nagy G, tolóerő-vektorálás (közelről is fordul), szinte nem téveszthető
-meg, nagyobb gyújtó- és hatósugár. Mérés (kitérő, flare-t/chaffot szóró célra, oldalról): a te AIM-9-ed
-500–1500 m-ről ~90–100 %, az AIM-120 ~90 %; az ellenfél rakétái a kitérő gépet nem találták el, a
-reakció nélkül egyenesen repülőt mind eltalálták. Ezen felül a pilóta is kicsit gyengébb:
+### 6.6 AI (`web/js/ai.js`, Pythonban `ai/pilot.py`)
 
 | Nehézség | max G | pontosság | rakéta-szünet | flare-esély | észlelés | DLZ-hányad, ahonnan lő |
 |---|---|---|---|---|---|---|
@@ -170,108 +257,175 @@ reakció nélkül egyenesen repülőt mind eltalálták. Ezen felül a pilóta i
 | normál | 0,80 | 0,85 | 24 s | 0,60 | 0,45 | 0,7 |
 | nehéz | 0,92 | 0,95 | 15 s | 0,90 | 0,75 | 0,8 |
 
-Viselkedés: járőrözés, célkövetés (rakéta, ágyú), védekezés (notch, flare/chaff, kitérés), terep- és
-pályahatár-kerülés. A játékos a teljes DLZ-t kihasználhatja, így mindig messzebbről lőhet.
+Viselkedés: járőrözés a harci zónában, célkövetés (rakéta, ágyú), védekezés (notch, flare / chaff,
+kitérés), terep- és pályahatár-kerülés; csak „tisztességes” célra támad (zónában, nem a biztonsági körben).
 
-### 5.7 Kabin és nézetek
+### 6.7 Kabin, kijelzők, nézetek
 
-**Kabinkijelzők (`web/js/mfd.js`).** A műszerfal minden képernyője egy-egy canvas-textúra, másodpercenként
-~30-szor újrarajzolva (csak kabinnézetben). F-16: két MFD (bal: RDR / SMS / ENG, jobb: SA / ENG / SMS), DED és
-RWR-szkóp – a régi kabinmodell képernyő-négyszögeire. F/A-18E: bal DDI (ENG / SMS / RWR), jobb DDI
-(RDR / SMS), AMPCD (SA / RWR), UFCD – a Blender-modell `screen_*` objektumaira, a UV-t a JS vetíti rájuk
-(`Models.modelScreens`). Lapozás: J / K / L. **N**: a fej lefordul a műszerfal közepére és 30–40°-os
-látószögre közelít, a HUD-réteg ilyenkor csak a figyelmeztetéseket rajzolja. Kabinnézetben a kép 13%-kal
-lejjebb van tolva (lencseeltolás, `setViewOffset`), így a HUD a középpont fölé kerül és a kijelzők beférnek.
+![F-16 kabin, a kijelzőkre nézve (N)](f16_cockpit_displays.jpg)
 
-* Kabin-kád a törzsbe vágva, magas buborék-kabintető kerettel és tükrökkel, 30°-ban döntött ACES II ülés,
-  oldalkonzolok, oldalsó bot és gázkar, műszerfal két világító MFD-vel, DED, ICP, tartalék műszerek,
-  takaróernyő és HUD. Pilóta szándékosan nincs. A textúra: `dogfight/render/cockpit.png`
-  (`tools/make_cockpit_texture.py` rajzolja).
-* Böngészőben kabinnézetben az egér közvetlenül a botkormányt mozgatja (lent kis kijelző mutatja): a bot
-  ott marad, ahová teszed (semmi nem húzza vissza középre), így a lassú forduló és a hosszú éles kitérés is
-  tartható; középen egy kis holtsáv segít megtalálni a semlegest (ott a kijelző pontja zöld). A fej a nyak körül fordul (±160°), hátranézéskor a pilóta előre és oldalra dől, így a fejtámla
-  mellett hátralát.
-* A kabinnézet a géphez rögzített (együtt orsózik, bólint), C / jobb gomb / L3 = fejfordítás; G alatt a
-  fej lesüllyed; 7,5 G felett elsötétülés, −1,8 G alatt bevörösödés. Szabad nézelődésnél a fej legfeljebb
-  160°-ot fordul mindkét irányba.
-* A saját gép kabinnézetben külön, közeli (3 cm-es near plane) renderelési menetben rajzolódik
-  (Three.js layer 1, Panda3D camera mask + display region), így a műszerfal nem vágódik le.
-* Külső nézet: War Thunder-féle követő kamera, a horizontra visszabillenő célzással.
+**Kabinok.** F-16: a régi, kódból épített kabinmodell (`web/assets/f16.json`): ACES II ülés, oldalsó bot,
+két MFD, DED, ICP, RWR-szkóp, tartalék műszerek, HUD. F/A-18E: a Blender-modell része: NACES ülés,
+keretes szélvédő, majdnem átlátszó HUD-üveg, két DDI, UFCD, AMPCD, középső bot, gázkarok, figyelmeztető lámpák.
 
-### 5.8 Grafika és hang
+**Élő kijelzők (`web/js/mfd.js`, `CockpitDisplays`).** Minden képernyő egy canvas-textúra; kabinnézetben
+képkockánként a kijelzők fele rajzolódik újra (mindegyik ~30-szor másodpercenként), külső nézetben semmi.
 
-* **Külső nézet (böngésző):** Blenderben, szkriptből épített F-16C (`tools/blender/build_f16.py` →
-  `web/assets/f16.glb`): valós méretek, összeolvadó szárny-törzs, kb. 70 ezer háromszög, festés panelvonalakkal,
-  normal- és roughness-térkép, csuklóra tett mozgó felületek, futómű, fúvócső, kabin; AIM-9M és AIM-120 külön
-  `.glb`-ben. A `web/js/glb.js` saját, kis `.glb`-olvasó (a csomagolt three.js-ben nincs GLTFLoader).
-* **Kabinnézet és Python változat:** a kódból épített modell (Catmull-Rom törzs, LERX, NACA profilok, csuklós
-  kormányfelületek, háromszínű szürke festés textúra-atlasszal) – ennek van részletes műszerfala.
-* Fények, páracsóva, szárnyvég-örvények, utánégető-láng.
-* 102 × 102 km-es sziget LOD-terepen, légibázis (pálya, gurulóút, fedezékek, torony, fények), felhők,
-  tenger, részecske-effektek (füst, robbanás, flare), nyomjelzők.
-* Minden shader az első képkockán lefordul (nincs akadás az első utánégetőnél / rakétánál).
-* Hangok kódból generálva (WebAudio / Panda3D): hajtómű, utánégető, ágyú, growl, lock-hang, RWR, MAWS,
-  indítás, találat, robbanás.
+| Oldal | Tartalom |
+|---|---|
+| **RDR** | B-scope: célok magassággal és irányvektorral, pásztázó nyaláb, ACM-doboz; lockolt cél: távolság, Vc, magasság, Mach, aspektus, **NCTR** (típus), notch / memória; jobb oldalt DLZ-csík (Rmax, no-escape, Rmin, SHOOT / NOESC) |
+| **SA** | orr-felfelé térkép 20 / 40 / 80 km-es tartománnyal: ellenségek (radarcél tömött, datalink üres), saját és rád tartó rakéták, RWR-irányok a peremen, harci zóna, bázis és biztonsági kör, irány és távolság mindkettőhöz |
+| **SMS** | gép-felülnézet az állomásokkal (töltött / üres, kiválasztott fehér, arkád újratöltés), darabszámok, lőszer, flare / chaff, a kiválasztott rakéta állapota |
+| **ENG** | hajtóművenként fordulatszám-oszlop, fúvócső, EGT, fogyasztás, tolóerő, utánégető; tolóerő/tömeg, **Ps** (fajlagos többletteljesítmény), ellenállás, Mach, IAS, AoA / limit, G (min / max a felszállás óta), tömeg; üzemanyag-csík, hátralévő idő, **BINGO** (ennyi kell a hazaúthoz) |
+| **RWR** | fenyegetések a szkópon, rád tartó rakéták listája távolsággal és idővel, flare / chaff |
+| **DED / UFCD** | adatsor: zóna és bázis iránya / távolsága, üzemanyag és BINGO, fegyverek, hullám; a Hornet UFCD-jén magasság, Mach, G, hátralévő idő, fogyasztás, flare / chaff is |
+
+| Gép | Bal (J) | Jobb (K) | Középső (L) | Fix |
+|---|---|---|---|---|
+| F-16C | MFD: RDR / SMS / ENG | MFD: SA / ENG / SMS | – | DED, RWR-szkóp |
+| F/A-18E | DDI: ENG / SMS / RWR | DDI: RDR / SMS | AMPCD: SA / RWR | UFCD |
+
+Az F-16 képernyői a régi modell négy képernyő-négyszögére kerülnek (0–1 UV-val szétválasztva), a Hornetéi a
+`screen_*` objektumokra – ezekre a JS vetíti a UV-t (`Models.modelScreens`).
+
+**Nézetek.**
+* **N – kijelzők nézése:** a fej a műszerfal közepére fordul, a látószög 30° (F-16) / 40° (Hornet); a
+  HUD-réteg ilyenkor csak a figyelmeztetéseket és üzeneteket rajzolja. C-vel körülnézve kilép belőle.
+* Kabinnézetben a kép 13%-kal lejjebb van tolva (lencseeltolás, `setViewOffset`): a HUD a középpont fölé
+  kerül, alul beférnek a kijelzők; a fegyver-sorok a kép tetejére, a botkormány-kijelző balra kerül; a HUD
+  dőlésskálája csak ±16°-on belül látszik (mint az igazi HUD).
+* **Egér-botkormány:** a bot ott marad, ahová teszed (nincs visszarugózás), 7%-os holtsáv; pointer lock
+  nélkül a kurzor középtől mért eltérése a bot.
+* A kabinnézet a géphez rögzített; a fej a nyak körül fordul (±160°), hátranézéskor előre-oldalra dől;
+  G alatt a fej lesüllyed; 7,5 G felett elsötétülés, −1,8 G alatt bevörösödés.
+* A saját gép kabinnézetben külön, közeli (3 cm-es near plane) renderelési menetben rajzolódik (layer 1).
+* Külső nézet: War Thunder-féle követő kamera.
+
+### 6.8 Grafika és hang
+
+* **Külső nézet:** a Blenderben épített F-16 és Super Hornet (`.glb`), saját olvasóval (`web/js/glb.js`).
+  Gépenként: mozgó kormányfelületek, behúzódó futómű ajtókkal, helyzetjelző fények, stroboszkóp (F-16:
+  1 a vezérsíkon, Hornet: 2), utánégető-láng (Hornet: két kisebb), páracsóva a LEX / szárnytő-kiterjesztésből
+  nagy állásszögnél, szárnyvég-örvények 5,5 G felett, torkolattűz a gépágyú helyén.
+* **Hornet kormányfelületei:** csűrő orsózásra, fékszárny állásszög szerint (és kis sebességnél
+  differenciálisan), orrsegédszárny 34°-ig, két oldalkormány; légféknél a kormányok kifelé, a csűrők fel,
+  a LEX-spoilerek ki; a kifutón a kormányok befelé állnak (toe-in).
+* A reptéren 2 F-16 és 2 Super Hornet parkol.
+* 102 × 102 km-es sziget LOD-terepen, légibázis, felhők, tenger, füst, robbanás, flare, nyomjelzők.
+* Minden shader az első képkockán lefordul (nincs akadás).
+* Hangok kódból generálva (WebAudio): hajtómű, utánégető, ágyú, growl, lock-hang, RWR, MAWS, robbanás.
 
 ---
 
-## 6. A kód felépítése
+## 7. A modellek (Blender)
 
-### 6.1 Megfeleltetés a két változat között
+![F/A-18E elölről (Blender-render)](../models/fa18/previews/fa18_front.png)
 
-| Python (`dogfight/`) | Böngésző (`web/js/`) | Tartalom |
-|---|---|---|
-| `sim/specs.py` | `specs.js` | F-16C, AIM-9M, AIM-120A, M61A1, APG-68, ALE-47 adatai |
-| `sim/atmosphere.py`, `sim/flight_model.py` | `flight.js` | légkör, aerodinamika, FLCS, hajtómű, futómű |
-| `sim/terrain.py`, `sim/airfield.py` | `terrain.js` | magasságmező, reptér |
-| `sim/ir_seeker.py`, `radar.py`, `rwr.py`, `missile.py`, `guns.py`, `signatures.py`, `countermeasures.py` | `weapons.js` | szenzorok, rakéták, ágyú, DLZ, flare/chaff |
-| `sim/aircraft.py`, `sim/world.py` | `sim.js` | repülőgép, világ, fix lépésköz, események |
-| `ai/steering.py`, `ai/pilot.py`, `controls.py` | `ai.js` | instruktor, AI pilóta, játékos pilóta |
-| `controls.py` | `game.js` (Input, Pad) | billentyű, egér, kontroller, gázkar |
-| `camera.py` | `game.js` (FlightCamera) | követő és kabin kamera |
-| `game.py` | `game.js` (Game) | játékmenet, módok, hullámok, kiszolgálás |
-| `render/*` | `render.js` | modellek, terep, reptér, effektek, kabin-menet |
-| – | `glb.js` | a Blender-modell (`.glb`) beolvasása |
-| `ui/hud.py`, `ui/scopes.py`, `ui/help.py` | `hud.js`, `index.html` | HUD, radar, RWR, G-hatások, súgó |
-| `audio.py` | `audio.js` | hangok |
+Mindkét gép **Blender-szkriptből** épül, kézi modellezés nélkül; a szkriptek bármikor újrafuttathatók.
 
-### 6.2 Eszközök (`tools/`)
+| Fájl | Tartalom |
+|---|---|
+| `tools/blender/aircraft_lib.py` | közös eszközök: mesh-darabok (`Part`), geometria (cső, doboz, szárnyprofil-felület, kerék, futóakna, futóajtó), anyagok (festés textúrával, matt / fém színnel, üveg, HUD-üveg, kijelző, lámpák), objektum-építés UV-val és csuklóval, renderképek, GLB-export |
+| `build_f16.py`, `f16_shape.py`, `f16_paint.py` | F-16C: alak-táblázatok, építés, festés (USAF háromszínű szürke, panelvonalak) |
+| `build_fa18.py`, `fa18_shape.py`, `fa18_paint.py` | F/A-18E: keresztmetszetek (törzs + gondolák + LEX + szárny sima összeolvasztással), szívócsatornák, kettős döntött vezérsík, kabin, futómű, festés (US Navy kétszínű szürke, NAVY / NG / 200 jelzések, sárga-fekete farokcsík) |
+
+**Kimenet:** `models/<gép>/<gép>.glb` (teljes felbontású textúrák), `web/assets/<gép>.glb` (kisebb
+textúrák, ezt tölti a játék), `models/<gép>/<gép>.blend`, a festés textúrái `models/<gép>/textures/`
+(nincs a repóban, újragenerálható), renderképek `models/<gép>/previews/`. Az F-16 építése a rakéták
+`.glb`-jét is kiírja (`aim9m.glb`, `aim120c.glb`).
+
+**Konvenciók** (a játék ezekre épít):
+* Tengelyek: +Y előre, +X jobbra, +Z fel, méter (a glTF-export +Y fel / −Z előre; a játék visszaforgatja).
+* Mozgó részek origója a csuklón, a helyi X tengely a csuklóvonal; pozitív forgatás = kilépőél le /
+  belépőél le / oldalkormány kilépőéle jobbra / légfék nyit. Nevek: `lef_*`, `flap_*`, `ail_*`, `stab_*`,
+  `rudder` vagy `rudder_L` / `rudder_R`, `sb_up_*`, `sb_lo_*`.
+* Futószárak és ajtók glTF-extrában: `retract` / `door` = ennyi fokkal kell a helyi X körül forgatni a
+  behúzáshoz.
+* Üres csomópontok: `store_N` (N. függesztési pont), `ref_nozzle*`, `ref_wingtip_L/R`, `ref_nav_L/R`,
+  `ref_tail`, `ref_strobe*`, `ref_vapor_L/R`, `ref_gun`, `ref_eye`, `ref_gear_main_L/R`, `ref_gear_nose`,
+  `ref_intake_light_L/R` (F-16).
+* `screen_*` objektumok (Hornet): a kabin kijelzői, a játék ezekre rajzol.
+
+**Futtatás Blenderben** (Scripting fül, vagy a blender-mcp kiegészítő 9876-os portján keresztül):
+
+```python
+path = r"...\tools\blender\build_fa18.py"
+exec(compile(open(path, encoding="utf-8").read(), path, "exec"),
+     {"__file__": path, "OPTS": dict(textures=False, export=True, save=True)})
+```
+
+`OPTS`: `build` (modell építése), `textures` (textúrák újrafestése), `export` (GLB-k kiírása), `save`
+(`.blend` mentése), `previews` (mappa a renderképeknek), `views` (melyik nézetek). Egy jelenetben egyszerre
+egy gép van: az építés törli a korábbi `F16` / `FA18` gyűjteményt.
+
+---
+
+## 8. A kód felépítése
+
+### 8.1 Böngészős változat (`web/`)
+
+| Fájl | Tartalom |
+|---|---|
+| `index.html` | menü (gép, fegyverzet, ellenfél, mód, nehézség, egér), szünet, súgó, betöltő |
+| `js/specs.js` | `F16C`, `FA18E`, `BANDITS`, rakéták (`PLAYER_MISSILES`, `BANDIT_MISSILES`), gépágyúk, radarok, `buildLoadout`, `loadoutLimits` |
+| `js/flight.js` | légkör, aerodinamika, fly-by-wire, hajtómű, futómű |
+| `js/terrain.js` | magasságmező, reptér |
+| `js/weapons.js` | IR kereső, radar, RWR, rakéták, gépágyú, DLZ, flare / chaff |
+| `js/sim.js` | `Aircraft` (fegyverzet, kiszolgálás, szenzorok), `World` (fix lépésköz, események) |
+| `js/ai.js` | instruktor, játékos pilóta, AI pilóta harci zónával |
+| `js/render.js` | modellek (`Models.typeInfo`: gépenkénti pontok és effektek), kormányfelületek, terep, reptér, effektek, kabin-menet |
+| `js/glb.js` | `.glb`-olvasó |
+| `js/mfd.js` | élő kabinkijelzők |
+| `js/hud.js` | HUD, radar, RWR, G-hatások, zóna- és bázisjelölők |
+| `js/audio.js` | hangok |
+| `js/game.js` | kamera, bemenet (egér-botkormány), játékmenet (zóna, hullámok, kiszolgálás), betöltés, menü |
+
+### 8.2 Megfeleltetés a Python változattal
+
+| Python (`dogfight/`) | Böngésző (`web/js/`) |
+|---|---|
+| `sim/specs.py` | `specs.js` |
+| `sim/atmosphere.py`, `sim/flight_model.py` | `flight.js` |
+| `sim/terrain.py`, `sim/airfield.py` | `terrain.js` |
+| `sim/ir_seeker.py`, `radar.py`, `rwr.py`, `missile.py`, `guns.py`, `signatures.py`, `countermeasures.py` | `weapons.js` |
+| `sim/aircraft.py`, `sim/world.py` | `sim.js` |
+| `ai/steering.py`, `ai/pilot.py`, `controls.py` | `ai.js`, `game.js` (Input, Pad) |
+| `camera.py`, `game.py` | `game.js` |
+| `render/*` | `render.js` (+ `glb.js`, `mfd.js`) |
+| `ui/*` | `hud.js`, `index.html` |
+| `audio.py` | `audio.js` |
+
+### 8.3 Eszközök (`tools/`)
 
 | Parancs | Mit csinál |
 |---|---|
 | `python tools/export_web_assets.py` | a Python modellből / terepből előállítja a `web/assets/*` fájlokat (f16.json, festések, terep, kabin-textúra) |
-| `python tools/make_cockpit_texture.py` | megrajzolja a kabin-textúrát (`dogfight/render/cockpit.png`, Pillow kell) |
-| `python tools/build_offline.py` | elkészíti a `web/dogfight-offline.html` egyfájlos változatot (Node.js-szel az esbuild tömörít; nélküle a beépített csomagoló dolgozik) |
-| `tools/blender/build_f16.py` | **Blenderben** futtatandó: megépíti az új F-16-ot, megfesti a textúrákat, és kiírja a `models/f16/*.glb` (teljes felbontás) és a `web/assets/*.glb` (kisebb textúrák) fájlokat |
+| `python tools/make_cockpit_texture.py` | megrajzolja az F-16 kabin-textúráját (Pillow kell) |
+| `python tools/build_offline.py` | elkészíti a `web/dogfight-offline.html` egyfájlos változatot (Node.js nélkül a beépített csomagoló dolgozik; minden `web/assets` fájl data: URI-ként kerül bele) |
+| `tools/blender/build_f16.py`, `build_fa18.py` | **Blenderben** futtatandó modell-építők (lásd 7.) |
 
-Ha a kódból épített modell vagy a terep változik: `make_cockpit_texture.py` (ha a kabin változott) →
-`export_web_assets.py` → `build_offline.py`. Ha a Blender-modell változik: `build_f16.py` Blenderben →
-`build_offline.py`.
+### 8.4 Tesztek
 
-A Blender-modell tengelyei megegyeznek a játékéval (+Y előre, +Z fel). A mozgó részek (`lef_*`, `flap_*`,
-`stab_*`, `rudder`, `sb_up_*`, `sb_lo_*`) origója a csuklón van, a helyi X tengelyük a csuklóvonal. A `ref_*`
-és `store_*` üres csomópontok adják a fúvócső, a futók és a fegyverfelfüggesztések helyét; a játék a
-találat-dobozokat és az indítási pontokat (`specs.js`) is ehhez a modellhez igazítja.
-
-### 6.3 Tesztek
-
-`python -m pytest` – 50 teszt: repülésmodell (végsebesség, plafon, G, orsózás, hajtómű), földi fizika
-(felszállás, leszállás, balesetek), rakéták (sebesség, rávezetés, flare, notch, pitbull), szenzorok
-(radar, IR, lock segítő, MAWS), instruktor (kis korrekció, nyomás, G-határ), gázkar (koppintás, MIL-ütköző,
-utánégető), világ (hullámok, találatok).
-
-### 6.4 Közzététel
-
-* **GitHub Pages:** a repó beállítása „Deploy from branch: main / (root)” (Jekyll). A gyökér `index.html`
-  átirányít a `web/`-re. Pusholás után a „pages build and deployment” workflow ~1 perc alatt frissít.
-* **claude.ai artifact:** a `web/index.html` belső része (doctype / html / head / body nélkül, letöltés-link
-  nélkül) a `web/js/*` és `web/assets/*` fájlokkal publikálva.
-* **Offline fájl:** `tools/build_offline.py` után a `web/dogfight-offline.html` commitolva (a Pages-ről
-  tölthető le).
+`python -m pytest` – 50 teszt a **Python** változathoz: repülésmodell, földi fizika, rakéták, szenzorok,
+instruktor, gázkar, világ. A böngészős változat új részeit (Hornet, kijelzők, zóna) Chrome-ban, a
+játék saját függvényeivel mértük és próbáltuk ki (lásd 11.); automata JS-teszt nincs.
 
 ---
 
-## 7. Fejlesztési napló
+## 9. Karbantartás és közzététel
+
+* **Új gépadat / hangolás:** `web/js/specs.js` → `python tools/build_offline.py`.
+* **Blender-modell változott:** a gép építője Blenderben (`export=True`) → `build_offline.py`.
+* **Python modell / terep változott:** `make_cockpit_texture.py` (ha a kabin változott) →
+  `export_web_assets.py` → `build_offline.py`.
+* **GitHub Pages:** „Deploy from branch: main / (root)”. A gyökér `index.html` átirányít a `web/`-re.
+  Pusholás (`git push origin main`) után ~1 perc alatt frissül. Ezen a gépen a pusholáshoz a tulajdonos
+  GitHub-bejelentkezése kell.
+* **Offline fájl:** `build_offline.py` után a `web/dogfight-offline.html` commitolva (a Pages-ről tölthető le).
+
+---
+
+## 10. Fejlesztési napló
 
 | # | Kérés | Ami elkészült | Commit |
 |---|---|---|---|
@@ -293,43 +447,38 @@ utánégető), világ (hullámok, találatok).
 | 16 | Furcsa fordulás, forog W/S-nél – legyen War Thunder-szerű | új instruktor (arányos, nyom, hiszterézis), kézi irányítás átvétele | `b62b4a1` |
 | 17 | Kontroller, flare és lőszer újratöltés | Gamepad (böngésző + Python), arkád lőszer / flare töltés | `2bc5829` |
 | 18 | AI ugyanolyan gép, kicsit gyengébb; én is lőhessek messziről | azonos F-16, gyengébb AI, DLZ alapú AI-lövés, 80 km-es jelölők | `b8c41ae` |
-| 19 | Dokumentáció | ez a dokumentum, README frissítés, új képek | – |
+| 19 | Dokumentáció | ez a dokumentum, README frissítés, új képek | `f74219f` |
 | 20 | High quality F-16 modell Blenderben, GLB-ben, bekötve a játékba | Blender-szkriptből épített modell és rakéták, saját `.glb`-olvasó, új külső nézet, Node nélküli offline építés | `32cf8f4` |
 | 21 | Behúzható futómű aknákkal, kabin ne lógjon ki, orr kövesse a kurzort, fej 160°, erős saját / gyenge ellenséges rakéták, gyengébb ellenséges gép | futóműaknák és -ajtók, behúzás-animáció, ülés- és ernyőjavítás, orr-alapú instruktor, fejforgatás ±160°, `PLAYER_MISSILES` / `BANDIT_MISSILES`, `F16C_BANDIT`, tolóerő-vektorálás | `feefd29` |
-| 22 | Kabinból joystickként irányítani, a kabinnézet ne takarjon, főmenü meccs közben / után | egér-botkormány kabinnézetben, nyak körüli fejforgatás előre-oldalra dőléssel, szünetmenü (Folytatás / Főmenü / Súgó), főmenü Folytatással, új meccs ugyanazon a jeleneten | `a4f9287` |
-| 23 | Kabin: több infó olvashatóan (az alapok maradnak); F/A-18E Super Hornet Blenderben saját kabinnal; valós aerodinamika és tolóerő mindkettőnél; gép- és ellenfélválasztás, fegyverzet; a harc a térkép túloldalán | `aircraft_lib.py` + `build_fa18.py` (Super Hornet GLB), élő kabinkijelzők (`web/js/mfd.js`: RDR, SA, SMS, ENG, RWR, DED/UFCD), N = kijelzők nézése, lencseeltolás kabinban; `FA18E` adatok (2× F414, 46,5 m², 7,5 G, 40° AoA), rakéta-ellenállás felület szerint, gépenkénti futómagasság; menü: saját gép, ellenfél, AIM-9M / AIM-120A darabszám állomás-kiosztással; harci zóna (−14, +16 km, r = 16 km) és 14 km-es biztonsági kör a bázis körül | `92dc6ab` |
-| 24 | A kabin-botkormány ne álljon vissza magától középre | a bot ott marad, ahová teszed; 7%-os holtsáv középen, zöld pont a semlegesben | – |
+| 22 | Kabinból joystickként irányítani, a kabinnézet ne takarjon, főmenü meccs közben / után | egér-botkormány kabinnézetben, nyak körüli fejforgatás előre-oldalra dőléssel, szünetmenü, főmenü Folytatással, új meccs ugyanazon a jeleneten | `a4f9287` |
+| 23 | Kabin: több infó olvashatóan (az alapok maradnak); F/A-18E Super Hornet Blenderben saját kabinnal; valós aerodinamika és tolóerő mindkettőnél; gép- és ellenfélválasztás, fegyverzet; a harc a térkép túloldalán | `aircraft_lib.py` + `build_fa18.py` (Super Hornet GLB), élő kabinkijelzők (`mfd.js`), N = kijelzők nézése, lencseeltolás kabinban; `FA18E` adatok, rakéta-ellenállás felület szerint, gépenkénti futómagasság; menü: saját gép, ellenfél, fegyverzet-szerkesztő; harci zóna és biztonsági kör | `92dc6ab` |
+| 24 | A kabin-botkormány ne álljon vissza magától középre | a bot ott marad, ahová teszed; 7%-os holtsáv, zöld pont a semlegesben | `4a9d873` |
+| 25 | Dokumentálj mindent | a dokumentáció és a README teljes átírása a jelenlegi állapotra | ez a commit |
 
 ---
 
-## 8. Ismert korlátok és tesztelési megjegyzések
+## 11. Ismert korlátok és tesztelési megjegyzések
 
-* A böngészős változatot csak **fej nélküli Chrome-ban, szoftveres rendereléssel** teszteltük (1–18 FPS).
-  Valódi videokártyán a sebességet nem mértük; gyenge iskolai gépen kisebb ablak segíthet.
-* **Kontroller:** a böngészőben szimulált kontrollerrel teszteltük; a Python változat kontrolleres része
-  valódi eszköz nélkül nem volt kipróbálható.
-* Böngészőben a Ctrl lenyomva tartása közben a böngésző saját gyorsbillentyűi (pl. Ctrl+1 lapváltás)
-  továbbra is működnek – a Z biztonságosabb gáz le gomb.
-* A claude.ai artifact privát; másnak a Share menüből kell megosztani. Ott a letöltés link nem működik.
-* Ha egy hálózat a `github.io`-t is tiltja, csak a letöltött egyfájlos változat működik.
-* Az offline fájl pillanatkép: változtatás után újra kell építeni (`build_offline.py`) és újra letölteni.
-* Az „aggressor” sivatagi festés még benne van a kódban, de jelenleg nem használja semmi (az új modellhez is
-  elkészül a textúrája a `models/f16/textures/` mappába, de a játék nem tölti be).
-* A rakéták és az ellenséges gép gyengítése / erősítése, az orr-alapú célzás és a 160°-os fejforgatás csak a
-  böngészős változatban van meg; a Python változat a régi, szimmetrikus értékekkel fut.
-* Az új Blender-modell csak a böngészős változat **külső** nézeteiben látszik. A kabinnézet a régi modellt
-  mutatja (annak van részletes kabinja), ezért belülről az orr és a szárnyak formája kicsit más; a Python
-  változat teljesen a régi modellt használja.
-* Az új modell gépenként kb. 70 ezer háromszög (a régi kb. 18 ezer). GTX 1060-on egy látszó gépnél a
-  rajzolási idő érdemben nem nőtt (~0,8 ms képkockánként); gyenge, integrált videokártyán, sok egyszerre
-  látszó gépnél lassabb lehet – ezt nem mértük.
+* A böngészős változatot csak Chrome-ban, **szoftveres rendereléssel** próbáltuk ki (kb. 10–20 FPS);
+  valódi videokártyán a sebességet nem mértük. Gyenge gépen kisebb ablak segíthet.
+* **Mérve / kipróbálva (Chrome):** a táblázat repülési értékei (a játék saját függvényeivel), felszállás
+  mindkét géppel, a zóna-logika (zónában támadnak, a bázis fölött nem), kevert ellenséges hullám hiba nélkül,
+  a Hornet kormányfelületeinek iránya, a botkormány (2 s után is a helyén marad), az offline fájl betöltése.
+* A Python tesztek ezen a gépen nem futottak (nincs numpy / Panda3D); a Python kód nem változott.
+* **Kontroller:** szimulált kontrollerrel teszteltük.
+* A Hornet 87 ezer, az F-16 70 ezer háromszög; sok egyszerre látszó gépnél gyenge videokártyán lassabb lehet.
+* A kijelzők szövege normál kabinnézetben kicsi – olvasáshoz az **N** (ráközelítés) való.
+* Az F-16 kabinnézete továbbra is a régi, kódból épített modell, ezért belülről a gép formája kicsit eltér
+  a külsőtől. A Hornet kabinja a saját modellje.
+* A claude.ai artifact és a Python változat a régi (csak F-16-os) állapotban maradt.
+* Az „aggressor” F-16 festés elkészül, de a játék nem használja.
+* Böngészőben a Ctrl lenyomva tartása közben a böngésző gyorsbillentyűi működnek – a Z biztonságosabb gáz le.
+* Az offline fájl pillanatkép: változtatás után újra kell építeni és újra letölteni.
 
-## 9. Ötletek a folytatáshoz
+## 12. Ötletek a folytatáshoz
 
-* Részletes kabin az új Blender-modellbe, hogy a kabinnézet is azt használhassa (és a régi modell
-  kikerülhessen a böngészős változatból).
-* Az új modell a Python (Panda3D) változatban is; aggressor festés az ellenfeleknek.
-* Több repülőgép (pl. MiG-29, Su-27) saját adatokkal.
-* Beállítások mentése (egér-érzékenység, mód, nehézség) a böngészőben.
-* Többjátékos mód.
-* Pontosabb rakéta-fly-out (2D, manőverező céllal) a DLZ-hez.
+* Részletes Blender-kabin az F-16-ba is (a régi modell kikerülhetne).
+* Hornet: középső póttartály (6. állomás), saját hajtómű-hangok; kijelzők lapozása a gombjaikra kattintva.
+* Több repülőgép (pl. MiG-29, Su-27) saját adatokkal; aggressor festés az ellenfeleknek.
+* Beállítások mentése (gép, fegyverzet, egér) a böngészőben.
+* Többjátékos mód; pontosabb rakéta-fly-out (2D, manőverező céllal).
