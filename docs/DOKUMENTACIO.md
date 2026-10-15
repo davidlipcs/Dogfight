@@ -187,9 +187,9 @@ lejjebb van tolva (lencseeltolás, `setViewOffset`), így a HUD a középpont f�
   oldalkonzolok, oldalsó bot és gázkar, műszerfal két világító MFD-vel, DED, ICP, tartalék műszerek,
   takaróernyő és HUD. Pilóta szándékosan nincs. A textúra: `dogfight/render/cockpit.png`
   (`tools/make_cockpit_texture.py` rajzolja).
-* Böngészőben kabinnézetben az egér közvetlenül a botkormányt mozgatja (lent kis kijelző mutatja): az orsózás
-  rugózott, elengedve a gép tartja a bedöntést; a húzás ott marad, ahová teszed (fordulóhoz), és csak középen
-  áll vissza. A fej a nyak körül fordul (±160°), hátranézéskor a pilóta előre és oldalra dől, így a fejtámla
+* Böngészőben kabinnézetben az egér közvetlenül a botkormányt mozgatja (lent kis kijelző mutatja): a bot
+  ott marad, ahová teszed (semmi nem húzza vissza középre), így a lassú forduló és a hosszú éles kitérés is
+  tartható; középen egy kis holtsáv segít megtalálni a semlegest (ott a kijelző pontja zöld). A fej a nyak körül fordul (±160°), hátranézéskor a pilóta előre és oldalra dől, így a fejtámla
   mellett hátralát.
 * A kabinnézet a géphez rögzített (együtt orsózik, bólint), C / jobb gomb / L3 = fejfordítás; G alatt a
   fej lesüllyed; 7,5 G felett elsötétülés, −1,8 G alatt bevörösödés. Szabad nézelődésnél a fej legfeljebb
@@ -297,7 +297,8 @@ utánégető), világ (hullámok, találatok).
 | 20 | High quality F-16 modell Blenderben, GLB-ben, bekötve a játékba | Blender-szkriptből épített modell és rakéták, saját `.glb`-olvasó, új külső nézet, Node nélküli offline építés | `32cf8f4` |
 | 21 | Behúzható futómű aknákkal, kabin ne lógjon ki, orr kövesse a kurzort, fej 160°, erős saját / gyenge ellenséges rakéták, gyengébb ellenséges gép | futóműaknák és -ajtók, behúzás-animáció, ülés- és ernyőjavítás, orr-alapú instruktor, fejforgatás ±160°, `PLAYER_MISSILES` / `BANDIT_MISSILES`, `F16C_BANDIT`, tolóerő-vektorálás | `feefd29` |
 | 22 | Kabinból joystickként irányítani, a kabinnézet ne takarjon, főmenü meccs közben / után | egér-botkormány kabinnézetben, nyak körüli fejforgatás előre-oldalra dőléssel, szünetmenü (Folytatás / Főmenü / Súgó), főmenü Folytatással, új meccs ugyanazon a jeleneten | `a4f9287` |
-| 23 | Kabin: több infó olvashatóan (az alapok maradnak); F/A-18E Super Hornet Blenderben saját kabinnal; valós aerodinamika és tolóerő mindkettőnél; gép- és ellenfélválasztás, fegyverzet; a harc a térkép túloldalán | `aircraft_lib.py` + `build_fa18.py` (Super Hornet GLB), élő kabinkijelzők (`web/js/mfd.js`: RDR, SA, SMS, ENG, RWR, DED/UFCD), N = kijelzők nézése, lencseeltolás kabinban; `FA18E` adatok (2× F414, 46,5 m², 7,5 G, 40° AoA), rakéta-ellenállás felület szerint, gépenkénti futómagasság; menü: saját gép, ellenfél, AIM-9M / AIM-120A darabszám állomás-kiosztással; harci zóna (−14, +16 km, r = 16 km) és 14 km-es biztonsági kör a bázis körül | – |
+| 23 | Kabin: több infó olvashatóan (az alapok maradnak); F/A-18E Super Hornet Blenderben saját kabinnal; valós aerodinamika és tolóerő mindkettőnél; gép- és ellenfélválasztás, fegyverzet; a harc a térkép túloldalán | `aircraft_lib.py` + `build_fa18.py` (Super Hornet GLB), élő kabinkijelzők (`web/js/mfd.js`: RDR, SA, SMS, ENG, RWR, DED/UFCD), N = kijelzők nézése, lencseeltolás kabinban; `FA18E` adatok (2× F414, 46,5 m², 7,5 G, 40° AoA), rakéta-ellenállás felület szerint, gépenkénti futómagasság; menü: saját gép, ellenfél, AIM-9M / AIM-120A darabszám állomás-kiosztással; harci zóna (−14, +16 km, r = 16 km) és 14 km-es biztonsági kör a bázis körül | `92dc6ab` |
+| 24 | A kabin-botkormány ne álljon vissza magától középre | a bot ott marad, ahová teszed; 7%-os holtsáv középen, zöld pont a semlegesben | – |
 
 ---
 

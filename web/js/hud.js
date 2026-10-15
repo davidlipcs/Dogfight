@@ -122,8 +122,10 @@ export class HUD {
     const u = this.u, r = 26 * u, cx = 116 * u, cy = this.h - 270 * u;                 // above the RWR scope
     this.rect(cx, cy, r, r, DIM);
     this.line(cx - r, cy, cx + r, cy, DIM); this.line(cx, cy - r, cx, cy + r, DIM);
-    const g = this.g, x = cx + s.x * r, y = cy + s.y * r;
-    g.fillStyle = WHITE; g.beginPath(); g.arc(x, y, 4 * u + 1, 0, Math.PI * 2); g.fill();
+    const g = this.g, x = cx + s.x * r, y = cy + s.y * r, dz = 0.07;
+    this.rect(cx, cy, r * dz, r * dz, DIM);                                           // neutral band
+    const neutral = Math.abs(s.x) < dz && Math.abs(s.y) < dz;
+    g.fillStyle = neutral ? GREEN : WHITE; g.beginPath(); g.arc(x, y, 4 * u + 1, 0, Math.PI * 2); g.fill();
     this.text('BOTKORMÁNY', cx, cy + r + 12 * u, DIM, 9 * u + 2, 'center');
   }
   pitchLadder(ac, cam, camCtl) {

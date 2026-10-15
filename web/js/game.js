@@ -25,6 +25,7 @@ const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look dow
 const NECK = V(0, -0.09, -0.06), EYE_FROM_NECK = V(0, 0.09, 0.06), LEAN_SIDE = 0.18, LEAN_FWD = 0.12;
 const COCKPIT_SHIFT = 0.13;                           // cockpit view: picture shifted down by this part of its height
 const STICK_GAIN = 0.045;                             // mouse joystick: px of mouse travel per full deflection / sensitivity
+const STICK_DEADZONE = 0.07;                          // mouse joystick: neutral band around the centre
 const ease = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
 const $ = (id) => document.getElementById(id);
@@ -418,8 +419,9 @@ class Game {
     this.pilot.roll = inp.axis('d', 'a');
     this.pilot.yaw = inp.axis('e', 'q');
     if (joystick) {
-      if (this.pilot.pitch === null) this.pilot.pitch = this.stick.y;
-      if (this.pilot.roll === null) this.pilot.roll = this.stick.x;
+      const dz = (v) => (Math.abs(v) < STICK_DEADZONE ? 0 : (v - Math.sign(v) * STICK_DEADZONE) / (1 - STICK_DEADZONE));
+      if (this.pilot.pitch === null) this.pilot.pitch = dz(this.stick.y);
+      if (this.pilot.roll === null) this.pilot.roll = dz(this.stick.x);
     } else { this.stick.x = 0; this.stick.y = 0; }
     cam.stick = joystick ? this.stick : null;
     if (pad && (pad.lx || pad.ly)) {            // left stick: direct control, stick back = nose up
@@ -450,19 +452,14 @@ class Game {
     }
   }
 
-  // Mouse joystick for the cockpit.  Roll is sprung like a real stick: stop moving the mouse and it centres,
-  // the jet stops rolling and the flight computer holds the bank.  Pitch stays where you put it (so a turn
-  // can be held) and only drifts to neutral when it is nearly centred.
+  // Mouse joystick for the cockpit.  The stick stays exactly where you put it - nothing pulls it back to the
+  // middle, so a slow turn or a long hard break can be held as long as you want.  A small dead zone around
+  // the centre makes neutral easy to find (the gauge shows it: the dot turns green there).
   flyStick(dt, dx, dy) {
     const s = this.stick, inp = this.input, cam = this.cam, inv = cam.invertY ? -1 : 1;
     if (this.locked) {
       const k = cam.sensitivity * STICK_GAIN;
       s.x = clamp(s.x + dx * k, -1, 1); s.y = clamp(s.y + dy * k * inv, -1, 1);
-      s.idle = dx || dy ? 0 : s.idle + dt;
-      if (s.idle > 0.12) {
-        s.x -= Math.sign(s.x) * Math.min(Math.abs(s.x), 2.5 * dt);
-        if (Math.abs(s.y) < 0.12) s.y -= Math.sign(s.y) * Math.min(Math.abs(s.y), 0.6 * dt);
-      }
     } else if (inp.inside && !this.state.paused) {   // no pointer lock: the cursor's offset from the centre is the stick
       const dz = (v) => (Math.abs(v) < 0.04 ? 0 : (v - Math.sign(v) * 0.04) / 0.96);
       s.x = clamp(dz(inp.mx) * 1.6, -1, 1); s.y = clamp(dz(inp.my) * 1.6 * inv, -1, 1);
