@@ -27,6 +27,14 @@ const LAYOUTS = {
     screen_ampcd: { w: 512, h: 512, pages: ['sa', 'rwr'], key: 'L' },
     screen_ufcd: { w: 512, h: 420, pages: ['ded'] },
   },
+  f22: {
+    screen_mfd_l: { w: 512, h: 512, pages: ['eng', 'rwr'], key: 'J' },
+    screen_mfd_r: { w: 512, h: 512, pages: ['radar', 'sms'], key: 'K' },
+    screen_pmfd: { w: 512, h: 512, pages: ['sa', 'rwr'], key: 'L' },
+    screen_mfd_c: { w: 512, h: 512, pages: ['sms'] },
+    screen_ufd_l: { w: 512, h: 394, pages: ['ded'] },
+    screen_ufd_r: { w: 333, h: 256, pages: ['rwrmini'] },
+  },
 };
 const SIDE_KEYS = { left: 'J', right: 'K', center: 'L' };
 
@@ -123,7 +131,7 @@ export class CockpitDisplays {
     else if (tgt) { const dd = len(sub(tgt.pos, ac.pos)); scale = [10000, 20000, 40000, 80000, 160000].find((s) => dd < s * 0.85) || 160000; }
     this.text(g, r.mode === OFF ? 'RDR OFF' : r.mode, 14, 24, r.mode === STT ? C.w : C.g, 28);
     this.text(g, `${scale / 1000} KM`, W / 2 - 20, 24, C.g, 28, 'center');
-    this.text(g, sp.name.includes('79') ? 'APG-79' : 'APG-68', W - 14, 24, C.gd, 22, 'right');
+    this.text(g, sp.name.includes('77') ? 'APG-77' : sp.name.includes('79') ? 'APG-79' : 'APG-68', W - 14, 24, C.gd, 22, 'right');
     // scope frame, azimuth and range ticks
     this.box(g, x0, y0, sw, sh, C.gd, 2);
     const azMax = sp.scanAz * DEG, toXY = (az, dist) => [cx + clamp(az / azMax, -1, 1) * sw / 2, y1 - Math.min(dist / scale, 1) * sh];
@@ -324,7 +332,7 @@ export class CockpitDisplays {
     const rpm = e > 1 ? 100 + 2 * ab : 64 + 36 * Math.pow(dry, 0.7);
     const noz = e > 1 ? 25 + 75 * ab : 8 + 30 * (1 - dry);
     const egt = 420 + 430 * Math.pow(dry, 1.6) + 40 * ab;
-    this.text(g, n > 1 ? 'ENG  F414-GE-400 ×2' : 'ENG  F110-GE-129', 14, 26, C.g, 26);
+    this.text(g, n > 1 ? (sp.id === 'f22' ? 'ENG  F119-PW-100 ×2' : 'ENG  F414-GE-400 ×2') : 'ENG  F110-GE-129', 14, 26, C.g, 26);
     // per engine: RPM bar, nozzle, temperature, fuel flow, thrust
     const colW = n > 1 ? 112 : 150;
     for (let k = 0; k < n; k++) {
@@ -371,7 +379,7 @@ export class CockpitDisplays {
 
   // -------------------------------------------------------------------- RWR
   rwr(g, W, H, ac, world, info, d, mini = false) {
-    const cx = W / 2, cy = mini ? H / 2 : H * 0.42, R = mini ? W * 0.44 : W * 0.34;
+    const cx = W / 2, cy = mini ? H / 2 : H * 0.42, R = mini ? Math.min(W, H) * 0.44 : W * 0.34;
     this.circle(g, cx, cy, R, C.gd, mini ? 2 : 2.5); this.circle(g, cx, cy, R * 0.5, C.gdd, 2);
     for (let k = 0; k < 12; k++) {
       const a = k * Math.PI / 6;

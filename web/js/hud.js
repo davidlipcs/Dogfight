@@ -1,7 +1,7 @@
 // HUD drawn on a 2D canvas over the WebGL view (port of dogfight/ui/hud.py + scopes.py).
 import { THREE, V, add, sub, mul, dot, len, norm, clamp, DEG, toLocal, xform, angleBetween, headingDeg } from './util.js';
 import { IR, ARH } from './specs.js';
-import { STT, ACM, OFF, SEARCH, gunLead, launchZone, timeToImpact, flyoutTime } from './weapons.js';
+import { STT, ACM, OFF, SEARCH, gunLead, launchZone, timeToImpact, flyoutTime, rcs, radarRange } from './weapons.js';
 
 const GREEN = 'rgba(107,255,133,0.95)', DIM = 'rgba(107,255,133,0.5)', AMBER = '#ffc840', RED = '#ff4d40',
   WHITE = 'rgba(245,245,245,0.95)', ENEMY = 'rgba(255,84,72,0.95)', CYAN = 'rgba(115,217,255,0.95)';
@@ -159,8 +159,11 @@ export class HUD {
       this.poly([[p[0] - 8 * u, p[1] - 20 * u], [p[0] + 8 * u, p[1] - 20 * u], [p[0], p[1] - 10 * u]], ENEMY);
       this.text((d / 1000).toFixed(1), p[0], p[1] - 30 * u, ENEMY, 11 * u + 2, 'center');
       // in radar lock range and not locked yet: tell how
-      if (ac.radar.mode !== STT && d < ac.spec.radar.lockRange && t === this.nearestEnemy) {
-        this.text('T = lock', p[0], p[1] + 2 * u, AMBER, 11 * u + 2, 'center');
+      // (a stealthy F-22 only shows up on radar much closer)
+      const lockable = Math.min(ac.spec.radar.lockRange, radarRange(ac.spec.radar.searchRange, rcs(t, ac.pos)));
+      if (ac.radar.mode !== STT && t === this.nearestEnemy) {
+        if (d < lockable) this.text('T = lock', p[0], p[1] + 2 * u, AMBER, 11 * u + 2, 'center');
+        else if (t.spec.rcsFront < 0.01 && d < 40000) this.text(`lopakodó - radar ~${(lockable / 1000).toFixed(0)} km-től`, p[0], p[1] + 2 * u, DIM, 10 * u + 2, 'center');
       }
     }
   }
@@ -356,7 +359,8 @@ export class HUD {
       [fm.gearPos > 0.98 ? 'GEAR DOWN' : fm.gearPos > 0.02 ? 'GEAR TRANSIT' : 'GEAR UP', fm.gearPos > 0.98 ? GREEN : fm.gearPos > 0.02 ? AMBER : DIM],
     ];
     if (ac.onGround) rows.push([`GS  ${String(Math.round(ac.speed * 3.6)).padStart(5)} km/h`, GREEN]);
-    if (ac.extreme) rows.push([`TVC EXTRÉM${ac.fm.alpha / DEG > 50 ? '  COBRA' : ''}`, AMBER]);
+    if (ac.extreme) rows.push([`${ac.spec.tvcAlways ? 'TVC' : 'TVC EXTRÉM'}${ac.fm.alpha / DEG > 50 ? '  COBRA' : ''}`, ac.spec.tvcAlways ? DIM : AMBER]);
+    if (ac.bayOpenAny > 0.05) rows.push(['FEGYVERTÉR NYITVA', AMBER]);
     if (ac.controls.brakes && ac.onGround) rows.push(['BRAKES', AMBER]);
     else if (ac.controls.airbrake) rows.push(['SPD BRK', AMBER]);
     rows.forEach(([t, c], i) => this.text(t, x, y + i * lh, c, fs));
@@ -512,7 +516,7 @@ export class HUD {
     this.text(hint, 20 * u, 42 * u, DIM, 11 * u + 2);
     // F-16: where the extreme mode is (it has no menu entry, only the key)
     const p = this.player;
-    if (p && p.alive && p.spec.tvc) {
+    if (p && p.alive && p.spec.tvc && !p.spec.tvcAlways) {
       this.g.font = `${11 * u + 2}px ${MONO}`;
       const x = 20 * u + this.g.measureText(hint + '   ').width;
       this.text(p.extreme ? 'Tab = EXTRÉM mód KI' : 'Tab = EXTRÉM mód (TVC, 9 G, Cobra)', x, 42 * u, AMBER, 11 * u + 2);

@@ -212,7 +212,24 @@ function lessons(spec) {
       status: (t) => t.missileStatus(),
     },
   ];
-  if (f16) {
+  if (spec.id === 'f22') {
+    list.push({
+      title: 'A Raptor: lopakodás és belső fegyvertér',
+      html: `<p><b>Lopakodó:</b> az F-22 radarkeresztmetszete apró, ezért az ellenség radarja csak kb. 10–15 km-ről
+        lát meg (téged akár 100 km-ről is). Az APG-77 radarod „csendes” (LPI): amíg csak keresel vele, az ellenfél
+        RWR-je nem jelez, csak amikor lockolsz.</p>
+        <p><b>Belső fegyvertér:</b> 6 AIM-120 a hasban, 1–1 AIM-9 az oldalsó terekben. ${k('Space')}-re előbb kinyílik
+        az ajtó, a kar kitolja a rakétát, az leold vagy lerepül a sínről, aztán minden visszacsukódik – kb. 0,7 s
+        késéssel indul a rakéta. Amíg az ajtó nyitva van, a géped jól látszik a radaron (a HUD-on: FEGYVERTÉR NYITVA).</p>
+        <p><b>Tolóerő-vektorálás:</b> mindig be van kapcsolva (nem kell Tab), 35°-os állásszög, a gép max 8 G-t húz.</p>
+        <p><b>Mikor:</b> lőj messziről, amíg nem látnak; rakéta után fordulj el, hogy ne maradj sokáig nyitott
+        ajtóval a közelükben. Külső nézetben (${k('V')}) megnézheted, ahogy a rakéta kijön a hasból.</p>`,
+      task: `Indíts egy rakétát (${k('Space')}), és nézd meg, ahogy kinyílik a fegyvertér.`,
+      setup: (t) => { t.flags.launched = false; },
+      check: (t) => t.player.stations.some((st) => st.launch && st.launch.t > 1.0) || t.flags.launched,
+      status: (t) => (t.player.bayOpenAny > 0.05 ? 'Fegyvertér nyitva!' : `Fegyver: ${t.player.selected || '-'}`),
+    });
+  } else if (f16) {
     list.push({
       title: 'Extrém mód: tolóerő-vektorálás és Cobra (F-16)',
       html: `<p>Csak az F-16-on van (mint a kísérleti F-16 MATV-n): a fúvócső ±20°-ot fordul.</p>

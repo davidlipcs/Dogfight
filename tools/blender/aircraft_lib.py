@@ -30,7 +30,7 @@ C_CHROME = (0.85, 0.86, 0.88)
 C_COCKPIT = (0.27, 0.29, 0.30)
 
 CTX = {"prefix": None, "tex": None, "uv": None, "collection": None, "root": None, "mats": {}}
-AIRCRAFT_COLLECTIONS = ("F16", "FA18")
+AIRCRAFT_COLLECTIONS = ("F16", "FA18", "F22")
 
 
 def begin(prefix, tex, uv, collection, **extra):
@@ -147,6 +147,48 @@ class Part:
                 faces.append(tuple(g))
                 cols.append(c)
         return verts[first], faces, cols, uvverts[first]
+
+
+def viewport_like_game(target=(0.0, 0.0, 0.0), distance=24.0):
+    """Saved .blend files open the way the game shows the jet: every 3D view in Material Preview (textures and
+    colours), aimed at the aircraft from the front left, with the helper empties hidden."""
+    from mathutils import Euler, Vector
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            for space in area.spaces:
+                if space.type != "VIEW_3D":
+                    continue
+                space.shading.type = "MATERIAL"
+                space.overlay.show_extras = False
+                space.overlay.show_relationship_lines = False
+                r3 = space.region_3d
+                r3.view_perspective = "PERSP"
+                r3.view_location = Vector(target)
+                r3.view_rotation = Euler((math.radians(68.0), 0.0, math.radians(140.0))).to_quaternion()
+                r3.view_distance = distance
+
+
+def fit_under_canopy(parts, shape, margin=0.07):
+    """Moves the parts (the ejection seat) straight down until every point is at least ``margin`` under the
+    canopy glass (or under the skin where there is no glass), so the head box never sticks out of the canopy
+    whatever the seat's tilt or size.  ``shape`` is the aircraft's shape module.  -> the drop in metres."""
+    def limit(x, y):
+        if shape.CANOPY_Y0 < y < shape.CANOPY_Y1 and abs(x) < float(shape.CANOPY_W(y)):
+            return shape.canopy_z(y, x)
+        return float(shape.body_top(y, abs(x))[0])
+    drop = 0.0
+    for p in parts:
+        for v in p.verts:
+            for x, y, z in v:
+                drop = max(drop, z - (limit(x, y) - margin))
+    if drop > 0.0:
+        d = np.array([0.0, 0.0, drop])
+        for p in parts:
+            p.verts = [v - d for v in p.verts]
+            p.uvverts = [v - d for v in p.uvverts]
+    return drop
 
 
 def unit(v):

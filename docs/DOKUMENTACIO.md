@@ -1,4 +1,4 @@
-# Dogfight – F-16C Viper és F/A-18E Super Hornet: teljes dokumentáció
+# Dogfight – F-16C Viper, F/A-18E Super Hornet és F-22A Raptor: teljes dokumentáció
 
 Ez a dokumentum mindent leír, ami a projektben elkészült: hol és hogyan lehet játszani, mit tud a játék,
 hogyan épülnek fel a gépek és a kód, hogyan kell karbantartani, és milyen lépésekben készült
@@ -85,9 +85,9 @@ felszállás, X = indulás a levegőben, B = új meccs a kifutóról. (Böngész
 
 | Beállítás | Lehetőségek |
 |---|---|
-| **Saját gép** | F-16C Viper · F/A-18E Super Hornet (a cím is vált: „Dogfight Viper” / „Dogfight Rhino”) |
+| **Saját gép** | F-16C Viper · F/A-18E Super Hornet · F-22A Raptor (a cím is vált: Viper / Rhino / Raptor) |
 | **Fegyverzet** | AIM-9M és AIM-120A darabszám (− / +), „Alap” gomb; alatta a függesztési pontok sora mutatja, melyik állomásra mi kerül, mellette a rakéták száma és tömege |
-| **Ellenfél** | F-16C · F/A-18E · Vegyes (hullámonként véletlenszerűen keverve) |
+| **Ellenfél** | F-16C · F/A-18E · F-22A · Vegyes (a három típus véletlenszerűen keverve) |
 | **Játékmód** | Arkád · Realisztikus |
 | **Nehézség** | Könnyű · Normál · Nehéz |
 | **Ellenség** | 1–4 ellenség az első hullámban |
@@ -196,8 +196,41 @@ fordítja az orrát (40°-os állásszög), de nehezebb és nagyobb az ellenáll
 lassabban gyorsul, és nagy állásszögnél gyorsan elveszti az energiáját – mint az igazi. A Viper több
 tolóerővel és 9 G-vel az energiaharcban erősebb.
 
+### F-22A Raptor (`F22A`)
+
+| | F-22A |
+|---|---|
+| Hajtómű | 2× F119-PW-100: 2× 116 / 2× 156 kN, fogyasztás 4,9 / 16,8 kg/s |
+| Üres tömeg / belső üzemanyag | 19 700 / 8 200 kg |
+| Szárnyfelület / fesztáv / hossz | 78,0 m² / 13,56 m / 18,92 m |
+| cL,α / cL,max / cD0 / k | 3,6 / 1,9 (TVC-vel 2,1) / 0,019 / 0,16; kis hullám-ellenállás |
+| Max G / AoA / orsózás | **8 G** (a játékban így kérték) / 35° (teljes kézi húzásnál 60°) / 260°/s |
+| Tolóerő/tömeg | 1,28 |
+| Végsebesség tengerszinten / 11 km-en | M1,55 / M2,30; utánégető nélkül M1,09 / **M1,45** (supercruise) |
+| Emelkedés tengerszinten | ~370 m/s |
+| Radar | AN/APG-77 AESA: 120 km keresés, 100 km lock, 300°/s pásztázás, 0,3 s lock, LPI |
+| RCS szemből / oldalról / nyitott ajtónál | 0,0006 / 0,006 / 1,5 m² |
+| Hő | a kiáramlás hője 65% (hidegebb, takart fúvócső) |
+| Gépágyú | M61A2, 480 lövés (a jobb szárnytőben) |
+| Fegyverzet | 1 és 8: AIM-9M (oldalsó terek) · 2–7: AIM-120A (hasi tér) – legfeljebb 8 rakéta, ellenállás nélkül |
+
+**Észlelési távolság** (`radarRange`, a radar keresési hatótávja × (RCS / 5)^0,25 – az alsó korlát ki lett véve):
+egy F-16 radarja egy F-22-t ~8 km-ről lát (F-16-ot 55 km-ről), a Hornet ~9 km-ről, egy F-22 ~13 km-ről. A HUD a
+legközelebbi lopakodó ellenség alá kiírja: „lopakodó – radar ~8 km-től”.
+
+**Belső fegyvertér és kilövés** (`Aircraft.fireMissile` / `updateLaunches`, `specs.F22A.launch`): Space-re az állomás
+`launch` állapotba kerül: AIM-120: ajtó nyit 0–0,30 s, kar ki 0,30–0,65 s, leoldás 0,70 s (8 m/s-mal lefelé),
+kar vissza 0,80–1,15 s, ajtó csuk 1,15–1,45 s; AIM-9: ajtó 0–0,25, sín ki 0,25–0,55, a rakéta 0,75 s-kor
+lerepül a sínről, vissza 0,85–1,15, csuk 1,15–1,40 s. Leoldáskor a hőkövető a kereső aktuális célját, a radaros
+a radar lockját kapja. `bayOpen(group)` és `rackOut(station)` adja a megjelenítésnek az ajtók és a karok
+állását; nyitott ajtónál az RCS felugrik. A HUD-on „FEGYVERTÉR NYITVA”.
+
+**Megjelenítés** (`Models.setBays`): a modell `bay_*` ajtói (`bay` fok, `group`), `rack_N` karjai (`rack` fok vagy
+`slide_x/y/z`) és `store_N` pontjai alapján; a rakéták a modell glTF-keretében lógnak, a trapéz-kar végén
+vízszintesen maradnak. A fúvócső-lapok (`vec_L/R`) a bottal együtt ±20°-ot térnek ki.
+
 **Ellenséges változatok** (`BANDITS`): ugyanazok a gépek gyengébb sárkánnyal – F-16C: 7 G, 190°/s, 20° AoA;
-F/A-18E: 6,3 G, 150°/s, 28° AoA.
+F/A-18E: 6,3 G, 150°/s, 28° AoA; F-22A: 6,8 G, 190°/s, tolóerő-vektorálás nélkül (2× AIM-9 + 4× AIM-120).
 
 **F-16 EXTRÉM mód** (`F16C.tvc`, Tab): tolóerő-vektorálás, mint a kísérleti F-16 MATV / VISTA-n. Bekapcsolva:
 
@@ -377,6 +410,7 @@ Mindkét gép **Blender-szkriptből** épül, kézi modellezés nélkül; a szkr
 |---|---|
 | `tools/blender/aircraft_lib.py` | közös eszközök: mesh-darabok (`Part`), geometria (cső, doboz, szárnyprofil-felület, kerék, futóakna, futóajtó), anyagok (festés textúrával, matt / fém színnel, üveg, HUD-üveg, kijelző, lámpák), objektum-építés UV-val és csuklóval, renderképek, GLB-export |
 | `build_f16.py`, `f16_shape.py`, `f16_paint.py` | F-16C: alak-táblázatok, építés, festés (USAF háromszínű szürke, panelvonalak) |
+| `build_f22.py`, `f22_shape.py`, `f22_paint.py` | F-22A: gyémánt szárny, chine-orr, ferde szívócsatornák, döntött kettős vezérsík, lapos vektoros fúvócsövek (`vec_L/R`), buborék-kabintető, 6 kijelzős kabin (`screen_pmfd`, `screen_mfd_l/r/c`, `screen_ufd_l/r`), három fegyvertér ajtókkal (`bay_main_L/R`, `bay_side_L/R`) és kilövő karokkal (`rack_1..8`), festés (kétszínű szürke, fűrészfogas ajtóélek, FF farokkód); `OPTS.pose` = előnézeti póz (futó be, ajtók csukva, karok ki) |
 | `build_fa18.py`, `fa18_shape.py`, `fa18_paint.py` | F/A-18E: keresztmetszetek (törzs + gondolák + LEX + szárny sima összeolvasztással), szívócsatornák, kettős döntött vezérsík, kabin, futómű, festés (US Navy kétszínű szürke, NAVY / NG / 200 jelzések, sárga-fekete farokcsík) |
 
 **Kimenet:** `models/<gép>/<gép>.glb` (teljes felbontású textúrák), `web/assets/<gép>.glb` (kisebb
@@ -406,7 +440,13 @@ exec(compile(open(path, encoding="utf-8").read(), path, "exec"),
 
 `OPTS`: `build` (modell építése), `textures` (textúrák újrafestése), `export` (GLB-k kiírása), `save`
 (`.blend` mentése), `previews` (mappa a renderképeknek), `views` (melyik nézetek). Egy jelenetben egyszerre
-egy gép van: az építés törli a korábbi `F16` / `FA18` gyűjteményt.
+egy gép van: az építés törli a korábbi `F16` / `FA18` / `F22` gyűjteményt.
+
+Futtatható ablak nélkül is: `blender.exe -b --factory-startup --python-expr "<a fenti exec>"`. A mentett
+`.blend` fájlok úgy nyílnak meg, ahogy a játékban látszik a gép (`viewport_like_game`: Material Preview,
+festéssel, a gépre irányított nézet). **Az ülés sosem lóg ki a kabintetőből:** `fit_under_canopy` minden
+gépnél addig süllyeszti az ülést, amíg minden pontja legalább 7 cm-rel a tető alatt van (F-22: 9 cm,
+F/A-18: 19 cm lett lejjebb; az F-22 kabintetője közben valódi buborékformát kapott).
 
 ---
 
@@ -505,7 +545,8 @@ játék saját függvényeivel mértük és próbáltuk ki (lásd 11.); automata
 | 23 | Kabin: több infó olvashatóan (az alapok maradnak); F/A-18E Super Hornet Blenderben saját kabinnal; valós aerodinamika és tolóerő mindkettőnél; gép- és ellenfélválasztás, fegyverzet; a harc a térkép túloldalán | `aircraft_lib.py` + `build_fa18.py` (Super Hornet GLB), élő kabinkijelzők (`mfd.js`), N = kijelzők nézése, lencseeltolás kabinban; `FA18E` adatok, rakéta-ellenállás felület szerint, gépenkénti futómagasság; menü: saját gép, ellenfél, fegyverzet-szerkesztő; harci zóna és biztonsági kör | `92dc6ab` |
 | 24 | A kabin-botkormány ne álljon vissza magától középre | a bot ott marad, ahová teszed; 7%-os holtsáv, zöld pont a semlegesben | `4a9d873` |
 | 25 | Dokumentálj mindent | a dokumentáció és a README teljes átírása a jelenlegi állapotra | `ad1f7ca` |
-| 26 | Oktatás, ami tényleg elmagyaráz mindent (csak aki akarja); ne lőjenek rám 15 km-ről, amíg én nem tudok lockolni; az F-16 legyen jobb az F-18-nál, extrém mód tolóerő-vektorálással egy gombra, 9 G, Cobra rakéta ellen | `tutorial.js` (11 lecke, céldrónok, rakéta-gyakorlat, Oktatás gomb); AI lőtávolság-plafon (normál 8 / 4,5 km), „T = lock” jelzés; F-16 extrém mód (Tab): TVC, 9 G instruktor, cL,max 2,4, 80° Cobra, `Missile.checkCobra`; enyhébb G-sötétülés | – |
+| 26 | Oktatás, ami tényleg elmagyaráz mindent (csak aki akarja); ne lőjenek rám 15 km-ről, amíg én nem tudok lockolni; az F-16 legyen jobb az F-18-nál, extrém mód tolóerő-vektorálással egy gombra, 9 G, Cobra rakéta ellen | `tutorial.js` (11 lecke, céldrónok, rakéta-gyakorlat, Oktatás gomb); AI lőtávolság-plafon (normál 8 / 4,5 km), „T = lock” jelzés; F-16 extrém mód (Tab): TVC, 9 G instruktor, cL,max 2,4, 80° Cobra, `Missile.checkCobra`; enyhébb G-sötétülés | `d77a1ca` |
+| 27 | F-22 Raptor: 8 rakéta belül, nehezen lockolható (lopakodó), hasból kijövő rakéta szép animációval, jobb radar, max 8 G; a fejtámla ne lógjon ki egyik gépnél se; Blenderben festve mutasd | `build_f22.py` + `f22_shape.py` + `f22_paint.py`, `F22A` (2× F119, 78 m², APG-77 LPI, RCS 0,0006, 8 G, TVC mindig), belső fegyvertér kilövési sorrenddel és animációval, RCS-alsó korlát törölve, HUD „lopakodó” jelzés, F-22 oktatási lecke, menü; `fit_under_canopy` mindhárom gépre; `.blend` Material Preview nézettel, háttérben futtatható Blender-építés | – |
 
 ---
 

@@ -61,7 +61,8 @@ function puffTexture(seed = 3) {
 // screen_* objects); the F-16 pilot's own view still uses the older model built from code (assets/f16.json)
 // with its detailed instrument panel.
 const MOVING = ['lef_L', 'lef_R', 'flap_L', 'flap_R', 'ail_L', 'ail_R', 'stab_L', 'stab_R', 'rudder', 'rudder_L', 'rudder_R',
-  'sb_up_L', 'sb_up_R', 'sb_lo_L', 'sb_lo_R'];
+  'sb_up_L', 'sb_up_R', 'sb_lo_L', 'sb_lo_R', 'vec_L', 'vec_R'];
+const ROT = new THREE.Quaternion(), V3 = new THREE.Vector3();
 const VAPOR_STEP = { f16: [0.27, -1.0, -0.03], fa18: [0.45, -1.4, -0.05] };   // second LEX / strake vapour point
 const LEGACY_SCREENS = ['mfd_l', 'mfd_r', 'ded', 'rwr'];                   // the quads of f16.json's screens, in order
 const MISSILE_MODELS = { 'AIM-9M': 'aim9m', 'AIM-120A': 'aim120c' };
@@ -134,8 +135,9 @@ export class Models {
       strobes: pick(/^ref_strobe/), gun: ref.ref_gun,
       // the pilot's eye: the old F-16 cockpit model has its own; the Hornet's is a point of its model
       cockpit: legacy ? 'legacy' : 'self', eye: legacy ? V(...this.data.eye) : ref.ref_eye,
-      panel: legacy ? V(0, 3.28, 0.63) : V(0, 5.37, 1.0 + modelZ),          // the middle of the displays
-      panelFov: legacy ? 30 : 40,
+      // the middle of the displays (N) and the field of view that fits them
+      panel: legacy ? V(0, 3.28, 0.63) : spec.model === 'f22' ? V(0, 4.98, 0.82 + modelZ) : V(0, 5.37, 1.0 + modelZ),
+      panelFov: legacy ? 30 : spec.model === 'f22' ? 42 : 40,
     };
   }
   // glTF material -> three.js: painted skin (textures), glass, lamps (unlit) or vertex coloured details
@@ -160,13 +162,23 @@ export class Models {
   // A copy of a .glb scene (geometry and materials are shared).  Moving parts are registered in `parts`:
   // each one hangs on its hinge and turns about its local X axis.  Gear legs and doors (extras.retract /
   // extras.door = degrees about local X that fold them away) go to `gear`.
-  instance(key, parts, gear) {
+  // F-22 internal carriage (in `bays`): doors (extras.bay = degrees that close them, extras.group), launchers
+  // rack_N (extras.rack = degrees that swing them down, or slide_x/y/z = metres they slide out) and the
+  // missiles' places store_N.
+  instance(key, parts, gear, bays) {
     const mats = this.glbMat[key];
     const build = (n) => {
       const o = new THREE.Object3D();
       o.name = n.name; o.position.fromArray(n.position); o.quaternion.fromArray(n.quaternion); o.scale.fromArray(n.scale);
       const fold = n.extras.retract ?? n.extras.door;
       if (gear && fold !== undefined) gear.push({ o, rest: o.quaternion.clone(), angle: fold * DEG, door: n.extras.door !== undefined });
+      if (bays && n.extras.bay !== undefined) bays.doors.push({ o, rest: o.quaternion.clone(), angle: n.extras.bay * DEG, group: n.extras.group });
+      if (bays && /^rack_/.test(n.name)) {
+        bays.racks[Number(n.name.slice(5))] = { o, rest: o.quaternion.clone(), restPos: o.position.clone(), angle: (n.extras.rack || 0) * DEG,
+          // glTF frame: x right, y up, z backwards
+          slide: n.extras.slide_x !== undefined ? new THREE.Vector3(n.extras.slide_x, n.extras.slide_z, -n.extras.slide_y) : null };
+      }
+      if (bays && /^store_/.test(n.name)) bays.stores[Number(n.name.slice(6))] = new THREE.Vector3().fromArray(n.position);
       if (n.prims.length) {
         const surf = new THREE.Group();
         for (const p of n.prims) {
@@ -201,8 +213,9 @@ export class Models {
     return t;
   }
   aircraft(key = 'f16') {
-    const root = new THREE.Group(), parts = {}, gear = [];
-    const model = this.instance(key, parts, gear);
+    const root = new THREE.Group(), parts = {}, gear = [], bays = { doors: [], racks: {}, stores: {} };
+    const model = this.instance(key, parts, gear, bays);
+    root.userData.bays = bays;
     model.position.z = this.types[key].modelZ;
     root.userData.model = model;
     root.add(model);
@@ -224,6 +237,37 @@ export class Models {
     }
   }
   missile(key) { const g = new THREE.Group(); g.add(this.instance(MISSILE_MODELS[key])); return g; }
+  // a missile for the glTF frame of a model (inside a weapons bay): no axis swap
+  bayMissile(key) { const m = this.instance(MISSILE_MODELS[key]); m.rotation.x = 0; return m; }
+  // F-22: doors open as far as the jet says, launchers out, the missiles riding on them
+  setBays(root, ac) {
+    const b = root.userData.bays, model = root.userData.model;
+    if (!b || !b.doors.length) return;
+    for (const d of b.doors) {
+      const open = ac.bayOpen(d.group);
+      d.o.quaternion.copy(d.rest).multiply(ROT.setFromAxisAngle(X_AXIS, d.angle * (1 - open)));
+    }
+    for (const st of ac.stations) {
+      const r = b.racks[st.number], m = b.missiles && b.missiles[st.number];
+      if (!r) continue;
+      const out = ac.rackOut(st);
+      if (r.slide) {
+        r.o.position.copy(r.restPos).addScaledVector(r.slide, out);
+        if (m) m.position.copy(b.stores[st.number]).addScaledVector(r.slide, out);
+      } else {
+        r.o.quaternion.copy(r.rest).multiply(ROT.setFromAxisAngle(X_AXIS, r.angle * out));
+        // the trapeze keeps the missile level: its top rides on the end of the links
+        if (m) {
+          if (!r.attach) {
+            const top = b.stores[st.number].clone().add(V3.set(0, 0.12, 0));
+            r.attach = top.sub(r.restPos).applyQuaternion(r.rest.clone().invert());
+          }
+          m.position.copy(r.attach).applyQuaternion(r.o.quaternion).add(r.restPos).add(V3.set(0, -0.12, 0));
+        }
+      }
+      if (m) m.visible = st.loaded;
+    }
+  }
   cockpitAircraft(livery) {
     const root = new THREE.Group();
     const add_ = (geo, mat) => { const m = new THREE.Mesh(geo, mat); root.add(m); return m; };
@@ -308,6 +352,8 @@ export function animateSurfaces(parts, dt, c, alphaDeg, flaps, brake, onGround) 
   };
   const stab = -c.pitch * 16;
   move('stab_R', stab - c.roll * 5); move('stab_L', stab + c.roll * 5);
+  // F-22 two dimensional nozzles: both flaps turn with the pitch stick (nose up = exhaust up)
+  move('vec_R', -c.pitch * 20); move('vec_L', -c.pitch * 20);
   if (parts.ail_L) {
     // Super Hornet: ailerons for roll, trailing edge flaps scheduled with AoA (and differential at low
     // speed), LEFs down to 34 degrees, two rudders.  The "speed brake" is the spoilers on the LEX plus the
@@ -617,9 +663,9 @@ export class SceneView {
       const tnk = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 9, 18).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xb4b4a8 }));
       tnk.position.set(ax1 + 60, ay0 + 40 + k * 22, 4.5); g.add(tnk);
     }
-    // parked F-16s and Super Hornets
-    for (let k = 0; k < 4; k++) {
-      const key = k < 2 ? 'f16' : 'fa18', ac = this.models.aircraft(key);
+    // parked F-16s, Super Hornets and a Raptor
+    for (let k = 0; k < 5; k++) {
+      const key = ['f16', 'f16', 'fa18', 'fa18', 'f22'][k], ac = this.models.aircraft(key);
       ac.position.set(tx + TAXIWAY_WIDTH + 45, ay0 + 90 + k * 48, this.models.types[key].gearHeight);
       ac.rotation.z = Math.PI / 2;
       g.add(ac);
@@ -660,10 +706,20 @@ export class SceneView {
     const type = this.models.types[ac.spec.model] || this.models.types.f16;
     const root = new THREE.Group(), outside = this.models.aircraft(type.key);
     root.add(outside);
-    const stores = new Map();
-    for (const st of ac.stations) {
-      const m = this.models.missile(st.key);
-      m.position.copy(type.ref[`store_${st.number}`] || st.mount); outside.add(m); stores.set(st.number, m);
+    const stores = new Map(), bays = outside.userData.bays;
+    if (type.spec.bays) {
+      // F-22: the missiles hang inside the bays (glTF frame of the model) and ride out on their launchers
+      bays.missiles = {};
+      for (const st of ac.stations) {
+        const m = this.models.bayMissile(st.key);
+        m.position.copy(bays.stores[st.number]); outside.userData.model.add(m);
+        bays.missiles[st.number] = m; stores.set(st.number, m);
+      }
+    } else {
+      for (const st of ac.stations) {
+        const m = this.models.missile(st.key);
+        m.position.copy(type.ref[`store_${st.number}`] || st.mount); outside.add(m); stores.set(st.number, m);
+      }
     }
     const flames = type.nozzles.map((n) => {
       const flame = new THREE.Group();
@@ -719,10 +775,11 @@ export class SceneView {
       v.root.position.copy(ac.pos); v.root.quaternion.copy(ac.quat);
       for (const st of ac.stations) {
         const m = v.stores.get(st.number), mi = v.insideStores && v.insideStores.get(st.number);
-        if (m) m.visible = st.loaded;
+        if (m && !v.type.spec.bays) m.visible = st.loaded;
         if (mi) mi.visible = st.loaded;
       }
       this.models.setGear(v.outside, ac.fm.gearPos);
+      if (v.type.spec.bays) this.models.setBays(v.outside, ac);
       const e = ac.engineSetting;
       v.flames.forEach((flame, k) => {
         if (ac.alive && e > 1) {

@@ -1,4 +1,4 @@
-# Dogfight – F-16C és F/A-18E légiharc (War Thunder stílusban)
+# Dogfight – F-16C, F/A-18E és F-22A légiharc (War Thunder stílusban)
 
 3D légiharc-játék **Pythonban**, a [Panda3D](https://www.panda3d.org/) motorral – és ugyanez a böngészőben is játszható (lásd lent).
 
@@ -56,6 +56,31 @@ Ezzel az F-16 a közelharcban erősebb a Super Hornetnél, akkor is, ha a Hornet
 AIM-9-cel 4,5 km-ről (nehéz: 10 / 5,5 km, könnyű: csak AIM-9, 3,5 km) –, te pedig a radarral sokkal messzebbről
 lockolhatsz (T, F-16: 55 km, Hornet: 70 km). Ha egy ellenség lock-távolságon belül van, a jelölője alatt
 megjelenik a „T = lock” felirat.
+
+## Harmadik gép: F-22A Raptor
+
+![F-22A Raptor a játékban](docs/f22_flight.jpg)
+
+Blenderben, szkriptből ([tools/blender/build_f22.py](tools/blender/build_f22.py), `f22_shape.py`, `f22_paint.py`):
+gyémánt alakú szárny (42° / −17°), éles élű (chine) orr, ferde szívócsatornák, 28°-ban döntött kettős vezérsík,
+lapos, **mozgó tolóerő-vektoros fúvócsövek**, aranyszínű egyrészes buborék-kabintető, kétszínű szürke „Have Glass”
+festés fűrészfogas ajtóélekkel, 6 kijelzős üvegkabin. Menüben választható saját gépnek és ellenfélnek is.
+
+* **8 rakéta, mind belül:** 6 AIM-120 a hasi fegyvertérben, 1–1 AIM-9 az oldalsó terekben (a fegyverzet a
+  menüben állítható). **Kilövéskor animáció:** kinyílik az ajtó, a kar kitolja a rakétát (az AIM-120-at
+  trapéz-kar lefelé, vízszintesen tartva; az AIM-9-et a sín kifelé-lefelé), a rakéta leold, a kar visszahúzódik,
+  az ajtó becsukódik – kb. 0,7 s késéssel indul a rakéta.
+* **Lopakodó:** apró radarkeresztmetszet, ezért sokkal nehezebb belockolni: egy F-16 radarja kb. 8 km-ről látja
+  (egy másik F-16-ot 55 km-ről). Nyitott fegyvertér-ajtónál egy pillanatra jól látszik a radaron. Hidegebb
+  kiáramlás: a hőkövetők is nehezebben fogják.
+* **Jobb radar:** AN/APG-77 AESA – 120 km keresés, 100 km lock, gyorsabb pásztázás és lock, és „csendes” (LPI):
+  az ellenfél RWR-je csak akkor jelez, ha lockolsz.
+* **2 × F119:** 312 kN, tolóerő/tömeg 1,28, utánégető nélkül is szuperszonikus (11 km-en M1,45), max M2,3;
+  a tolóerő-vektorálás mindig be van kapcsolva; a gép **legfeljebb 8 G-t** húz.
+
+| | | |
+|---|---|---|
+| ![AIM-120 a trapéz-karon](docs/f22_aim120_launch.jpg) | ![AIM-9 az oldalsó térből](docs/f22_aim9_launch.jpg) | ![F-22 kabin](docs/f22_cockpit_displays.jpg) |
 
 ## Második gép: F/A-18E Super Hornet
 

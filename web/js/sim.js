@@ -1,7 +1,7 @@
 // Aircraft + World (port of dogfight/sim/aircraft.py and world.py).
 import { V, add, sub, mul, len, copy, norm, qheading, xform, rng, DEG } from './util.js';
 import { FlightModel, Controls } from './flight.js';
-import { AIM9M, IR, MISSILES } from './specs.js';
+import { AIM9M, IR, ARH, MISSILES } from './specs.js';
 import { IRSeeker, Radar, RWR, Missile, Gun, Flare, Chaff, STT, updateBullets } from './weapons.js';
 
 const STORE_DRAG_AREA = 0.031;                     // m^2 of drag area per missile with its launcher
@@ -29,6 +29,7 @@ export class Aircraft {
     this.hp = spec.hp; this.alive = true; this.burning = false; this.crashed = false; this.deathTime = null;
     this.kills = 0; this.lastAttacker = null; this.lastHitTime = -1e9; this.pilot = null;
     this.lockAssist = !!opts.lockAssist; this.irAutoHold = 0;
+    this.fm.extreme = !!spec.tvcAlways;              // the F-22's thrust vectoring is always on
     this.rearm();
   }
   get pos() { return this.fm.pos; }
@@ -45,7 +46,7 @@ export class Aircraft {
     // a loadout is a name from spec.loadouts or a {station: weapon} table (the menu's loadout editor)
     const layout = typeof this.loadout === 'object' ? this.loadout : this.spec.loadouts[this.loadout] || this.spec.loadouts.default;
     this.stations = Object.keys(layout).map(Number).sort((a, b) => a - b)
-      .map((n) => ({ number: n, key: layout[n], spec: this.missileSpec(layout[n]), mount: V(...this.spec.stations[n]), loaded: true }));
+      .map((n) => ({ number: n, key: layout[n], spec: this.missileSpec(layout[n]), mount: V(...this.spec.stations[n]), loaded: true, launch: null }));
     this.gun.reload();
     this.flares = this.spec.cm.flares; this.chaff = this.spec.cm.chaff;
     if (!this.selected || this.missileCount(this.selected) === 0) this.selected = this.stations[0]?.key ?? null;
@@ -54,9 +55,9 @@ export class Aircraft {
   updateStores() {
     const loaded = this.stations.filter((s) => s.loaded);
     this.fm.storeMass = loaded.reduce((m, s) => m + s.spec.mass, 0);
-    this.fm.storeCd = STORE_DRAG_AREA * loaded.length / this.spec.wingArea;
+    this.fm.storeCd = this.spec.bays ? 0 : STORE_DRAG_AREA * loaded.length / this.spec.wingArea;     // F-22: all inside
   }
-  missileCount(key) { return this.stations.filter((s) => s.loaded && s.key === key).length; }
+  missileCount(key) { return this.stations.filter((s) => s.loaded && !s.launch && s.key === key).length; }
   weaponKeys() { return [...new Set(this.stations.map((s) => s.key))]; }
   missileSpec(key) { return this.missiles[key] || MISSILES[key]; }
   get selectedSpec() { return this.selected ? this.missileSpec(this.selected) : null; }
@@ -67,7 +68,7 @@ export class Aircraft {
   toggleGear() { return this.fm.setGear(!this.fm.gearDown); }
   // F-16 extreme mode (thrust vectoring); false when the jet has none
   toggleExtreme() {
-    if (!this.spec.tvc) return false;
+    if (!this.spec.tvc || this.spec.tvcAlways) return false;
     this.fm.extreme = !this.fm.extreme;
     return true;
   }
@@ -82,6 +83,7 @@ export class Aircraft {
       if (ev === 'tailstrike') { world.emit('message', { to: this, text: 'FAROKÜTÉS!', level: 'bad' }); this.takeDamage(30, null, 'tailstrike', world); }
       else if (ev === 'touchdown' && this.fm.sinkRate > 3) world.emit('message', { to: this, text: 'KEMÉNY LANDOLÁS', level: 'warn' });
       this.gun.update(dt, this, this.trigger, world);
+      if (this.spec.bays) this.updateLaunches(dt, world);
       this.cmTimer -= dt;
       if (this.cmHold) this.dispense(world);
     } else {
@@ -133,24 +135,76 @@ export class Aircraft {
   fireMissile(world) {
     if (!this.alive || !this.selected) return null;
     const byNum = new Map(this.stations.map((s) => [s.number, s]));
-    const st = this.spec.firingOrder.map((n) => byNum.get(n)).find((s) => s && s.loaded && s.key === this.selected);
+    const st = this.spec.firingOrder.map((n) => byNum.get(n)).find((s) => s && s.loaded && !s.launch && s.key === this.selected);
     if (!st) { world.emit('message', { to: this, text: `NINCS TÖBB ${this.selected}`, level: 'warn' }); return null; }
-    const sp = st.spec, q = this.quat;
-    const pos = add(this.pos, xform(q, st.mount));
-    const vel = sub(this.vel, mul(this.fm.up, Math.abs(st.mount.x) > 4.5 ? 0 : 4));
+    const sp = st.spec;
     let target, axis = null;
-    if (sp.guidance === IR) { target = this.irSeeker.target; axis = this.irSeeker.axis; }
+    if (sp.guidance === IR) { target = this.irSeeker.target; axis = this.irSeeker.axis ? this.irSeeker.axis.clone() : null; }
     else target = this.radar.mode === STT ? this.radar.locked : null;
-    const m = new Missile(sp, this, pos, vel, this.forward, this.rnd, target, axis);
-    st.loaded = false; this.updateStores();
+    if (this.spec.bays) {
+      // internal bay: the door opens and the launcher swings the missile out first (updateLaunches)
+      st.launch = { t: 0, target, axis, released: false, timing: this.spec.launch[st.key] };
+      if (sp.guidance === IR) this.irSeeker.reset();
+      this.afterLaunch();
+      return { spec: sp, pending: true };
+    }
+    const m = this.release(st, target, axis, world, Math.abs(st.mount.x) > 4.5 ? 0 : 4);
     if (sp.guidance === IR) this.irSeeker.reset();
+    this.afterLaunch();
+    return m;
+  }
+  release(st, target, axis, world, eject) {
+    const q = this.quat;
+    const pos = add(this.pos, xform(q, st.mount));
+    const vel = sub(this.vel, mul(this.fm.up, eject));
+    const m = new Missile(st.spec, this, pos, vel, this.forward, this.rnd, target, axis);
+    st.loaded = false; this.updateStores();
     world.addMissile(m);
+    return m;
+  }
+  afterLaunch() {
     if (this.missileCount(this.selected) === 0) {
       const other = this.weaponKeys().find((k) => this.missileCount(k) > 0);
       if (other) this.select(other);
     }
-    return m;
   }
+  // F-22 launch sequences: door open -> launcher out -> release (the missile drops / fires off the rail) ->
+  // launcher back -> door closed
+  updateLaunches(dt, world) {
+    for (const st of this.stations) {
+      const L = st.launch;
+      if (!L) continue;
+      L.t += dt;
+      const T = L.timing;
+      if (!L.released && L.t >= T.release) {
+        L.released = true;
+        let target = L.target;
+        if (st.spec.guidance === IR && this.irSeeker.locked) target = this.irSeeker.target;
+        if (st.spec.guidance === ARH) target = this.radar.mode === STT ? this.radar.locked : L.target;
+        this.release(st, target && target.alive !== false ? target : null, L.axis, world, T.eject);
+      }
+      if (L.t >= T.close[1]) st.launch = null;
+    }
+  }
+  // 0..1: how far the launcher of station st is out; how open the doors of a bay group are
+  rackOut(st) {
+    const L = st.launch;
+    if (!L) return 0;
+    const T = L.timing, ramp = (a, b) => Math.min(1, Math.max(0, (L.t - a) / (b - a)));
+    return L.t < T.back[0] ? ramp(T.out[0], T.out[1]) : 1 - ramp(T.back[0], T.back[1]);
+  }
+  bayOpen(group) {
+    let open = 0;
+    for (const st of this.stations) {
+      const L = st.launch;
+      if (!L || this.spec.bays[st.number] !== group) continue;
+      const T = L.timing;
+      const o = L.t < T.close[0] ? Math.min(1, L.t / T.open) : 1 - Math.min(1, (L.t - T.close[0]) / (T.close[1] - T.close[0]));
+      open = Math.max(open, o);
+    }
+    return open;
+  }
+  get bayOpenAny() { return this.spec.bays ? Math.max(this.bayOpen('main'), this.bayOpen('side_L'), this.bayOpen('side_R')) : 0; }
 
   dispense(world) {
     if (this.cmTimer > 0 || (this.flares <= 0 && this.chaff <= 0)) return;

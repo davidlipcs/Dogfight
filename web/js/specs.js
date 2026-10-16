@@ -71,6 +71,14 @@ export const APG79 = {
   notchSpeed: 20, trackMemory: 0.8, rwrSymbol: '18',
 };
 
+// The Raptor's AESA: longest range, fastest scan and lock, and low probability of intercept: an RWR only
+// notices it when it locks on (lpi), not while it searches
+export const APG77 = {
+  name: 'AN/APG-77 AESA', searchRange: 120000, scanAz: 60, scanEl: 15, scanRate: 300, sttGimbal: 60,
+  lockRange: 100000, acmRange: 20000, acmAz: 7, acmElLow: -8, acmElHigh: 45, lockTime: 0.3,
+  notchSpeed: 15, trackMemory: 1.0, rwrSymbol: '22', lpi: true,
+};
+
 export const ALE47 = { flares: 30, chaff: 30, flareIntensity: 3.0, flareLife: 4.0, chaffLife: 5.0, interval: 0.35 };
 
 // Station numbers follow the real aircraft (1 = left wingtip).  `pylons`: what each station can carry;
@@ -141,12 +149,57 @@ export const FA18E = {
   firingOrder: [11, 1, 10, 2, 9, 3, 8, 4, 7, 5],
 };
 
-export const AIRCRAFT = { f16: F16C, fa18: FA18E };
+// F-22A: stealth (tiny radar cross section, colder exhaust), everything carried inside: 6 AIM-120 in the main
+// bay, one AIM-9 in each side bay.  Firing opens the doors and swings the missile out on its launcher first
+// (about 0.7 s), and while a door is open the jet is easy to see on radar.  2 x F119: supercruise, high thrust;
+// two dimensional thrust vectoring is always on.  The game caps it at 8 G.
+export const F22A = {
+  id: 'f22', model: 'f22', name: 'F-22A Raptor', short: 'F-22A', callsign: 'Raptor',
+  emptyMass: 19700, internalFuel: 8200, wingArea: 78.04, wingSpan: 13.56, length: 18.92,
+  // 2 x F119-PW-100: ~116 kN military, ~156 kN with afterburner each; TSFC ~0.75 / ~1.9 lb/lbf/h
+  engines: 2, thrustDry: 232000, thrustAb: 312000, fuelFlowDry: 4.9, fuelFlowAb: 16.8,
+  clAlpha: 3.6, clMax: 1.9, alphaStall: 40, alphaLimit: 35, cd0: 0.0190, kInduced: 0.16, pylonCd: 0,
+  waveDrag: [[0, 0], [0.86, 0], [0.94, 0.004], [1.0, 0.011], [1.06, 0.016], [1.15, 0.017], [1.4, 0.016], [1.8, 0.014], [2.2, 0.013]],
+  gMax: 8, gMin: -3, rollRate: 250, yawBeta: 8, airbrakeCd: 0.05, hp: 120,
+  rcsFront: 0.0006, rcsSide: 0.006, rcsBay: 1.5, irScale: 0.65,
+  gearHeight: 1.98, tailStrike: 12, rotateIas: 66,
+  hitboxes: [
+    [[0, 0.2, -0.1], [1.6, 9.0, 0.8]], [[0, -1.5, 0.05], [6.8, 2.6, 0.3]],
+    [[0, -7.4, -0.2], [4.4, 1.4, 0.3]], [[0, -6.3, 1.3], [2.2, 1.6, 1.2]],
+  ],
+  gun: { ...M61A2, ammo: 480 }, gunPos: [1.20, 2.35, 0.55], radar: APG77, cm: ALE47,
+  // launch points: where the missile leaves its launcher (trapeze down, rail out); the missiles sit inside the
+  // bays until then (render.js reads those places from the model)
+  stations: {
+    1: [-1.33, 1.15, -1.24], 2: [-0.66, -0.01, -1.40], 3: [-0.43, 0.39, -1.40], 4: [-0.20, -0.01, -1.40],
+    5: [0.20, -0.01, -1.40], 6: [0.43, 0.39, -1.40], 7: [0.66, -0.01, -1.40], 8: [1.33, 1.15, -1.24],
+  },
+  pylons: { 1: ['AIM-9M'], 8: ['AIM-9M'], 2: ['AIM-120A'], 3: ['AIM-120A'], 4: ['AIM-120A'], 5: ['AIM-120A'], 6: ['AIM-120A'], 7: ['AIM-120A'] },
+  prefer: { 'AIM-120A': [4, 5, 3, 6, 2, 7], 'AIM-9M': [1, 8] },
+  loadouts: {
+    default: { 1: 'AIM-9M', 8: 'AIM-9M', 2: 'AIM-120A', 3: 'AIM-120A', 4: 'AIM-120A', 5: 'AIM-120A', 6: 'AIM-120A', 7: 'AIM-120A' },
+  },
+  firingOrder: [8, 1, 7, 2, 6, 3, 5, 4],
+  // internal carriage: which door each station opens, how it is launched, and the timing (s)
+  bays: { 1: 'side_L', 8: 'side_R', 2: 'main', 3: 'main', 4: 'main', 5: 'main', 6: 'main', 7: 'main' },
+  launch: {
+    'AIM-120A': { open: 0.30, out: [0.30, 0.65], release: 0.70, back: [0.80, 1.15], close: [1.15, 1.45], eject: 8 },
+    'AIM-9M': { open: 0.25, out: [0.25, 0.55], release: 0.75, back: [0.85, 1.15], close: [1.15, 1.40], eject: 2 },
+  },
+  tvcAlways: true,
+  tvc: {
+    vector: 20, alphaNormal: 35, alphaPostStall: 60, rollRate: 260, pitchRate: 2.0, thrustScale: 1.0,
+    kScale: 1.0, clMax: 2.1, lowSpeedAuthority: 0.5,
+  },
+};
+
+export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A };
 
 // the enemies fly the same jets with a weaker airframe: less G, slower roll, lower angle of attack limit
 export const BANDITS = {
   f16: { ...F16C, name: 'F-16C (ellenfél)', gMax: 7, rollRate: 190, alphaLimit: 20 },
   fa18: { ...FA18E, name: 'F/A-18E (ellenfél)', gMax: 6.3, rollRate: 150, alphaLimit: 28 },
+  f22: { ...F22A, name: 'F-22A (ellenfél)', gMax: 6.8, rollRate: 190, tvcAlways: false, tvc: undefined },
 };
 export const F16C_BANDIT = BANDITS.f16;
 

@@ -10,6 +10,9 @@ import { IR, ARH } from './specs.js';
 // ------------------------------------------------------------------ signatures
 export function irIntensity(src, obs) {
   if (src.isFlare) return src.intensity;
+  return irIntensityRaw(src, obs) * (src.spec && src.spec.irScale ? src.spec.irScale : 1);   // F-22: cooler, shielded exhaust
+}
+function irIntensityRaw(src, obs) {
   if (!src.alive && !src.burning) return 0;
   const toObs = norm(sub(obs, src.pos));
   const rear = -dot(src.forward, toObs);
@@ -23,9 +26,11 @@ export const irLockRange = (base, I) => (I <= 0 ? 0 : Math.min(base * Math.sqrt(
 export function rcs(tgt, obs) {
   const toObs = norm(sub(obs, tgt.pos));
   const side = 1 - Math.abs(dot(tgt.forward, toObs));
-  return tgt.spec.rcsFront + (tgt.spec.rcsSide - tgt.spec.rcsFront) * side;
+  const r = tgt.spec.rcsFront + (tgt.spec.rcsSide - tgt.spec.rcsFront) * side;
+  // F-22 with a weapons bay door open: the cavity and the missile shine on radar for a moment
+  return tgt.spec.rcsBay && tgt.bayOpenAny > 0.2 ? Math.max(r, tgt.spec.rcsBay * tgt.bayOpenAny) : r;
 }
-export const radarRange = (base, r) => base * Math.pow(Math.max(r, 0.01) / 5, 0.25);
+export const radarRange = (base, r) => base * Math.pow(Math.max(r, 1e-5) / 5, 0.25);     // no floor: stealth works
 export const radialSpeed = (vel, obs, pos) => dot(vel, norm(sub(pos, obs)));
 
 // ------------------------------------------------------------- countermeasures
@@ -301,6 +306,7 @@ export class RWR {
     for (const ac of world.aircraft) {
       if (ac === o || !ac.alive || !ac.radar.on) continue;
       const lvl = ac.radar.isPainting(o);
+      if (lvl === 'search' && ac.spec.radar.lpi) continue;       // LPI radar (F-22): not heard while searching
       if (lvl) found.set(ac, { source: ac, symbol: ac.spec.radar.rwrSymbol, level: lvl, bearing: this.bearing(ac.pos) });
     }
     for (const m of world.missiles) {

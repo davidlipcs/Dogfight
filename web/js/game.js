@@ -336,9 +336,9 @@ class Game {
       const pos = add(center, mul(side, (i - (count - 1) / 2) * 3500 + r.uniform(-800, 800)));
       pos.z = Math.max(r.uniform(3000, 7500), this.terrain.height(pos.x, pos.y) + 1500);
       const heading = Math.atan2(-from.x, -from.y) / DEG + r.uniform(-20, 20);
-      const type = this.opts.enemyType === 'mixed' ? (r() < 0.5 ? 'f16' : 'fa18') : (this.opts.enemyType || 'f16');
+      const type = this.opts.enemyType === 'mixed' ? ['f16', 'fa18', 'f22'][Math.floor(r() * 3)] : (this.opts.enemyType || 'f16');
       const spec = BANDITS[type];
-      const loadout = type === 'fa18' ? buildLoadout(spec, 2, 4).layout : 'default';
+      const loadout = type === 'f16' ? 'default' : buildLoadout(spec, 2, 4).layout;
       const ac = new Aircraft(spec, `Bandita ${i + 1} (${spec.short})`, 'red', pos, heading, 240, { livery: 'viper', missiles: BANDIT_MISSILES, loadout, rnd: rng(Math.floor(r() * 1e9)) });
       new AIPilot(ac, this.opts.difficulty, area);
       this.world.addAircraft(ac);
@@ -376,7 +376,7 @@ class Game {
     switch (k) {
       case 'Space': {
         const m = p.fireMissile(this.world);
-        if (m) msg(m.spec.guidance === IR ? 'FOX 2' : 'FOX 3');
+        if (m) msg(m.pending ? `${m.spec.guidance === IR ? 'FOX 2' : 'FOX 3'} - fegyvertér nyílik` : m.spec.guidance === IR ? 'FOX 2' : 'FOX 3');
         break;
       }
       case 'f':
@@ -400,6 +400,7 @@ class Game {
       case '2': if (p.select('AIM-120A')) msg('AIM-120A', 'info', 1); break;
       case 'Tab':
         if (p.toggleExtreme()) msg(p.extreme ? 'EXTRÉM MÓD BE - tolóerő-vektorálás, 9 G, teljes húzás = Cobra' : 'EXTRÉM MÓD KI', p.extreme ? 'warn' : 'info', 2.5);
+        else if (p.spec.tvcAlways) msg('F-22: a tolóerő-vektorálás mindig be van kapcsolva', 'info');
         else msg('Extrém mód (tolóerő-vektorálás) csak az F-16-on van', 'warn');
         break;
       case 'g':
@@ -677,15 +678,16 @@ async function boot() {
   const status = $('status'), bar = $('bar');
   if (!THREE) { status.textContent = 'A three.js nem töltődött be - ellenőrizd az internetkapcsolatot.'; return; }
   let done = 0;
-  const tick = () => { done++; bar.style.width = `${done / 10 * 100}%`; };
+  const tick = () => { done++; bar.style.width = `${done / 11 * 100}%`; };
   let assets;
   try {
-    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex, glbF16, glbFa18, glbAim9, glbAim120] = await Promise.all([
+    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex, glbF16, glbFa18, glbF22, glbAim9, glbAim120] = await Promise.all([
       fetchJSON(assetUrl('f16.json'), tick), fetchJSON(assetUrl('terrain.json'), tick),
       loadTexture(assetUrl('livery_viper.jpg'), tick), loadTexture(assetUrl('livery_aggressor.jpg'), tick),
       loadTexture(assetUrl('terrain_color.jpg'), tick), loadTexture(assetUrl('cockpit.png'), tick),
-      fetchGLB(assetUrl('f16.glb'), tick), fetchGLB(assetUrl('fa18.glb'), tick), fetchGLB(assetUrl('aim9m.glb'), tick), fetchGLB(assetUrl('aim120c.glb'), tick)]);
-    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex, glb: { f16: glbF16, fa18: glbFa18, aim9m: glbAim9, aim120c: glbAim120 } };
+      fetchGLB(assetUrl('f16.glb'), tick), fetchGLB(assetUrl('fa18.glb'), tick), fetchGLB(assetUrl('f22.glb'), tick),
+      fetchGLB(assetUrl('aim9m.glb'), tick), fetchGLB(assetUrl('aim120c.glb'), tick)]);
+    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex, glb: { f16: glbF16, fa18: glbFa18, f22: glbF22, aim9m: glbAim9, aim120c: glbAim120 } };
   } catch (e) {
     status.textContent = 'Betöltési hiba: ' + e.message; console.error(e); return;
   }
@@ -723,9 +725,10 @@ async function boot() {
     const mass = Object.values(layout).reduce((m, k) => m + (k === 'AIM-9M' ? 86 : 152), 0);
     $('loadout-hint').textContent = `${arms['AIM-9M'] + arms['AIM-120A']} rakéta · ${mass} kg`;
     $('brand').textContent = spec.callsign;
-    $('plane-hint').textContent = spec.id === 'fa18'
-      ? '2 × F414 · 196 kN · nagy állásszög, lassabb energia'
-      : '1 × F110 · 132 kN · 9 G, jobb tolóerő/tömeg';
+    $('plane-hint').textContent = {
+      fa18: '2 × F414 · 196 kN · nagy állásszög, lassabb energia',
+      f22: '2 × F119 · 312 kN · lopakodó, belső fegyvertér, APG-77, max 8 G',
+    }[spec.id] || '1 × F110 · 132 kN · 9 G, jobb tolóerő/tömeg';
   };
   for (const el of document.querySelectorAll('input[name=plane]')) el.addEventListener('change', () => { defaults(plane()); showLoadout(); });
   for (const [id, key, d] of [['m9', 'AIM-9M', -1], ['p9', 'AIM-9M', 1], ['m120', 'AIM-120A', -1], ['p120', 'AIM-120A', 1]]) {

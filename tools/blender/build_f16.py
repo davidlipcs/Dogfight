@@ -342,6 +342,8 @@ def build_cockpit():
     # side stick and throttle
     tube(room, [(w - 0.07, 4.62, 0.43), (w - 0.07, 4.63, 0.56)], [0.014, 0.020], 8, (0.07, 0.07, 0.08))
     box(room, (-w + 0.07, 4.66, 0.46), (0.03, 0.06, 0.03), color=(0.07, 0.07, 0.08))
+    drop = L.fit_under_canopy([seat], S)                  # the head box stays under the canopy
+    print("seat lowered by %.3f m" % drop)
     return [tub, room, sill, seat, screen, glass]
 
 
@@ -725,6 +727,7 @@ def main():
     if OPTS["export"]:
         L.export(OUT, WEB, WEB_TEXTURES)
     if OPTS["save"]:
+        L.viewport_like_game()
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "f16.blend"))
 
 

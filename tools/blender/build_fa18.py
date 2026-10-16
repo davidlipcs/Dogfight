@@ -420,6 +420,8 @@ def build_cockpit():
     tube(seat, [(-0.08, 4.88, 0.59), (-0.08, 4.92, 0.66), (0.08, 4.92, 0.66), (0.08, 4.88, 0.59)], 0.012, 8, (0.80, 0.68, 0.10))
     # the rear deck behind the seat
     box(room, (0.0, 3.92, 0.88), (S.COCKPIT_W - 0.02, 0.13, 0.12), color=(0.20, 0.21, 0.22))
+    drop = L.fit_under_canopy([seat], S)                  # the head box stays under the canopy
+    print("seat lowered by %.3f m" % drop)
     return [tub, room, sill, seat, glass], screens
 
 
@@ -720,6 +722,7 @@ def main():
         L.export(OUT, WEB, WEB_TEXTURES)
     if OPTS["save"]:
         os.makedirs(OUT, exist_ok=True)
+        L.viewport_like_game()
         bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "fa18.blend"))
 
 
