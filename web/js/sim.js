@@ -65,6 +65,13 @@ export class Aircraft {
     this.selected = key; this.irSeeker.reset(); return true;
   }
   toggleGear() { return this.fm.setGear(!this.fm.gearDown); }
+  // F-16 extreme mode (thrust vectoring); false when the jet has none
+  toggleExtreme() {
+    if (!this.spec.tvc) return false;
+    this.fm.extreme = !this.fm.extreme;
+    return true;
+  }
+  get extreme() { return this.fm.extreme; }
 
   physicsStep(dt, world) {
     if (this.crashed) return;
@@ -159,6 +166,7 @@ export class Aircraft {
 
   takeDamage(amount, source, weapon, world) {
     if (!this.alive) return;
+    if (this.invulnerable) { world.emit('shielded', { target: this, source, weapon }); return; }   // tutorial
     this.hp -= amount; this.lastAttacker = source; this.lastHitTime = world.time;
     if (this.hp < this.spec.hp * 0.3) this.burning = true;
     if (this.hp <= 0) this.kill(world, source, weapon);

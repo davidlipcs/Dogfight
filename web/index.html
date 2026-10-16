@@ -85,6 +85,26 @@
   .st.s9 { color: var(--hud); border-color: rgba(107, 255, 133, 0.5); }
   .st.s120 { color: var(--caution); border-color: rgba(255, 200, 64, 0.5); }
   #menu .card { width: min(640px, 100%); }
+  /* tutorial: readable lesson card on the right, the game stays playable under it */
+  #tutorial { position: fixed; top: 64px; right: 16px; width: min(410px, calc(100vw - 32px)); max-height: calc(100vh - 300px);
+    overflow-y: auto; pointer-events: none; background: rgba(14, 20, 26, 0.88); border: 1px solid var(--panel-edge);
+    border-radius: 6px; padding: 13px 15px; font-size: 14px; line-height: 1.42; color: var(--text); box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+  #tutorial h3 { margin: 6px 0 8px; font: 600 20px/1.2 var(--display); letter-spacing: 0.02em; }
+  #tutorial h4 { margin: 10px 0 4px; font: 600 12px var(--mono); letter-spacing: 0.12em; color: var(--hud); text-transform: uppercase; }
+  #tutorial p { margin: 0 0 8px; color: var(--text); }
+  #tutorial ul, #tutorial ol { margin: 0 0 8px; padding-left: 20px; }
+  #tutorial li { margin-bottom: 3px; }
+  #tutorial b { color: #fff; }
+  #tutorial kbd { font: 600 12px var(--mono); color: var(--caution); border: 1px solid rgba(255,200,64,.5); border-radius: 3px; padding: 0 4px; }
+  .tut-head { display: flex; align-items: center; gap: 10px; font: 600 11px var(--mono); letter-spacing: 0.14em; color: var(--hud); }
+  .tut-bar { flex: 1; height: 3px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+  .tut-bar i { display: block; height: 100%; background: var(--hud); }
+  .tut-task { margin-top: 10px; padding: 9px 11px; border-left: 3px solid var(--caution); background: rgba(255,200,64,.08); border-radius: 3px; }
+  .tut-task b { font: 600 12px var(--mono); letter-spacing: 0.1em; color: var(--caution); margin-right: 6px; }
+  .tut-task.done { border-color: var(--hud); background: rgba(107,255,133,.1); }
+  .tut-task.done b { color: var(--hud); }
+  .tut-status { margin-top: 4px; font: 12px var(--mono); color: var(--muted); }
+  .tut-foot { margin-top: 10px; font: 11px var(--mono); color: var(--muted); }
   @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 </style>
 <style>[hidden]{display:none!important} body{margin:0}</style>
@@ -93,6 +113,7 @@
 <canvas id="view" tabindex="0"></canvas>
 <canvas id="hud"></canvas>
 <div id="fps"></div>
+<div id="tutorial" hidden></div>
 
 <div id="loading" class="screen dim">
   <div class="card">
@@ -172,7 +193,9 @@
       <button class="primary" id="continue" hidden>Folytatás</button>
       <button class="primary" id="start-ground">Felszállás a kifutóról</button>
       <button id="start-air">Indulás a levegőben</button>
+      <button id="start-tutorial">Oktatás</button>
     </div>
+    <div class="hint">Oktatás (nem kötelező): lépésről lépésre elmagyaráz mindent – repülés, gáz, kabin, radar, rakéták, ágyú, védekezés, extrém mód –, és minden lépésnél kipróbálod. A kiválasztott géppel megy.</div>
     <div id="menuerr"></div>
     <a id="download" class="hint" href="dogfight-offline.html" download="Dogfight-F16.html" hidden>⤓ Letöltés egy fájlban (internet nélkül is megy, dupla kattintással indul)</a>
     <div class="hint">Kattintás után az egér a játékhoz kötődik · Esc = elengedés · H = súgó · kontrollerrel: A = indítás</div>
@@ -211,6 +234,7 @@
           <dt>C, jobb egér</dt><dd>szabad körülnézés</dd>
           <dt>Középső egér</dt><dd>zoom (3 fokozat)</dd>
           <dt>V</dt><dd>kabin / külső nézet (a kabin együtt mozog a géppel; C-vel körülnézel)</dd>
+          <dt>Tab</dt><dd>F-16: EXTRÉM mód – tolóerő-vektorálás, 9 G-s fordulók; teljes húzás (S) 600 km/h alatt = Cobra, rakéta ellen, amikor a jelölő 3–4 másodpercet mutat</dd>
           <dt>J / K / L</dt><dd>kabinban: bal / jobb / középső kijelző lapozása (radar, térkép, fegyverzet, hajtómű, RWR)</dd>
         </dl>
       </div>

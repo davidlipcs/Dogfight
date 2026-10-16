@@ -28,6 +28,7 @@ const NWS_RATE = 0.45;
 export class Controls {
   constructor(throttle = 0.85) {
     this.pitch = 0; this.roll = 0; this.yaw = 0; this.throttle = throttle; this.airbrake = false; this.brakes = false;
+    this.postStall = false;               // extreme mode + full aft stick: the AoA limiter lets go (Cobra)
   }
 }
 
@@ -44,7 +45,10 @@ export class FlightModel {
     this.gearDown = false; this.gearPos = 0; this.onGround = false; this.groundPitch = 0;
     this.contactEvent = null; this.crashReason = ''; this.sinkRate = 0; this.flaps = 0;
     this.gearHeight = spec.gearHeight ?? GEAR_HEIGHT; this.drag = 0; this.fuelFlow = 0;
+    this.extreme = false; this.vectorAngle = 0;             // F-16 extreme mode: thrust vectoring on
   }
+  // the thrust vectoring settings while extreme mode is on (only jets with spec.tvc have it)
+  get tvc() { return this.extreme && this.spec.tvc ? this.spec.tvc : null; }
   get mass() { return this.spec.emptyMass + this.fuel + this.storeMass; }
   get speed() { return len(this.vel); }
   get forward() { return fwdOf(this.quat); }
@@ -64,11 +68,11 @@ export class FlightModel {
   liftCoefficient(alpha, mach) {
     const s = this.spec;
     const cla = s.clAlpha * interp(CLA_MACH, mach);
-    const a = Math.abs(alpha), stall = s.alphaStall * DEG;
+    const a = Math.abs(alpha), stall = s.alphaStall * DEG, clMax = this.tvc ? this.tvc.clMax : s.clMax;
     let cl;
-    if (a <= stall) cl = Math.min(cla * a, s.clMax);
+    if (a <= stall) cl = Math.min(cla * a, clMax);
     else {
-      const peak = Math.min(cla * stall, s.clMax);
+      const peak = Math.min(cla * stall, clMax);
       const t = clamp((a - stall) / (15 * DEG), 0, 1);
       cl = peak * (1 - t) + 0.95 * Math.sin(2 * Math.min(a, Math.PI - a)) * t;
     }
@@ -107,7 +111,8 @@ export class FlightModel {
     const mass = this.mass;
 
     this.spool(clamp(c.throttle, 0, MAX_AB), dt);
-    const thrust = this.thrustAt(this.engine, rho, mach);
+    const tv = this.tvc;
+    const thrust = this.thrustAt(this.engine, rho, mach) * (tv ? tv.thrustScale : 1);
     this.thrust = thrust;
     const sfc = this.engine <= 1 ? s.fuelFlowDry / s.thrustDry : s.fuelFlowAb / s.thrustAb;
     this.fuelFlow = thrust * sfc;
@@ -119,13 +124,16 @@ export class FlightModel {
     if (flaps > 0 && alpha > -0.05) cl += FLAP_CL * flaps;
     const liftDir = norm(cross(right, vhat), up);
     const sideDir = cross(vhat, liftDir);
-    let cd = s.cd0 + (s.pylonCd || 0) + interp(s.waveDrag, mach) + s.kInduced * cl * cl + this.storeCd + 0.8 * Math.sin(alpha) ** 2;
+    let cd = s.cd0 + (s.pylonCd || 0) + interp(s.waveDrag, mach) + s.kInduced * (tv ? tv.kScale : 1) * cl * cl + this.storeCd + 0.8 * Math.sin(alpha) ** 2;
     if (c.airbrake) cd += s.airbrakeCd;
     cd += GEAR_CD * this.gearPos + FLAP_CD * flaps;
     const area = s.wingArea;
     this.drag = qbar * area * cd;
+    // thrust vectoring: the nozzle turns with the pitch stick, part of the thrust pushes the tail down (nose up)
+    const vec = tv && !this.onGround ? clamp(c.pitch, -1, 1) * tv.vector * DEG : 0;
+    this.vectorAngle += (vec - this.vectorAngle) * Math.min(1, dt * 8);
     const force = add(add(add(mul(liftDir, qbar * area * cl), mul(sideDir, -qbar * area * 1.1 * beta)),
-      mul(vhat, -qbar * area * cd)), mul(fwd, thrust));
+      mul(vhat, -qbar * area * cd)), add(mul(fwd, thrust * Math.cos(this.vectorAngle)), mul(up, thrust * Math.sin(this.vectorAngle))));
     const acc = add(mul(force, 1 / mass), V(0, 0, -G));
 
     // landing gear
@@ -148,15 +156,22 @@ export class FlightModel {
     this.nzCmd += clamp(nz - this.nzCmd, -G_ONSET * dt, G_ONSET * dt);
     nz = this.nzCmd;
     const claEff = s.clAlpha * interp(CLA_MACH, mach);
-    let alphaReq = qbar > 1 ? nz * mass * G / (qbar * area * claEff) : s.alphaLimit * DEG * (nz > 0 ? 1 : -1);
-    alphaReq = clamp(alphaReq, -10 * DEG, s.alphaLimit * DEG);
+    // AoA limit: normal, or in extreme mode 30 degrees (the mouse instructor) / 80 with full aft stick (Cobra)
+    const alphaLim = (tv ? (c.postStall ? tv.alphaPostStall : tv.alphaNormal) : s.alphaLimit) * DEG;
+    let alphaReq = qbar > 1 ? nz * mass * G / (qbar * area * claEff) : alphaLim * (nz > 0 ? 1 : -1);
+    alphaReq = clamp(alphaReq, -10 * DEG, alphaLim);
+    // Cobra: below ~600 km/h a full pull with vectored thrust throws the nose straight up to the limit
+    if (tv && c.postStall && speed < 170) alphaReq = alphaLim;
     const vSafe = Math.max(speed, 30);
     const pathPitch = dot(acc, liftDir) / vSafe;
     const pathLat = dot(acc, sideDir) / vSafe;
-    const authority = clamp(qbar / 9000, 0.12, 1);
-    const qCmd = clamp(pathPitch + K_ALPHA * (alphaReq - alpha) * authority, -0.9, 0.9);
-    const rollEff = clamp(qbar / 9000, 0.15, 1) * (1 - 0.5 * clamp(alpha / (s.alphaLimit * DEG), 0, 1));
-    const pCmd = clamp(c.roll, -1, 1) * s.rollRate * DEG * rollEff;
+    // the vectored nozzle keeps pitch and roll authority even when the air is too slow for the tail
+    const authority = clamp(qbar / 9000 + (tv ? tv.lowSpeedAuthority : 0), 0.12, 1);
+    const qMax = tv ? tv.pitchRate : 0.9;
+    const qCmd = clamp(pathPitch + K_ALPHA * (alphaReq - alpha) * authority, -qMax, qMax);
+    const rollEff = clamp(qbar / 9000 + (tv ? tv.lowSpeedAuthority * 0.5 : 0), 0.15, 1)
+      * (1 - 0.5 * clamp(alpha / alphaLim, 0, 1));
+    const pCmd = clamp(c.roll, -1, 1) * (tv ? tv.rollRate : s.rollRate) * DEG * rollEff;
     const betaCmd = -clamp(c.yaw, -1, 1) * s.yawBeta * DEG;
     const rCmd = pathLat + K_BETA * (beta - betaCmd) * authority;
     this.omega.x += (qCmd - this.omega.x) * Math.min(1, dt / TAU_PITCH);

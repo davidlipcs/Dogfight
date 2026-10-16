@@ -9,6 +9,7 @@ import { Models, SceneView } from './render.js';
 import { parseGLB } from './glb.js';
 import { HUD } from './hud.js';
 import { CockpitDisplays } from './mfd.js';
+import { Tutorial } from './tutorial.js';
 import { Sounds } from './audio.js';
 
 // The fight happens on the far side of the map: the enemies live in the combat zone and never attack anyone
@@ -249,6 +250,7 @@ class Game {
     const field = this.terrain.airfield;
     this.nav = { zone: { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }, base: { x: field.x, y: field.y, r: SAFE_RADIUS }, wave: 0, enemies: 0 };
     this.spawnPlayer();
+    this.startTutorial();
     this.resize();
     addEventListener('resize', () => this.resize());
     this.last = performance.now();
@@ -275,6 +277,12 @@ class Game {
     this.stick = { x: 0, y: 0, idle: 0 };
     this.player = null;
     this.spawnPlayer();
+    this.startTutorial();
+  }
+  // the optional guided flight (main menu -> Oktatás); no enemy waves while it runs
+  startTutorial() {
+    $('tutorial').hidden = true;
+    this.tutorial = this.opts.tutorial ? new Tutorial(this) : null;
   }
 
   resize() {
@@ -348,7 +356,7 @@ class Game {
     if (k === 'h' || k === 'F1') { this.toggleHelp(); return; }
     if (k === 'Escape') { if (!this.state.paused) this.pause(); return; }
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
-    if (k === 'Enter' || k === 'NumpadEnter') { this.respawn(); return; }
+    if (k === 'Enter' || k === 'NumpadEnter') { if (this.tutorial) this.tutorial.enter(); else this.respawn(); return; }
     if (k === 'm') { this.hud.markers = !this.hud.markers; return; }
     if (k === 'v') { this.cam.cockpit = !this.cam.cockpit; this.cam.panelLook = false; return; }
     if (k === 'n') {
@@ -390,6 +398,10 @@ class Game {
       case 'r': p.radar.togglePower(); msg(`RADAR ${p.radar.on ? 'BE' : 'KI'}`, 'info', 1.2); break;
       case '1': if (p.select('AIM-9M')) msg('AIM-9M', 'info', 1); break;
       case '2': if (p.select('AIM-120A')) msg('AIM-120A', 'info', 1); break;
+      case 'Tab':
+        if (p.toggleExtreme()) msg(p.extreme ? 'EXTRÉM MÓD BE - tolóerő-vektorálás, 9 G, teljes húzás = Cobra' : 'EXTRÉM MÓD KI', p.extreme ? 'warn' : 'info', 2.5);
+        else msg('Extrém mód (tolóerő-vektorálás) csak az F-16-on van', 'warn');
+        break;
       case 'g':
         if (p.toggleGear()) msg(`FUTÓMŰ ${p.fm.gearDown ? 'KI' : 'BE'}`);
         else msg('A földön nem húzható be a futómű', 'warn');
@@ -540,7 +552,7 @@ class Game {
   // ------------------------------------------------------------------ loop
   frame(t) {
     requestAnimationFrame((tt) => this.frame(tt));
-    const dt = Math.min((t - this.last) / 1000, 0.1);
+    const dt = clamp((t - this.last) / 1000, 0, 0.1);
     this.last = t;
     const st = this.state;
     if (this.pad.poll()) {
@@ -552,6 +564,7 @@ class Game {
       if (this.player.alive) this.applyInput(dt);
       else this.input.takeDelta();
       this.world.update(dt);
+      if (this.tutorial) this.tutorial.update(dt);
       this.gameFlow(dt);
     } else this.input.takeDelta();
     for (const [kind, d] of this.world.drainEvents()) {
@@ -559,6 +572,7 @@ class Game {
       this.hud.handleEvent(kind, d, this.player);
       this.sounds.handleEvent(kind, d, this.player);
       this.onEvent(kind, d);
+      if (this.tutorial) this.tutorial.onEvent(kind, d);
     }
     const sdt = st.paused ? 0 : dt;
     this.cam.update(sdt, this.player);
@@ -567,7 +581,7 @@ class Game {
     // the cockpit displays of the player's jet (drawn only while they can be seen)
     const nav = this.nav;
     nav.wave = st.wave; nav.enemies = this.enemiesAlive().length;
-    this.hud.nav = nav;
+    this.hud.nav = nav; this.hud.tutorial = !!this.tutorial;
     const vis = this.view.visuals.get(this.player);
     if (vis && vis.screens && !vis.displays) vis.displays = new CockpitDisplays(this.player.spec, vis.screens);
     if (vis && vis.displays && this.view.cockpitView) vis.displays.update(sdt, this.player, this.world, nav);
@@ -583,7 +597,8 @@ class Game {
     if (d.victim === this.player) {
       st.deaths++;
       st.banner = d.weapon !== 'crash' ? 'LELŐTTEK!' : 'LEZUHANTÁL!';
-      st.subBanner = 'Enter: újraéledés  ·  Esc: menü (főmenü, új játék)';
+      st.subBanner = this.tutorial ? 'Pár másodperc, és újra a levegőben vagy – a lecke elölről indul'
+        : 'Enter: újraéledés  ·  Esc: menü (főmenü, új játék)';
     } else if (d.killer === this.player) st.kills++;
   }
   gameFlow(dt) {
@@ -595,11 +610,11 @@ class Game {
       st.subBanner = '';
       this.hud.message('SIKERES FELSZÁLLÁS - húzd be a futóművet (G)', 'good', 4);
     }
-    if (st.waveActive && !this.enemiesAlive().length) {
+    if (!this.tutorial && st.waveActive && !this.enemiesAlive().length) {
       st.waveActive = false; st.waveTimer = WAVE_DELAY;
       this.hud.message('HULLÁM TELJESÍTVE - leszállhatsz a bázison újrafegyverezni', 'good', 5);
     }
-    if (!st.waveActive && airborne) {
+    if (!this.tutorial && !st.waveActive && airborne) {
       st.waveTimer -= dt;
       if (st.waveTimer <= 0) this.spawnWave();
     }
@@ -720,14 +735,14 @@ async function boot() {
   defaults(plane()); showLoadout();
   // The main menu starts a match, and the game can come back to it any time (Esc -> Főmenü), during a match
   // or after it: from there the match continues (Folytatás) or a new one starts on the same scene.
-  const start = (airStart) => {
+  const start = (airStart, tutorial = false) => {
     const difficulty = document.querySelector('input[name=diff]:checked').value;
     const enemies = Number($('enemies').value);
     const mode = document.querySelector('input[name=mode]:checked').value;
     const aircraft = document.querySelector('input[name=plane]:checked').value;
     const enemyType = document.querySelector('input[name=foe]:checked').value;
     const loadout = buildLoadout(AIRCRAFT[aircraft], arms['AIM-9M'], arms['AIM-120A']).layout;
-    const opts = { airStart, difficulty, enemies, mode, aircraft, enemyType, loadout };
+    const opts = { airStart: airStart || tutorial, difficulty, enemies, mode: tutorial ? 'arcade' : mode, aircraft, enemyType, loadout, tutorial };
     $('menu').hidden = true;
     let game = window.game;
     if (game) game.newMatch(opts);
@@ -735,6 +750,7 @@ async function boot() {
       try { game = new Game(assets, opts); }
       catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
       window.game = game;
+      game.onTutorialEnd = () => { showMenu(); $('current').textContent = 'Az oktatás véget ért. Folytatás = szabad repülés hullámokkal, vagy indíts új játékot.'; };
       $('sens').addEventListener('input', (e) => { game.cam.sensitivity = Number(e.target.value); });
       $('invert').addEventListener('change', (e) => { game.cam.invertY = e.target.checked; });
     }
@@ -779,6 +795,7 @@ async function boot() {
   };
   requestAnimationFrame(menuPoll);
   $('start-air').addEventListener('click', () => start(true));
+  $('start-tutorial').addEventListener('click', () => start(true, true));
   $('help').addEventListener('click', () => window.game && window.game.resume());
   $('fullscreen').addEventListener('click', (e) => {
     e.stopPropagation();

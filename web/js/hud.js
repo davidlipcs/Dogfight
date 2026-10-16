@@ -146,6 +146,8 @@ export class HUD {
   targets(ac, world, cam) {
     if (!this.markers) return;
     const u = this.u;
+    this.nearestEnemy = world.aircraft.filter((t) => t.alive && t.team !== ac.team)
+      .reduce((b, t) => (!b || len(sub(t.pos, ac.pos)) < len(sub(b.pos, ac.pos)) ? t : b), null);
     for (const t of world.aircraft) {
       if (t === ac || !t.alive || t.team === ac.team) continue;
       const d = len(sub(t.pos, ac.pos));
@@ -155,6 +157,10 @@ export class HUD {
       if (t === this.lockTarget(ac, ac.selectedSpec)) continue;      // drawn by the lock box
       this.poly([[p[0] - 8 * u, p[1] - 20 * u], [p[0] + 8 * u, p[1] - 20 * u], [p[0], p[1] - 10 * u]], ENEMY);
       this.text((d / 1000).toFixed(1), p[0], p[1] - 30 * u, ENEMY, 11 * u + 2, 'center');
+      // in radar lock range and not locked yet: tell how
+      if (ac.radar.mode !== STT && d < ac.spec.radar.lockRange && t === this.nearestEnemy) {
+        this.text('T = lock', p[0], p[1] + 2 * u, AMBER, 11 * u + 2, 'center');
+      }
     }
   }
   // the combat zone (amber) and the home base (cyan): marker with the distance, and an arrow at the screen
@@ -349,17 +355,20 @@ export class HUD {
       [fm.gearPos > 0.98 ? 'GEAR DOWN' : fm.gearPos > 0.02 ? 'GEAR TRANSIT' : 'GEAR UP', fm.gearPos > 0.98 ? GREEN : fm.gearPos > 0.02 ? AMBER : DIM],
     ];
     if (ac.onGround) rows.push([`GS  ${String(Math.round(ac.speed * 3.6)).padStart(5)} km/h`, GREEN]);
+    if (ac.extreme) rows.push([`TVC EXTRÉM${ac.fm.alpha / DEG > 50 ? '  COBRA' : ''}`, AMBER]);
     if (ac.controls.brakes && ac.onGround) rows.push(['BRAKES', AMBER]);
     else if (ac.controls.airbrake) rows.push(['SPD BRK', AMBER]);
     rows.forEach(([t, c], i) => this.text(t, x, y + i * lh, c, fs));
-    const terr = world.terrain.height(ac.pos.x, ac.pos.y), xr = this.w / 2 + 250 * u;
+    // during the tutorial its card covers the right side: the right column goes under the left one
+    const terr = world.terrain.height(ac.pos.x, ac.pos.y), xr = this.tutorial ? x : this.w / 2 + 250 * u;
+    const yr = this.tutorial ? y + (rows.length + 0.6) * lh : y;
     const fuelCol = fm.fuel < ac.spec.internalFuel * 0.12 ? RED : fm.fuel < ac.spec.internalFuel * 0.28 ? AMBER : GREEN;
     const right = [
       [`ALT ${String(Math.round(ac.pos.z)).padStart(6)} m`, GREEN], [`AGL ${String(Math.round(ac.pos.z - terr)).padStart(6)}`, DIM],
       [`VS  ${(fm.vel.z >= 0 ? '+' : '') + Math.round(fm.vel.z)}`, GREEN], [`HDG    ${String(Math.round(headingDeg(ac.forward))).padStart(3, '0')}`, GREEN],
       [`FUEL ${String(Math.round(fm.fuel)).padStart(5)} kg`, fuelCol], [`HP   ${String(Math.max(0, Math.round(ac.hp))).padStart(5)}`, ac.hp > 50 ? GREEN : RED],
     ];
-    right.forEach(([t, c], i) => this.text(t, xr, y + i * lh, c, fs));
+    right.forEach(([t, c], i) => this.text(t, xr, yr + i * lh, c, fs));
     // weapons
     const reloadText = (k) => {
       const r = ac.stations.filter((s) => s.key === k && !s.loaded && s.reload !== undefined).map((s) => s.reload);
@@ -469,7 +478,8 @@ export class HUD {
   gEffects(ac, dt) {
     if (!ac || !ac.alive) { this.black = 0; this.red = 0; return; }
     const g = ac.fm.gLoad;
-    this.black = clamp((this.black || 0) + (g > 7.5 ? (g - 7.5) * 0.15 : g < 6.5 ? -0.4 : 0) * dt, 0, 1);
+    // G-suit: up to ~8 G the pilot keeps the picture; a held 9 G turn greys out slowly (~6 s)
+    this.black = clamp((this.black || 0) + (g > 8.2 ? (g - 8.2) * 0.12 : g < 7 ? -0.4 : 0) * dt, 0, 1);
     this.red = clamp((this.red || 0) + (g < -1.8 ? (-g - 1.8) * 0.35 : -0.6) * dt, 0, 1);
     const gfx = this.g, w = this.w, h = this.h, R = Math.hypot(w, h) / 2;
     for (const [lvl, rgb] of [[this.black, '0,0,0'], [this.red, '150,0,0']]) {

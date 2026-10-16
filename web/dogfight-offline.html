@@ -85,6 +85,26 @@
   .st.s9 { color: var(--hud); border-color: rgba(107, 255, 133, 0.5); }
   .st.s120 { color: var(--caution); border-color: rgba(255, 200, 64, 0.5); }
   #menu .card { width: min(640px, 100%); }
+  /* tutorial: readable lesson card on the right, the game stays playable under it */
+  #tutorial { position: fixed; top: 64px; right: 16px; width: min(410px, calc(100vw - 32px)); max-height: calc(100vh - 300px);
+    overflow-y: auto; pointer-events: none; background: rgba(14, 20, 26, 0.88); border: 1px solid var(--panel-edge);
+    border-radius: 6px; padding: 13px 15px; font-size: 14px; line-height: 1.42; color: var(--text); box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+  #tutorial h3 { margin: 6px 0 8px; font: 600 20px/1.2 var(--display); letter-spacing: 0.02em; }
+  #tutorial h4 { margin: 10px 0 4px; font: 600 12px var(--mono); letter-spacing: 0.12em; color: var(--hud); text-transform: uppercase; }
+  #tutorial p { margin: 0 0 8px; color: var(--text); }
+  #tutorial ul, #tutorial ol { margin: 0 0 8px; padding-left: 20px; }
+  #tutorial li { margin-bottom: 3px; }
+  #tutorial b { color: #fff; }
+  #tutorial kbd { font: 600 12px var(--mono); color: var(--caution); border: 1px solid rgba(255,200,64,.5); border-radius: 3px; padding: 0 4px; }
+  .tut-head { display: flex; align-items: center; gap: 10px; font: 600 11px var(--mono); letter-spacing: 0.14em; color: var(--hud); }
+  .tut-bar { flex: 1; height: 3px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
+  .tut-bar i { display: block; height: 100%; background: var(--hud); }
+  .tut-task { margin-top: 10px; padding: 9px 11px; border-left: 3px solid var(--caution); background: rgba(255,200,64,.08); border-radius: 3px; }
+  .tut-task b { font: 600 12px var(--mono); letter-spacing: 0.1em; color: var(--caution); margin-right: 6px; }
+  .tut-task.done { border-color: var(--hud); background: rgba(107,255,133,.1); }
+  .tut-task.done b { color: var(--hud); }
+  .tut-status { margin-top: 4px; font: 12px var(--mono); color: var(--muted); }
+  .tut-foot { margin-top: 10px; font: 11px var(--mono); color: var(--muted); }
   @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 </style>
 <style>[hidden]{display:none!important} body{margin:0}</style>
@@ -93,6 +113,7 @@
 <canvas id="view" tabindex="0"></canvas>
 <canvas id="hud"></canvas>
 <div id="fps"></div>
+<div id="tutorial" hidden></div>
 
 <div id="loading" class="screen dim">
   <div class="card">
@@ -172,7 +193,9 @@
       <button class="primary" id="continue" hidden>Folytatás</button>
       <button class="primary" id="start-ground">Felszállás a kifutóról</button>
       <button id="start-air">Indulás a levegőben</button>
+      <button id="start-tutorial">Oktatás</button>
     </div>
+    <div class="hint">Oktatás (nem kötelező): lépésről lépésre elmagyaráz mindent – repülés, gáz, kabin, radar, rakéták, ágyú, védekezés, extrém mód –, és minden lépésnél kipróbálod. A kiválasztott géppel megy.</div>
     <div id="menuerr"></div>
     <a id="download" class="hint" href="dogfight-offline.html" download="Dogfight-F16.html" hidden>⤓ Letöltés egy fájlban (internet nélkül is megy, dupla kattintással indul)</a>
     <div class="hint">Kattintás után az egér a játékhoz kötődik · Esc = elengedés · H = súgó · kontrollerrel: A = indítás</div>
@@ -211,6 +234,7 @@
           <dt>C, jobb egér</dt><dd>szabad körülnézés</dd>
           <dt>Középső egér</dt><dd>zoom (3 fokozat)</dd>
           <dt>V</dt><dd>kabin / külső nézet (a kabin együtt mozog a géppel; C-vel körülnézel)</dd>
+          <dt>Tab</dt><dd>F-16: EXTRÉM mód – tolóerő-vektorálás, 9 G-s fordulók; teljes húzás (S) 600 km/h alatt = Cobra, rakéta ellen, amikor a jelölő 3–4 másodpercet mutat</dd>
           <dt>J / K / L</dt><dd>kabinban: bal / jobb / középső kijelző lapozása (radar, térkép, fegyverzet, hajtómű, RWR)</dd>
         </dl>
       </div>
@@ -511,6 +535,12 @@ const F16C = {
     default: { 1: 'AIM-9M', 9: 'AIM-9M', 2: 'AIM-9M', 8: 'AIM-9M', 3: 'AIM-120A', 7: 'AIM-120A' },
   },
   firingOrder: [9, 1, 8, 2, 7, 3],
+  // EXTRÉM mód (Tab): tolóerő-vektorálás, mint a kísérleti F-16 MATV / VISTA.  A fúvócső ±20°-ot fordul, így
+  // a gép kis sebességen is tud forgatni, 9 G-t tart, és teljes húzásra át tud menni nagy állásszögbe (Cobra).
+  tvc: {
+    vector: 20, alphaNormal: 32, alphaPostStall: 80, rollRate: 330, pitchRate: 2.4, thrustScale: 1.2,
+    kScale: 0.75, clMax: 2.4, lowSpeedAuthority: 0.65,
+  },
 };
 
 // F/A-18E: heavier, more wing, two engines.  Lower thrust to weight than the Viper and more drag (the canted
@@ -682,6 +712,7 @@ const NWS_RATE = 0.45;
 class Controls {
   constructor(throttle = 0.85) {
     this.pitch = 0; this.roll = 0; this.yaw = 0; this.throttle = throttle; this.airbrake = false; this.brakes = false;
+    this.postStall = false;               // extreme mode + full aft stick: the AoA limiter lets go (Cobra)
   }
 }
 
@@ -698,7 +729,10 @@ class FlightModel {
     this.gearDown = false; this.gearPos = 0; this.onGround = false; this.groundPitch = 0;
     this.contactEvent = null; this.crashReason = ''; this.sinkRate = 0; this.flaps = 0;
     this.gearHeight = spec.gearHeight ?? GEAR_HEIGHT; this.drag = 0; this.fuelFlow = 0;
+    this.extreme = false; this.vectorAngle = 0;             // F-16 extreme mode: thrust vectoring on
   }
+  // the thrust vectoring settings while extreme mode is on (only jets with spec.tvc have it)
+  get tvc() { return this.extreme && this.spec.tvc ? this.spec.tvc : null; }
   get mass() { return this.spec.emptyMass + this.fuel + this.storeMass; }
   get speed() { return len(this.vel); }
   get forward() { return fwdOf(this.quat); }
@@ -718,11 +752,11 @@ class FlightModel {
   liftCoefficient(alpha, mach) {
     const s = this.spec;
     const cla = s.clAlpha * interp(CLA_MACH, mach);
-    const a = Math.abs(alpha), stall = s.alphaStall * DEG;
+    const a = Math.abs(alpha), stall = s.alphaStall * DEG, clMax = this.tvc ? this.tvc.clMax : s.clMax;
     let cl;
-    if (a <= stall) cl = Math.min(cla * a, s.clMax);
+    if (a <= stall) cl = Math.min(cla * a, clMax);
     else {
-      const peak = Math.min(cla * stall, s.clMax);
+      const peak = Math.min(cla * stall, clMax);
       const t = clamp((a - stall) / (15 * DEG), 0, 1);
       cl = peak * (1 - t) + 0.95 * Math.sin(2 * Math.min(a, Math.PI - a)) * t;
     }
@@ -761,7 +795,8 @@ class FlightModel {
     const mass = this.mass;
 
     this.spool(clamp(c.throttle, 0, MAX_AB), dt);
-    const thrust = this.thrustAt(this.engine, rho, mach);
+    const tv = this.tvc;
+    const thrust = this.thrustAt(this.engine, rho, mach) * (tv ? tv.thrustScale : 1);
     this.thrust = thrust;
     const sfc = this.engine <= 1 ? s.fuelFlowDry / s.thrustDry : s.fuelFlowAb / s.thrustAb;
     this.fuelFlow = thrust * sfc;
@@ -773,13 +808,16 @@ class FlightModel {
     if (flaps > 0 && alpha > -0.05) cl += FLAP_CL * flaps;
     const liftDir = norm(cross(right, vhat), up);
     const sideDir = cross(vhat, liftDir);
-    let cd = s.cd0 + (s.pylonCd || 0) + interp(s.waveDrag, mach) + s.kInduced * cl * cl + this.storeCd + 0.8 * Math.sin(alpha) ** 2;
+    let cd = s.cd0 + (s.pylonCd || 0) + interp(s.waveDrag, mach) + s.kInduced * (tv ? tv.kScale : 1) * cl * cl + this.storeCd + 0.8 * Math.sin(alpha) ** 2;
     if (c.airbrake) cd += s.airbrakeCd;
     cd += GEAR_CD * this.gearPos + FLAP_CD * flaps;
     const area = s.wingArea;
     this.drag = qbar * area * cd;
+    // thrust vectoring: the nozzle turns with the pitch stick, part of the thrust pushes the tail down (nose up)
+    const vec = tv && !this.onGround ? clamp(c.pitch, -1, 1) * tv.vector * DEG : 0;
+    this.vectorAngle += (vec - this.vectorAngle) * Math.min(1, dt * 8);
     const force = add(add(add(mul(liftDir, qbar * area * cl), mul(sideDir, -qbar * area * 1.1 * beta)),
-      mul(vhat, -qbar * area * cd)), mul(fwd, thrust));
+      mul(vhat, -qbar * area * cd)), add(mul(fwd, thrust * Math.cos(this.vectorAngle)), mul(up, thrust * Math.sin(this.vectorAngle))));
     const acc = add(mul(force, 1 / mass), V(0, 0, -G));
 
     // landing gear
@@ -802,15 +840,22 @@ class FlightModel {
     this.nzCmd += clamp(nz - this.nzCmd, -G_ONSET * dt, G_ONSET * dt);
     nz = this.nzCmd;
     const claEff = s.clAlpha * interp(CLA_MACH, mach);
-    let alphaReq = qbar > 1 ? nz * mass * G / (qbar * area * claEff) : s.alphaLimit * DEG * (nz > 0 ? 1 : -1);
-    alphaReq = clamp(alphaReq, -10 * DEG, s.alphaLimit * DEG);
+    // AoA limit: normal, or in extreme mode 30 degrees (the mouse instructor) / 80 with full aft stick (Cobra)
+    const alphaLim = (tv ? (c.postStall ? tv.alphaPostStall : tv.alphaNormal) : s.alphaLimit) * DEG;
+    let alphaReq = qbar > 1 ? nz * mass * G / (qbar * area * claEff) : alphaLim * (nz > 0 ? 1 : -1);
+    alphaReq = clamp(alphaReq, -10 * DEG, alphaLim);
+    // Cobra: below ~600 km/h a full pull with vectored thrust throws the nose straight up to the limit
+    if (tv && c.postStall && speed < 170) alphaReq = alphaLim;
     const vSafe = Math.max(speed, 30);
     const pathPitch = dot(acc, liftDir) / vSafe;
     const pathLat = dot(acc, sideDir) / vSafe;
-    const authority = clamp(qbar / 9000, 0.12, 1);
-    const qCmd = clamp(pathPitch + K_ALPHA * (alphaReq - alpha) * authority, -0.9, 0.9);
-    const rollEff = clamp(qbar / 9000, 0.15, 1) * (1 - 0.5 * clamp(alpha / (s.alphaLimit * DEG), 0, 1));
-    const pCmd = clamp(c.roll, -1, 1) * s.rollRate * DEG * rollEff;
+    // the vectored nozzle keeps pitch and roll authority even when the air is too slow for the tail
+    const authority = clamp(qbar / 9000 + (tv ? tv.lowSpeedAuthority : 0), 0.12, 1);
+    const qMax = tv ? tv.pitchRate : 0.9;
+    const qCmd = clamp(pathPitch + K_ALPHA * (alphaReq - alpha) * authority, -qMax, qMax);
+    const rollEff = clamp(qbar / 9000 + (tv ? tv.lowSpeedAuthority * 0.5 : 0), 0.15, 1)
+      * (1 - 0.5 * clamp(alpha / alphaLim, 0, 1));
+    const pCmd = clamp(c.roll, -1, 1) * (tv ? tv.rollRate : s.rollRate) * DEG * rollEff;
     const betaCmd = -clamp(c.yaw, -1, 1) * s.yawBeta * DEG;
     const rCmd = pathLat + K_BETA * (beta - betaCmd) * authority;
     this.omega.x += (qCmd - this.omega.x) * Math.min(1, dt / TAU_PITCH);
@@ -1263,10 +1308,11 @@ class Missile {
     this.thrust = this.motorThrust();
     if (this.thrust > 0) this.mass -= sp.propellant / sp.burnTime * dt;
     let acmd = V();
-    if (this.age >= Math.max(sp.guidanceDelay, sp.railTime)) {
+    if (!this.defeated) this.checkCobra(world);
+    if (this.age >= Math.max(sp.guidanceDelay, sp.railTime) && !this.defeated) {
       const aim = this.guidance(dt, world);
       if (aim) { acmd = this.proNav(aim[0], aim[1]); acmd.z += G; }
-    }
+    } else if (this.defeated) this.status = 'MISSED';
     acmd.addScaledVector(vhat, -dot(acmd, vhat));
     // fins, plus thrust vectoring while the motor burns (spec.tvc: share of the thrust that can push sideways)
     const tvc = sp.tvc && this.thrust > 0 ? this.thrust * sp.tvc / this.mass : 0;
@@ -1292,6 +1338,22 @@ class Missile {
     if (this.pos.z <= world.terrain.height(this.pos.x, this.pos.y)) world.detonate(this, this.pos, true);
     else if (this.age > sp.guidanceTime) world.detonate(this, this.pos, false, true);
     else if (!this.burning && speed < 160 && this.age > 3) { this.status = 'SLOW'; if (speed < 110) world.detonate(this, this.pos, false, true); }
+  }
+  // A target that suddenly stands on its tail (Cobra, AoA > 40 degrees) when the missile is 4 s or less away
+  // loses most of its speed in a moment: the missile cannot turn that hard and its seeker loses the target
+  // in the clutter - it overshoots.  Too early (more than 4 s) the missile simply re-aims and the jet has
+  // thrown away its energy.
+  checkCobra(world) {
+    const t = this.guidedTarget || this.intended;
+    if (!t || !t.fm || !t.alive || t.fm.alpha < 40 * DEG) return;
+    const rel = sub(t.pos, this.pos), d = len(rel), closing = -dot(sub(t.vel, this.vel), norm(rel));
+    const ttg = closing > 1 ? d / closing : 99;
+    if (ttg > 4 || this.cobraJudged) return;
+    this.cobraJudged = true;
+    if (this.rnd() < (t.isPlayer ? 0.9 : 0.6)) {
+      this.defeated = true;
+      world.emit('message', { to: t, text: 'COBRA - A RAKÉTA ELVESZTETT!', level: 'good' });
+    }
   }
   proNav(aimPos, aimVel) {
     const r = sub(aimPos, this.pos), d2 = Math.max(dot(r, r), 1), vRel = sub(aimVel, this.vel);
@@ -1564,6 +1626,13 @@ class Aircraft {
     this.selected = key; this.irSeeker.reset(); return true;
   }
   toggleGear() { return this.fm.setGear(!this.fm.gearDown); }
+  // F-16 extreme mode (thrust vectoring); false when the jet has none
+  toggleExtreme() {
+    if (!this.spec.tvc) return false;
+    this.fm.extreme = !this.fm.extreme;
+    return true;
+  }
+  get extreme() { return this.fm.extreme; }
 
   physicsStep(dt, world) {
     if (this.crashed) return;
@@ -1658,6 +1727,7 @@ class Aircraft {
 
   takeDamage(amount, source, weapon, world) {
     if (!this.alive) return;
+    if (this.invulnerable) { world.emit('shielded', { target: this, source, weapon }); return; }   // tutorial
     this.hp -= amount; this.lastAttacker = source; this.lastHitTime = world.time;
     if (this.hp < this.spec.hp * 0.3) this.burning = true;
     if (this.hp <= 0) this.kill(world, source, weapon);
@@ -1828,11 +1898,15 @@ class PlayerPilot {
       c.pitch = this.pitch !== null ? this.pitch : 0;
       c.roll = this.roll !== null ? this.roll : clamp(-fm.omega.y * 0.5, -1, 1);
       c.yaw = this.yaw !== null ? this.yaw : 0;
+      // extreme mode: a full pull lets the jet go past the AoA limit (Cobra)
+      c.postStall = fm.extreme && c.pitch >= 0.95;
       return;
     }
     // the instructor keeps a little G margin (~7.6 G) so the pilot does not black out; S pulls the full 9 G.
+    // In extreme mode (thrust vectoring) it flies the full 9 G turns itself.
     // It puts the nose on the cursor (not the direction of flight), so the jet always points where you aim.
-    steerTowards(fm, this.aim, c, PLAYER_G, 1.3, true);
+    c.postStall = false;
+    steerTowards(fm, this.aim, c, fm.extreme ? 1 : PLAYER_G, fm.extreme ? 1.5 : 1.3, true);
     if (this.yaw !== null) c.yaw = this.yaw;
   }
 }
@@ -1841,10 +1915,12 @@ class PlayerPilot {
 // weaker too: less G, less precise, slower to notice missiles, and it only fires inside a cautious part of the
 // launch zone.  With an `area` (the combat zone) it patrols there and only goes for enemies inside the zone
 // (plus a margin), never for anyone near the home base: taking off and landing is safe.
+// maxIr / maxArh: the farthest they ever shoot (m).  Kept well inside what the player can lock and answer,
+// so nobody gets a missile from 15 km out of nowhere.
 const SKILLS = {
-  easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5 },
-  normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7 },
-  hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8 },
+  easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5, maxIr: 3500, maxArh: 0 },
+  normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7, maxIr: 4500, maxArh: 8000 },
+  hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 10000 },
 };
 const MIN_AGL = 450;
 
@@ -1909,14 +1985,14 @@ class AIPilot {
     let fired = null;
     const closingT = -dot(t.vel, norm(sub(t.pos, ac.pos)));
     const zone = (key) => launchZone(ac.missileSpec(key), ac.speed, ac.pos.z, closingT)[0] * this.skill.zone;
-    if (ac.missileCount('AIM-9M') && d > 900 && d < Math.min(7000, zone('AIM-9M'))) {
+    if (ac.missileCount('AIM-9M') && d > 900 && d < Math.min(this.skill.maxIr, zone('AIM-9M'))) {
       if (ac.selected !== 'AIM-9M') ac.select('AIM-9M');
       else if (ac.irSeeker.candidate === t || ac.irSeeker.target === t) {
         if (!ac.irSeeker.locked) ac.irSeeker.lock();
         if (ac.irSeeker.target === t) fired = ac.fireMissile(world);
       }
     } else if (ac.missileCount('AIM-120A') && this.skill.arh && ac.radar.mode === STT && ac.radar.locked === t) {
-      if (d > 2500 && d < zone('AIM-120A')) {
+      if (d > 2500 && d < Math.min(this.skill.maxArh, zone('AIM-120A'))) {
         if (ac.selected !== 'AIM-120A') ac.select('AIM-120A');
         fired = ac.fireMissile(world);
       }
@@ -1973,7 +2049,7 @@ class AIPilot {
   }
 }
 
-return { AIPilot, PlayerPilot };
+return { AIPilot, PlayerPilot, steerTowards };
 })();
 __modules['render.js'] = (() => {
 // Three.js scene: aircraft, terrain, sky, clouds, airfield, particles, tracers.
@@ -3047,6 +3123,8 @@ class HUD {
   targets(ac, world, cam) {
     if (!this.markers) return;
     const u = this.u;
+    this.nearestEnemy = world.aircraft.filter((t) => t.alive && t.team !== ac.team)
+      .reduce((b, t) => (!b || len(sub(t.pos, ac.pos)) < len(sub(b.pos, ac.pos)) ? t : b), null);
     for (const t of world.aircraft) {
       if (t === ac || !t.alive || t.team === ac.team) continue;
       const d = len(sub(t.pos, ac.pos));
@@ -3056,6 +3134,10 @@ class HUD {
       if (t === this.lockTarget(ac, ac.selectedSpec)) continue;      // drawn by the lock box
       this.poly([[p[0] - 8 * u, p[1] - 20 * u], [p[0] + 8 * u, p[1] - 20 * u], [p[0], p[1] - 10 * u]], ENEMY);
       this.text((d / 1000).toFixed(1), p[0], p[1] - 30 * u, ENEMY, 11 * u + 2, 'center');
+      // in radar lock range and not locked yet: tell how
+      if (ac.radar.mode !== STT && d < ac.spec.radar.lockRange && t === this.nearestEnemy) {
+        this.text('T = lock', p[0], p[1] + 2 * u, AMBER, 11 * u + 2, 'center');
+      }
     }
   }
   // the combat zone (amber) and the home base (cyan): marker with the distance, and an arrow at the screen
@@ -3250,17 +3332,20 @@ class HUD {
       [fm.gearPos > 0.98 ? 'GEAR DOWN' : fm.gearPos > 0.02 ? 'GEAR TRANSIT' : 'GEAR UP', fm.gearPos > 0.98 ? GREEN : fm.gearPos > 0.02 ? AMBER : DIM],
     ];
     if (ac.onGround) rows.push([`GS  ${String(Math.round(ac.speed * 3.6)).padStart(5)} km/h`, GREEN]);
+    if (ac.extreme) rows.push([`TVC EXTRÉM${ac.fm.alpha / DEG > 50 ? '  COBRA' : ''}`, AMBER]);
     if (ac.controls.brakes && ac.onGround) rows.push(['BRAKES', AMBER]);
     else if (ac.controls.airbrake) rows.push(['SPD BRK', AMBER]);
     rows.forEach(([t, c], i) => this.text(t, x, y + i * lh, c, fs));
-    const terr = world.terrain.height(ac.pos.x, ac.pos.y), xr = this.w / 2 + 250 * u;
+    // during the tutorial its card covers the right side: the right column goes under the left one
+    const terr = world.terrain.height(ac.pos.x, ac.pos.y), xr = this.tutorial ? x : this.w / 2 + 250 * u;
+    const yr = this.tutorial ? y + (rows.length + 0.6) * lh : y;
     const fuelCol = fm.fuel < ac.spec.internalFuel * 0.12 ? RED : fm.fuel < ac.spec.internalFuel * 0.28 ? AMBER : GREEN;
     const right = [
       [`ALT ${String(Math.round(ac.pos.z)).padStart(6)} m`, GREEN], [`AGL ${String(Math.round(ac.pos.z - terr)).padStart(6)}`, DIM],
       [`VS  ${(fm.vel.z >= 0 ? '+' : '') + Math.round(fm.vel.z)}`, GREEN], [`HDG    ${String(Math.round(headingDeg(ac.forward))).padStart(3, '0')}`, GREEN],
       [`FUEL ${String(Math.round(fm.fuel)).padStart(5)} kg`, fuelCol], [`HP   ${String(Math.max(0, Math.round(ac.hp))).padStart(5)}`, ac.hp > 50 ? GREEN : RED],
     ];
-    right.forEach(([t, c], i) => this.text(t, xr, y + i * lh, c, fs));
+    right.forEach(([t, c], i) => this.text(t, xr, yr + i * lh, c, fs));
     // weapons
     const reloadText = (k) => {
       const r = ac.stations.filter((s) => s.key === k && !s.loaded && s.reload !== undefined).map((s) => s.reload);
@@ -3370,7 +3455,8 @@ class HUD {
   gEffects(ac, dt) {
     if (!ac || !ac.alive) { this.black = 0; this.red = 0; return; }
     const g = ac.fm.gLoad;
-    this.black = clamp((this.black || 0) + (g > 7.5 ? (g - 7.5) * 0.15 : g < 6.5 ? -0.4 : 0) * dt, 0, 1);
+    // G-suit: up to ~8 G the pilot keeps the picture; a held 9 G turn greys out slowly (~6 s)
+    this.black = clamp((this.black || 0) + (g > 8.2 ? (g - 8.2) * 0.12 : g < 7 ? -0.4 : 0) * dt, 0, 1);
     this.red = clamp((this.red || 0) + (g < -1.8 ? (-g - 1.8) * 0.35 : -0.6) * dt, 0, 1);
     const gfx = this.g, w = this.w, h = this.h, R = Math.hypot(w, h) / 2;
     for (const [lvl, rgb] of [[this.black, '0,0,0'], [this.red, '150,0,0']]) {
@@ -3835,6 +3921,423 @@ class CockpitDisplays {
 
 return { CockpitDisplays };
 })();
+__modules['tutorial.js'] = (() => {
+// Tutorial: an optional guided flight (main menu -> Oktatás).  Every lesson explains WHAT a system does, HOW to
+// use it and WHEN it is worth it, then gives one small task that the game checks by itself.  Target drones do
+// not shoot back, and the player's jet cannot be hurt by weapons here (only the ground is dangerous).
+const { V, add, sub, mul, norm, len, clamp, DEG, rng } = __modules['util.js'];
+const { Aircraft } = __modules['sim.js'];
+const { BANDITS, BANDIT_MISSILES } = __modules['specs.js'];
+const { steerTowards } = __modules['ai.js'];
+const { Missile } = __modules['weapons.js'];
+
+const $ = (id) => document.getElementById(id);
+const k = (key) => `<kbd>${key}</kbd>`;
+
+// a target that just flies: straight, or weaving gently; radar off so the RWR stays quiet
+class DronePilot {
+  constructor(ac, heading, weave = 0, throttle = 0.9) {
+    this.ac = ac; this.heading = heading; this.weave = weave; this.throttle = throttle; this.t = 0; this.alt = ac.pos.z;
+    if (ac.radar.on) ac.radar.togglePower();
+    ac.pilot = this;
+  }
+  think() {}
+  fly(dt) {
+    const ac = this.ac;
+    this.t += dt;
+    const h = this.heading + Math.sin(this.t * 0.3) * this.weave;
+    const climb = clamp((this.alt - ac.pos.z) / 1500, -0.25, 0.25);
+    steerTowards(ac.fm, norm(V(Math.sin(h), Math.cos(h), climb)), ac.controls, 0.45, 0.8);
+    ac.controls.throttle = this.throttle;
+  }
+}
+
+function lessons(spec) {
+  const f16 = spec.id === 'f16', gun = spec.gun;
+  const list = [
+    {
+      title: 'Üdvözlünk a pilótafülkében!',
+      read: true,
+      html: `<p>Ez az oktatás lépésről lépésre végigvezet a játékon. Minden lépésnél leírjuk, <b>mit</b> csinál egy
+        funkció, <b>hogyan</b> használod és <b>mikor</b> érdemes, utána jön egy kis feladat – a játék magától
+        észreveszi, ha megcsináltad.</p>
+        <p>A gép közben magától repül. Gyakorlás alatt a lövések nem sebeznek meg, csak a földbe csapódás veszélyes.</p>
+        <h4>A képernyő</h4>
+        <ul>
+          <li><b>Bal oldalt:</b> IAS = sebesség (km/h), M = Mach, G = terhelés, AoA = állásszög,
+            THR = gázkar, MOT = hajtómű.</li>
+          <li><b>Jobb oldalt:</b> ALT = magasság, AGL = föld feletti magasság, VS = emelkedés, HDG = irány,
+            FUEL = üzemanyag, HP = épség.</li>
+          <li><b>Középen:</b> a zöld kereszt a gép orra, a szárnyas zöld kör a valódi repülési irány,
+            a fehér kör az, ahová célzol.</li>
+          <li><b>Bal lent</b> az RWR (ki figyel rád radarral), <b>jobb lent</b> a radar.</li>
+        </ul>`,
+      task: `Nyomd meg az ${k('Enter')}-t, ha elolvastad.`,
+    },
+    {
+      title: 'Repülés az egérrel',
+      html: `<p><b>Mit:</b> külső nézetben az egér a fehér kört mozgatja, a gép pedig az orrát oda fordítja. A
+        bedöntést és a húzást egy robotpilóta (instruktor) intézi helyetted.</p>
+        <p><b>Hogyan:</b> mozgasd az egeret. Kicsi elmozdulás = finom korrekció, a kép széléig = éles forduló.
+        Kézzel is repülhetsz: ${k('S')} orr fel, ${k('W')} orr le, ${k('A')} / ${k('D')} orsózás,
+        ${k('Q')} / ${k('E')} oldalkormány – amíg nyomod, az instruktor elengedi a gépet.</p>
+        <p><b>Mikor:</b> célzáshoz és üldözéshez az egér a legjobb; kézzel akkor, ha egy manővert pontosan
+        akarsz, például teljes erejű húzást az ${k('S')}-sel.</p>`,
+      task: 'Fordulj legalább 90°-ot (bármelyik irányba).',
+      setup: (t) => { t.flags.turned = 0; t.flags.lastHdg = null; },
+      check: (t) => {
+        const f = t.player.forward, h = Math.atan2(f.x, f.y);
+        if (t.flags.lastHdg !== null) {
+          let d = h - t.flags.lastHdg;
+          d = Math.atan2(Math.sin(d), Math.cos(d));
+          t.flags.turned += d;
+        }
+        t.flags.lastHdg = h;
+        return Math.abs(t.flags.turned) >= 90 * DEG;
+      },
+      status: (t) => `Eddig: ${Math.round(Math.abs(t.flags.turned) / DEG)}°`,
+    },
+    {
+      title: 'Gáz és utánégető',
+      html: `<p><b>Mit:</b> ${k('Shift')} növeli, ${k('Z')} (vagy ${k('Ctrl')}) csökkenti a gázt. 100% a katonai
+        teljesítmény (MIL). E fölött jön az utánégető (AB): sokkal több tolóerő, de 4–5-ször annyi üzemanyag
+        (F-16: 1,6 → 7,3 kg/s; Super Hornet: 2,8 → 10,3 kg/s).</p>
+        <p><b>Hogyan:</b> tartsd nyomva a ${k('Shift')}-et – 100%-nál megáll. Engedd el, és nyomd meg még egyszer:
+        ez az AB. Lefelé az első ${k('Z')} kikapcsolja az AB-t. A HUD-on a THR a kar állása, a MOT a hajtómű,
+        ami pár másodperc alatt pörög fel.</p>
+        <p><b>Mikor:</b> AB-t felszálláskor, ha lelassultál, és éles forduló közben. Utazáshoz MIL vagy kevesebb,
+        így tovább bírja az üzemanyag. Hőkövető rakéta ellen kapcsold ki az AB-t, mert kevesebb hőt adsz le.</p>`,
+      task: 'Kapcsold be az utánégetőt, aztán vedd vissza 100%-ra.',
+      setup: (t) => { t.flags.ab = false; },
+      check: (t) => {
+        const thr = t.player.controls.throttle;
+        if (thr > 1.001) t.flags.ab = true;
+        return t.flags.ab && thr <= 1.001;
+      },
+      status: (t) => (t.flags.ab ? 'Utánégető megvolt – most vissza 100%-ra (Z)' : `Gáz most: ${Math.round(Math.min(t.player.controls.throttle, 1) * 100)}%`),
+    },
+    {
+      title: 'Forduló, G és energia',
+      html: `<p><b>Mit:</b> a G a terhelés: vízszintes repülésben 1 G, a gép határa ${spec.gMax} G. Minél nagyobb
+        a G, annál élesebben fordulsz – de annál gyorsabban fogy a sebességed. A sebesség az „energiád”:
+        ha elfogy, nem tudsz fordulni, és könnyű célpont leszel.</p>
+        <p><b>Hogyan:</b> vidd az egeret messze oldalra és felfelé, vagy nyomd az ${k('S')}-t. Közben figyeld a
+        bal oldali G és IAS értéket.</p>
+        <p><b>Mikor:</b> a legélesebb forduló kb. 650–850 km/h-n megy (ez a sarok-sebesség). Lassabban a gép nem
+        tud nagy G-t húzni, gyorsabban túl nagy a fordulókör. Ha elfogyott a sebesség: AB és enyhe süllyedés.
+        8 G fölött tartósan elszürkül a kép.</p>`,
+      task: 'Húzz legalább 6 G-t.',
+      setup: (t) => { t.flags.g = 1; },
+      check: (t) => { t.flags.g = Math.max(t.flags.g, t.player.fm.gLoad); return t.flags.g >= 6; },
+      status: (t) => `Legnagyobb eddig: ${t.flags.g.toFixed(1)} G`,
+    },
+    {
+      title: 'Kabin és kijelzők',
+      html: `<p><b>Mit:</b> a ${k('V')} a kabinnézet. Itt az egér maga a botkormány: előre tolva orr le, magad
+        felé húzva orr fel, oldalra orsózás. A bot ott marad, ahová teszed – középre te viszed vissza
+        (a bal oldali kis kijelzőn a zöld pont jelzi a semleges állást).</p>
+        <p><b>Hogyan:</b> ${k('N')} = lenézel a kijelzőkre (ráközelít, így olvashatók), újra ${k('N')} = vissza.
+        ${k('J')} / ${k('K')} / ${k('L')} = a bal / jobb / középső kijelző lapozása.</p>
+        <ul>
+          <li><b>RDR</b> – radar: a célok, a lockolt cél adatai és típusa, hatótáv-csík</li>
+          <li><b>SA</b> – térkép: ellenség, rakéták, harci zóna, bázis</li>
+          <li><b>SMS</b> – fegyverzet, lőszer, flare / chaff</li>
+          <li><b>ENG</b> – hajtómű, tolóerő, üzemanyag, mennyi kell hazáig (BINGO)</li>
+          <li><b>RWR</b> – ki figyel rád, és a rád tartó rakéták</li>
+        </ul>
+        <p><b>Mikor:</b> a kabinnézet akkor jó, ha a cél előtted van. A kijelzőkre utazás közben vagy lock előtt
+        nézz le – csak röviden, mert közben nem látod a HUD-ot.</p>`,
+      task: `Válts kabinnézetbe (${k('V')}), nézd meg a kijelzőket (${k('N')}), majd ${k('N')}-nel nézz vissza előre.`,
+      setup: (t) => { t.flags.panel = false; },
+      check: (t) => {
+        const c = t.game.cam;
+        if (c.cockpit && c.panelLook) t.flags.panel = true;
+        return t.flags.panel && c.cockpit && !c.panelLook;
+      },
+      status: (t) => (t.flags.panel ? 'Most N-nel nézz vissza előre' : t.game.cam.cockpit ? 'Most nyomd meg az N-t' : 'Nyomd meg a V-t'),
+    },
+    {
+      title: 'Radar lock és AIM-120 – távoli cél',
+      html: `<p>Egy céldrón repül feléd kb. 22 km-ről (nem lő vissza). A piros háromszög jelöli, alatta a távolság km-ben.</p>
+        <p><b>Mit:</b> az AIM-120A AMRAAM radarvezérlésű rakéta („Fox 3”), 5–35 km-ről lőhető. Kilövés után
+        a te radarod vezeti, majd kb. 11–16 km-re a céltól bekapcsolja a saját radarját (PITBULL) – onnan
+        magától megy.</p>
+        <p><b>Hogyan:</b></p>
+        <ol>
+          <li>Nyomd meg a ${k('2')}-t: kiválasztod az AIM-120A-t.</li>
+          <li>Fordulj a cél felé (vagy nézz rá ${k('C')}-vel), és nyomd meg a ${k('T')}-t: fél másodperc alatt
+            lockol, a célon zöld négyzet jelenik meg.</li>
+          <li>A jobb oldali DLZ-csík mutatja, elér-e a rakéta. Ha a négyzet piros lesz és villog a
+            <b>LŐHETSZ!</b>, nyomd meg a ${k('Space')}-t.</li>
+          <li>Tartsd az orrod a cél felé (±60°), amíg meg nem jelenik a PITBULL üzenet.</li>
+        </ol>
+        <p><b>Mikor:</b> szemből messzebbről is elér, mert a cél feléd repül; hátulról csak közelebbről. Ha a lock
+        elvész (a cél 90°-ra fordul – ez a notch), nyomd meg újra a ${k('T')}-t.</p>`,
+      task: 'Lődd le a drónt AIM-120-szal.',
+      setup: (t) => { t.drone({ dist: 22000, heading: 'toward' }); },
+      check: (t) => t.killed(),
+      status: (t) => t.droneStatus(),
+    },
+    {
+      title: 'AIM-9 – hőkövető rakéta közelről',
+      html: `<p>Egy drón repül előtted kb. 3 km-re, teljes gázzal – jó meleg cél.</p>
+        <p><b>Mit:</b> az AIM-9M Sidewinder a gép hőjét követi („Fox 2”). Nem kell hozzá radar, de rövid a
+        hatótáva: hátulról 1–8 km, szemből csak 3–4 km. Kilövés után teljesen magától megy.</p>
+        <p><b>Hogyan:</b></p>
+        <ol>
+          <li>Nyomd meg az ${k('1')}-et. Megjelenik egy nagy kör – a rakéta keresője –, és halk morgást hallasz.</li>
+          <li>Vidd a célt a körbe: ha hőt lát, magától lockol (dupla kör, magas sípolás). Az ${k('F')}
+            azonnal lockol bármelyik ellenségre az orrod előtt ±30°-on belül.</li>
+          <li>${k('Space')} = indítás.</li>
+        </ol>
+        <p><b>Mikor:</b> a cél mögül, főleg ha utánégetővel repül. Ha a cél flare-t szór, várj egy pillanatot
+        és lockolj újra. 400 m-en belül már túl közel van – oda az ágyú való.</p>`,
+      task: 'Lődd le a drónt AIM-9-cel.',
+      setup: (t) => { t.drone({ dist: 3000, heading: 'away', throttle: 0.85, speed: 190, maxDist: 10000 }); },
+      check: (t) => t.killed(),
+      status: (t) => t.droneStatus(),
+    },
+    {
+      title: 'Gépágyú',
+      html: `<p>Most egy lassabb, kicsit kanyargó drón van előtted kb. 900 m-re.</p>
+        <p><b>Mit:</b> a 20 mm-es ${gun.name} gépágyú 1 km-en belül hatásos, 6000 lövés/perc, ${gun.ammo}
+        lőszer (kb. ${Math.round(gun.ammo / 100)} másodpercnyi tűz).</p>
+        <p><b>Hogyan:</b></p>
+        <ol>
+          <li>Lockold a célt radarral (${k('T')}). Ekkor megjelenik az előretartás-jelző: fehér kör ponttal –
+            ide érnek a golyók.</li>
+          <li>Tedd a fehér célzókört erre a jelre, és tüzelj a <b>bal egérgombbal</b>, rövid sorozatokkal.</li>
+        </ol>
+        <p><b>Mikor:</b> ha a cél közel van és előtted, vagy ha elfogytak a rakéták. 1,5 km-nél messzebbről ne
+        lőj – a golyók lelassulnak és szétszóródnak.</p>`,
+      task: 'Lődd le a drónt.',
+      setup: (t) => { t.drone({ dist: 900, heading: 'away', speed: 170, throttle: 0.7, weave: 0.2, maxDist: 6000, hp: 40 }); },
+      check: (t) => t.killed(),
+      status: (t) => t.droneStatus(),
+    },
+    {
+      title: 'Védekezés: rád lőttek!',
+      html: `<p>Pár másodperc múlva egy ellenség rakétát indít rád kb. 9 km-ről, oldalról. A gyakorlásban nem
+        sebez, de jelezzük, ha eltalált volna.</p>
+        <p><b>Mit jelez a gép:</b> az RWR-en (bal lent) piros villogó jel, gyorsuló sípolás, középen
+        <b>MISSILE!</b>, a rakétán piros rombusz a távolsággal és a becsapódásig hátralévő idővel.</p>
+        <p><b>Hogyan védekezz:</b></p>
+        <ol>
+          <li>Fordulj úgy, hogy a rakéta oldalt (3 vagy 9 órában) legyen – ez a <b>notch</b>: a radar nem lát
+            jól, ha nem közeledsz felé és nem is távolodsz tőle.</li>
+          <li>Közben tartsd nyomva az ${k('X')}-et: chaff (radar ellen) és flare (hőkövető ellen).</li>
+          <li>Az utolsó 2–3 másodpercben húzz egy éles fordulót – a rakéta nem tud ilyen élesen fordulni.</li>
+          <li>Hőkövető ellen vedd vissza az utánégetőt.</li>
+        </ol>
+        <p><b>Mikor:</b> azonnal, amint megjelenik a MISSILE!. Egyenesen előre ne menekülj – a rakéta gyorsabb.</p>`,
+      task: 'Éld túl a rakétát (ne találjon el).',
+      setup: (t) => { t.flags.fireIn = 3; t.flags.missile = null; t.flags.hit = false; t.flags.tries = 0; },
+      check: (t, dt) => t.missileDrill(dt),
+      status: (t) => t.missileStatus(),
+    },
+  ];
+  if (f16) {
+    list.push({
+      title: 'Extrém mód: tolóerő-vektorálás és Cobra (F-16)',
+      html: `<p>Csak az F-16-on van (mint a kísérleti F-16 MATV-n): a fúvócső ±20°-ot fordul.</p>
+        <p><b>Mit ad:</b> 9 G-s fordulók (az egeres instruktor is kihúzza), 32°-os állásszög, gyorsabb orsózás,
+        több tolóerő, kis sebességen is irányítható. Cserébe többet fogyaszt.</p>
+        <p><b>Cobra:</b> teljes húzásra a gép felágaskodik (80° állásszögig), és egy pillanat alatt rengeteg
+        sebességet veszít. Ha egy rakéta <b>3–4 másodpercen belül</b> van tőled, amikor ezt csinálod, nagy eséllyel
+        elveszít és elrepül melletted. Ha túl korán csinálod, a rakéta újracéloz, te pedig lelassultál.</p>
+        <p><b>Hogyan:</b> ${k('Tab')} = extrém mód be / ki. Cobra: 600 km/h alatt tartsd nyomva az ${k('S')}-t
+        (kabinban: bot teljesen hátra) kb. 1 másodpercig, engedd el, adj AB-t, és engedd le az orrot.</p>
+        <p><b>Mikor:</b> közelharcban, hogy az ellenfél mögé kerülj, és végső védekezésként rakéta ellen, amikor a
+        piros rombusz 3–4 másodpercet mutat.</p>`,
+      task: `Kapcsold be az extrém módot (${k('Tab')}), és csinálj egy Cobrát (állásszög 50° fölött).`,
+      check: (t) => t.player.extreme && t.player.fm.alpha > 50 * DEG,
+      status: (t) => (t.player.extreme ? `Extrém mód BE · ${Math.round(t.player.fm.ias * 3.6)} km/h · AoA ${Math.round(t.player.fm.alpha / DEG)}°`
+        : 'Nyomd meg a Tab-ot'),
+    });
+  } else {
+    list.push({
+      title: 'A Super Hornet erőssége: nagy állásszög',
+      html: `<p><b>Mit:</b> a Hornet nagy szárnya és a törzs melletti LEX miatt 40°-os állásszögig is irányítható:
+        lassan is oda tudja fordítani az orrát, ahová kell – ezzel lehet lövéshez jutni közelharcban.</p>
+        <p><b>Hogyan:</b> lassíts 450 km/h alá, aztán húzz teljes erővel (${k('S')} vagy egér messze felfelé).</p>
+        <p><b>Mikor:</b> csak röviden! Nagy állásszögben gyorsan fogy a sebesség, és a Hornet lassabban gyorsul
+        vissza, mint az F-16. Energiaharcban (hosszú, gyors fordulók) az F-16 az erősebb.</p>`,
+      task: 'Érj el 30° fölötti állásszöget.',
+      check: (t) => t.player.fm.alpha > 30 * DEG,
+      status: (t) => `${Math.round(t.player.fm.ias * 3.6)} km/h · AoA ${Math.round(t.player.fm.alpha / DEG)}°`,
+    });
+  }
+  list.push({
+    title: 'Harci zóna, bázis, leszállás',
+    read: true,
+    html: `<p>A játékban a harc a térkép túloldalán, a <b>harci zónában</b> van: a HUD-on borostyán rombusz
+      mutatja az irányt és a távolságot, a kabin térképén piros kör. A bázis körüli 14 km-es körben senki nem
+      támad – ott nyugodtan fel- és leszállhatsz.</p>
+      <p><b>Hullámok:</b> felszállás után kb. 25 másodperccel jön az első hullám a zónába, minden hullám eggyel
+      több ellenséget hoz. Az ellenség csak közelről lő (normál nehézségen AIM-120-szal legfeljebb 8 km-ről),
+      te sokkal messzebbről lockolhatsz és lőhetsz.</p>
+      <p><b>Leszállás:</b> futómű ki (${k('G')}), kb. 270 km/h, lassú süllyedés (4 m/s alatt), vízszintes
+      szárnyak; a földön ${k('B')} fékez. A bázis betonján lelassulva újratölt, tankol és javít.
+      Arkád módban a rakéták 10 másodperc alatt maguktól visszatöltődnek, realisztikusban csak leszálláskor.</p>
+      <p><b>Tipp:</b> messziről AIM-120 (${k('T')} + ${k('Space')}), közelről AIM-9 vagy ágyú, és mindig figyeld
+      az RWR-t. Jó repülést!</p>`,
+    task: `${k('Enter')} = az oktatás vége, vissza a főmenübe.`,
+  });
+  return list;
+}
+
+class Tutorial {
+  constructor(game) {
+    this.game = game; this.panel = $('tutorial'); this.spawned = []; this.deadTime = 0;
+    this.steps = lessons(game.player.spec);
+    this.panel.hidden = false;
+    this.start(0);
+  }
+  get player() { return this.game.player; }
+  get step() { return this.steps[this.i]; }
+
+  start(i) {
+    const w = this.game.world;
+    w.aircraft = w.aircraft.filter((a) => !this.spawned.includes(a));
+    w.missiles = w.missiles.filter((m) => !this.spawned.includes(m.shooter));
+    this.spawned = [];
+    this.i = i; this.done = false; this.doneTime = 0; this.flags = {};
+    const p = this.player;
+    p.invulnerable = true;
+    // the lessons need both missile types on the jet
+    if (!p.stations.some((s) => s.key === 'AIM-9M') || !p.stations.some((s) => s.key === 'AIM-120A')) {
+      p.loadout = 'default'; p.rearm();
+    }
+    if (this.step.setup) this.step.setup(this);
+    this.render();
+  }
+  next() { if (this.i + 1 < this.steps.length) this.start(this.i + 1); else this.finish(); }
+  enter() { this.next(); }                     // Enter: read steps go on, task steps can be skipped
+  finish() {
+    const w = this.game.world;
+    w.aircraft = w.aircraft.filter((a) => !this.spawned.includes(a));
+    this.panel.hidden = true;
+    this.player.invulnerable = false;
+    this.game.tutorial = null;
+    if (this.game.onTutorialEnd) this.game.onTutorialEnd();
+  }
+
+  // ------------------------------------------------------------------ helpers
+  drone({ dist, heading = 'away', speed = 220, throttle = 0.9, weave = 0, side = 0, maxDist = 45000, hp = null }) {
+    const p = this.player, g = this.game;
+    const fwd = norm(V(p.forward.x, p.forward.y, 0), V(0, 1, 0)), right = V(fwd.y, -fwd.x, 0);
+    const pos = add(add(p.pos, mul(fwd, dist)), mul(right, side));
+    pos.z = Math.max(p.pos.z, g.terrain.height(pos.x, pos.y) + 1200);
+    const hdgP = Math.atan2(fwd.x, fwd.y), h = heading === 'toward' ? hdgP + Math.PI : hdgP;
+    const spec = BANDITS[g.opts.enemyType === 'fa18' ? 'fa18' : 'f16'];
+    const ac = new Aircraft(spec, 'Céldrón', 'red', pos, h / DEG, speed, { missiles: BANDIT_MISSILES, rnd: rng(7) });
+    ac.stations.forEach((s) => { s.loaded = false; }); ac.updateStores();
+    if (hp) ac.hp = hp;                          // the gun lesson's drone goes down after a few good bursts
+    new DronePilot(ac, h, weave, throttle);
+    g.world.addAircraft(ac);
+    this.spawned.push(ac);
+    this.flags.drone = ac; this.flags.maxDist = maxDist;
+    return ac;
+  }
+  killed() {
+    const d = this.flags.drone;
+    if (d && !d.alive && d.lastAttacker === this.player) this.flags.kill = true;
+    if (this.flags.kill) return true;
+    // flew away, or went down without your shot (a hill): a new one
+    if (d && (len(sub(d.pos, this.player.pos)) > this.flags.maxDist || !d.alive)) {
+      this.game.world.aircraft = this.game.world.aircraft.filter((a) => a !== d);
+      this.game.hud.message('A drón elment – itt egy új előtted', 'info', 3);
+      this.step.setup(this);
+    }
+    return false;
+  }
+  droneStatus() {
+    const d = this.flags.drone;
+    if (!d || !d.alive) return 'Találat!';
+    const dist = len(sub(d.pos, this.player.pos)) / 1000;
+    const r = this.player.radar, locked = r.locked === d;
+    return `Drón: ${dist.toFixed(1)} km · ${locked ? 'radar lock OK' : 'nincs radar lock'} · fegyver: ${this.player.selected || '-'}`;
+  }
+  missileDrill(dt) {
+    const f = this.flags, p = this.player, g = this.game;
+    if (!f.missile) {
+      f.fireIn -= dt;
+      if (f.fireIn > 0) return false;
+      // a bandit appears 7 km out behind on the right and fires one (weak) AIM-120 at once, aimed ahead of you
+      const ac = this.drone({ dist: -5000, side: 5000, heading: 'away', speed: 260 });
+      const rel = sub(p.pos, ac.pos);
+      const m = new Missile(BANDIT_MISSILES['AIM-120A'], ac, ac.pos, ac.vel, norm(rel), ac.rnd, p);
+      m.estVel = p.vel.clone();
+      g.world.addMissile(m);
+      f.missile = m; f.hit = false; f.tries++;
+      return false;
+    }
+    const m = f.missile;
+    if (m.alive) {
+      // gone past you and flying away, or lost you: that counts as beaten
+      const rel = sub(p.pos, m.pos), closing = (m.vel.x * rel.x + m.vel.y * rel.y + m.vel.z * rel.z) / Math.max(len(rel), 1) - 0;
+      if ((closing < 0 && len(rel) > 1500) || m.defeated) m.alive = false; else return false;
+    }
+    if (f.hit) {                               // it would have hit: one more try
+      g.hud.message('ELTALÁLT VOLNA – próbáld újra: fordulj oldalra, X, és az utolsó pillanatban éles forduló', 'warn', 5);
+      f.missile = null; f.fireIn = 4;
+      return false;
+    }
+    return true;
+  }
+  missileStatus() {
+    const f = this.flags;
+    if (!f.missile) return f.tries ? 'Új rakéta jön...' : `Rakéta indul ${Math.max(0, Math.ceil(f.fireIn))} s múlva`;
+    const d = len(sub(f.missile.pos, this.player.pos)) / 1000;
+    return `RAKÉTA: ${d.toFixed(1)} km · ${f.missile.status}`;
+  }
+
+  // ------------------------------------------------------------------ frame
+  update(dt) {
+    const p = this.player;
+    if (!p.alive) {                             // crashed: back in the air, same lesson again
+      this.deadTime += dt;
+      if (this.deadTime > 2) {
+        this.deadTime = 0;
+        this.game.state.banner = this.game.state.subBanner = '';
+        this.game.spawnPlayer();
+        this.start(this.i);
+      }
+      return;
+    }
+    const s = this.step;
+    if (!this.done && s.check && s.check(this, dt)) { this.done = true; this.render(); }
+    if (this.done) { this.doneTime += dt; if (this.doneTime > 2.5) { this.next(); return; } }
+    this.renderTime = (this.renderTime || 0) + dt;
+    if (this.renderTime > 0.25) { this.renderTime = 0; this.renderStatus(); }
+  }
+  onEvent(kind, d) {
+    if (kind === 'shielded' && d.target === this.player) this.flags.hit = true;
+    if (kind === 'kill' && d.killer === this.player && d.victim === this.flags.drone) this.flags.kill = d.weapon;
+  }
+
+  render() {
+    const s = this.step, n = this.steps.length;
+    this.panel.innerHTML = `
+      <div class="tut-head"><span>OKTATÁS · ${this.i + 1} / ${n}</span><span class="tut-bar"><i style="width:${(this.i + 1) / n * 100}%"></i></span></div>
+      <h3>${s.title}</h3>
+      <div class="tut-body">${s.html}</div>
+      <div class="tut-task ${this.done ? 'done' : ''}">
+        <b>${this.done ? '✓ KÉSZ' : 'FELADAT'}</b> ${this.done ? 'Szép volt! Megyünk tovább…' : s.task}
+        <div class="tut-status" id="tut-status"></div>
+      </div>
+      <div class="tut-foot">${s.read ? `${k('Enter')} = tovább` : `${k('Enter')} = lépés kihagyása`} · ${k('Esc')} = menü (kilépés az oktatásból)</div>`;
+    this.renderStatus();
+  }
+  renderStatus() {
+    const el = $('tut-status'), s = this.step;
+    if (!el) return;
+    try { el.textContent = !this.done && s.status ? s.status(this) : ''; } catch (e) { el.textContent = ''; }
+  }
+}
+
+return { Tutorial };
+})();
 __modules['audio.js'] = (() => {
 // Procedural WebAudio sounds (port of dogfight/audio.py): engine, afterburner, gun, Sidewinder growl /
 // lock tone, RWR tones, launch, hits and explosions.  Created on the first click (browser autoplay rules).
@@ -3944,6 +4447,7 @@ const { Models, SceneView } = __modules['render.js'];
 const { parseGLB } = __modules['glb.js'];
 const { HUD } = __modules['hud.js'];
 const { CockpitDisplays } = __modules['mfd.js'];
+const { Tutorial } = __modules['tutorial.js'];
 const { Sounds } = __modules['audio.js'];
 
 // The fight happens on the far side of the map: the enemies live in the combat zone and never attack anyone
@@ -4184,6 +4688,7 @@ class Game {
     const field = this.terrain.airfield;
     this.nav = { zone: { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }, base: { x: field.x, y: field.y, r: SAFE_RADIUS }, wave: 0, enemies: 0 };
     this.spawnPlayer();
+    this.startTutorial();
     this.resize();
     addEventListener('resize', () => this.resize());
     this.last = performance.now();
@@ -4210,6 +4715,12 @@ class Game {
     this.stick = { x: 0, y: 0, idle: 0 };
     this.player = null;
     this.spawnPlayer();
+    this.startTutorial();
+  }
+  // the optional guided flight (main menu -> Oktatás); no enemy waves while it runs
+  startTutorial() {
+    $('tutorial').hidden = true;
+    this.tutorial = this.opts.tutorial ? new Tutorial(this) : null;
   }
 
   resize() {
@@ -4283,7 +4794,7 @@ class Game {
     if (k === 'h' || k === 'F1') { this.toggleHelp(); return; }
     if (k === 'Escape') { if (!this.state.paused) this.pause(); return; }
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
-    if (k === 'Enter' || k === 'NumpadEnter') { this.respawn(); return; }
+    if (k === 'Enter' || k === 'NumpadEnter') { if (this.tutorial) this.tutorial.enter(); else this.respawn(); return; }
     if (k === 'm') { this.hud.markers = !this.hud.markers; return; }
     if (k === 'v') { this.cam.cockpit = !this.cam.cockpit; this.cam.panelLook = false; return; }
     if (k === 'n') {
@@ -4325,6 +4836,10 @@ class Game {
       case 'r': p.radar.togglePower(); msg(`RADAR ${p.radar.on ? 'BE' : 'KI'}`, 'info', 1.2); break;
       case '1': if (p.select('AIM-9M')) msg('AIM-9M', 'info', 1); break;
       case '2': if (p.select('AIM-120A')) msg('AIM-120A', 'info', 1); break;
+      case 'Tab':
+        if (p.toggleExtreme()) msg(p.extreme ? 'EXTRÉM MÓD BE - tolóerő-vektorálás, 9 G, teljes húzás = Cobra' : 'EXTRÉM MÓD KI', p.extreme ? 'warn' : 'info', 2.5);
+        else msg('Extrém mód (tolóerő-vektorálás) csak az F-16-on van', 'warn');
+        break;
       case 'g':
         if (p.toggleGear()) msg(`FUTÓMŰ ${p.fm.gearDown ? 'KI' : 'BE'}`);
         else msg('A földön nem húzható be a futómű', 'warn');
@@ -4475,7 +4990,7 @@ class Game {
   // ------------------------------------------------------------------ loop
   frame(t) {
     requestAnimationFrame((tt) => this.frame(tt));
-    const dt = Math.min((t - this.last) / 1000, 0.1);
+    const dt = clamp((t - this.last) / 1000, 0, 0.1);
     this.last = t;
     const st = this.state;
     if (this.pad.poll()) {
@@ -4487,6 +5002,7 @@ class Game {
       if (this.player.alive) this.applyInput(dt);
       else this.input.takeDelta();
       this.world.update(dt);
+      if (this.tutorial) this.tutorial.update(dt);
       this.gameFlow(dt);
     } else this.input.takeDelta();
     for (const [kind, d] of this.world.drainEvents()) {
@@ -4494,6 +5010,7 @@ class Game {
       this.hud.handleEvent(kind, d, this.player);
       this.sounds.handleEvent(kind, d, this.player);
       this.onEvent(kind, d);
+      if (this.tutorial) this.tutorial.onEvent(kind, d);
     }
     const sdt = st.paused ? 0 : dt;
     this.cam.update(sdt, this.player);
@@ -4502,7 +5019,7 @@ class Game {
     // the cockpit displays of the player's jet (drawn only while they can be seen)
     const nav = this.nav;
     nav.wave = st.wave; nav.enemies = this.enemiesAlive().length;
-    this.hud.nav = nav;
+    this.hud.nav = nav; this.hud.tutorial = !!this.tutorial;
     const vis = this.view.visuals.get(this.player);
     if (vis && vis.screens && !vis.displays) vis.displays = new CockpitDisplays(this.player.spec, vis.screens);
     if (vis && vis.displays && this.view.cockpitView) vis.displays.update(sdt, this.player, this.world, nav);
@@ -4518,7 +5035,8 @@ class Game {
     if (d.victim === this.player) {
       st.deaths++;
       st.banner = d.weapon !== 'crash' ? 'LELŐTTEK!' : 'LEZUHANTÁL!';
-      st.subBanner = 'Enter: újraéledés  ·  Esc: menü (főmenü, új játék)';
+      st.subBanner = this.tutorial ? 'Pár másodperc, és újra a levegőben vagy – a lecke elölről indul'
+        : 'Enter: újraéledés  ·  Esc: menü (főmenü, új játék)';
     } else if (d.killer === this.player) st.kills++;
   }
   gameFlow(dt) {
@@ -4530,11 +5048,11 @@ class Game {
       st.subBanner = '';
       this.hud.message('SIKERES FELSZÁLLÁS - húzd be a futóművet (G)', 'good', 4);
     }
-    if (st.waveActive && !this.enemiesAlive().length) {
+    if (!this.tutorial && st.waveActive && !this.enemiesAlive().length) {
       st.waveActive = false; st.waveTimer = WAVE_DELAY;
       this.hud.message('HULLÁM TELJESÍTVE - leszállhatsz a bázison újrafegyverezni', 'good', 5);
     }
-    if (!st.waveActive && airborne) {
+    if (!this.tutorial && !st.waveActive && airborne) {
       st.waveTimer -= dt;
       if (st.waveTimer <= 0) this.spawnWave();
     }
@@ -4655,14 +5173,14 @@ async function boot() {
   defaults(plane()); showLoadout();
   // The main menu starts a match, and the game can come back to it any time (Esc -> Főmenü), during a match
   // or after it: from there the match continues (Folytatás) or a new one starts on the same scene.
-  const start = (airStart) => {
+  const start = (airStart, tutorial = false) => {
     const difficulty = document.querySelector('input[name=diff]:checked').value;
     const enemies = Number($('enemies').value);
     const mode = document.querySelector('input[name=mode]:checked').value;
     const aircraft = document.querySelector('input[name=plane]:checked').value;
     const enemyType = document.querySelector('input[name=foe]:checked').value;
     const loadout = buildLoadout(AIRCRAFT[aircraft], arms['AIM-9M'], arms['AIM-120A']).layout;
-    const opts = { airStart, difficulty, enemies, mode, aircraft, enemyType, loadout };
+    const opts = { airStart: airStart || tutorial, difficulty, enemies, mode: tutorial ? 'arcade' : mode, aircraft, enemyType, loadout, tutorial };
     $('menu').hidden = true;
     let game = window.game;
     if (game) game.newMatch(opts);
@@ -4670,6 +5188,7 @@ async function boot() {
       try { game = new Game(assets, opts); }
       catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
       window.game = game;
+      game.onTutorialEnd = () => { showMenu(); $('current').textContent = 'Az oktatás véget ért. Folytatás = szabad repülés hullámokkal, vagy indíts új játékot.'; };
       $('sens').addEventListener('input', (e) => { game.cam.sensitivity = Number(e.target.value); });
       $('invert').addEventListener('change', (e) => { game.cam.invertY = e.target.checked; });
     }
@@ -4714,6 +5233,7 @@ async function boot() {
   };
   requestAnimationFrame(menuPoll);
   $('start-air').addEventListener('click', () => start(true));
+  $('start-tutorial').addEventListener('click', () => start(true, true));
   $('help').addEventListener('click', () => window.game && window.game.resume());
   $('fullscreen').addEventListener('click', (e) => {
     e.stopPropagation();

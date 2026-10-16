@@ -100,6 +100,12 @@ export const F16C = {
     default: { 1: 'AIM-9M', 9: 'AIM-9M', 2: 'AIM-9M', 8: 'AIM-9M', 3: 'AIM-120A', 7: 'AIM-120A' },
   },
   firingOrder: [9, 1, 8, 2, 7, 3],
+  // EXTRÉM mód (Tab): tolóerő-vektorálás, mint a kísérleti F-16 MATV / VISTA.  A fúvócső ±20°-ot fordul, így
+  // a gép kis sebességen is tud forgatni, 9 G-t tart, és teljes húzásra át tud menni nagy állásszögbe (Cobra).
+  tvc: {
+    vector: 20, alphaNormal: 32, alphaPostStall: 80, rollRate: 330, pitchRate: 2.4, thrustScale: 1.2,
+    kScale: 0.75, clMax: 2.4, lowSpeedAuthority: 0.65,
+  },
 };
 
 // F/A-18E: heavier, more wing, two engines.  Lower thrust to weight than the Viper and more drag (the canted

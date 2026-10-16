@@ -363,10 +363,11 @@ export class Missile {
     this.thrust = this.motorThrust();
     if (this.thrust > 0) this.mass -= sp.propellant / sp.burnTime * dt;
     let acmd = V();
-    if (this.age >= Math.max(sp.guidanceDelay, sp.railTime)) {
+    if (!this.defeated) this.checkCobra(world);
+    if (this.age >= Math.max(sp.guidanceDelay, sp.railTime) && !this.defeated) {
       const aim = this.guidance(dt, world);
       if (aim) { acmd = this.proNav(aim[0], aim[1]); acmd.z += G; }
-    }
+    } else if (this.defeated) this.status = 'MISSED';
     acmd.addScaledVector(vhat, -dot(acmd, vhat));
     // fins, plus thrust vectoring while the motor burns (spec.tvc: share of the thrust that can push sideways)
     const tvc = sp.tvc && this.thrust > 0 ? this.thrust * sp.tvc / this.mass : 0;
@@ -392,6 +393,22 @@ export class Missile {
     if (this.pos.z <= world.terrain.height(this.pos.x, this.pos.y)) world.detonate(this, this.pos, true);
     else if (this.age > sp.guidanceTime) world.detonate(this, this.pos, false, true);
     else if (!this.burning && speed < 160 && this.age > 3) { this.status = 'SLOW'; if (speed < 110) world.detonate(this, this.pos, false, true); }
+  }
+  // A target that suddenly stands on its tail (Cobra, AoA > 40 degrees) when the missile is 4 s or less away
+  // loses most of its speed in a moment: the missile cannot turn that hard and its seeker loses the target
+  // in the clutter - it overshoots.  Too early (more than 4 s) the missile simply re-aims and the jet has
+  // thrown away its energy.
+  checkCobra(world) {
+    const t = this.guidedTarget || this.intended;
+    if (!t || !t.fm || !t.alive || t.fm.alpha < 40 * DEG) return;
+    const rel = sub(t.pos, this.pos), d = len(rel), closing = -dot(sub(t.vel, this.vel), norm(rel));
+    const ttg = closing > 1 ? d / closing : 99;
+    if (ttg > 4 || this.cobraJudged) return;
+    this.cobraJudged = true;
+    if (this.rnd() < (t.isPlayer ? 0.9 : 0.6)) {
+      this.defeated = true;
+      world.emit('message', { to: t, text: 'COBRA - A RAKÉTA ELVESZTETT!', level: 'good' });
+    }
   }
   proNav(aimPos, aimVel) {
     const r = sub(aimPos, this.pos), d2 = Math.max(dot(r, r), 1), vRel = sub(aimVel, this.vel);

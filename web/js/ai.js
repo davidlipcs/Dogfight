@@ -84,11 +84,15 @@ export class PlayerPilot {
       c.pitch = this.pitch !== null ? this.pitch : 0;
       c.roll = this.roll !== null ? this.roll : clamp(-fm.omega.y * 0.5, -1, 1);
       c.yaw = this.yaw !== null ? this.yaw : 0;
+      // extreme mode: a full pull lets the jet go past the AoA limit (Cobra)
+      c.postStall = fm.extreme && c.pitch >= 0.95;
       return;
     }
     // the instructor keeps a little G margin (~7.6 G) so the pilot does not black out; S pulls the full 9 G.
+    // In extreme mode (thrust vectoring) it flies the full 9 G turns itself.
     // It puts the nose on the cursor (not the direction of flight), so the jet always points where you aim.
-    steerTowards(fm, this.aim, c, PLAYER_G, 1.3, true);
+    c.postStall = false;
+    steerTowards(fm, this.aim, c, fm.extreme ? 1 : PLAYER_G, fm.extreme ? 1.5 : 1.3, true);
     if (this.yaw !== null) c.yaw = this.yaw;
   }
 }
@@ -97,10 +101,12 @@ export class PlayerPilot {
 // weaker too: less G, less precise, slower to notice missiles, and it only fires inside a cautious part of the
 // launch zone.  With an `area` (the combat zone) it patrols there and only goes for enemies inside the zone
 // (plus a margin), never for anyone near the home base: taking off and landing is safe.
+// maxIr / maxArh: the farthest they ever shoot (m).  Kept well inside what the player can lock and answer,
+// so nobody gets a missile from 15 km out of nowhere.
 const SKILLS = {
-  easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5 },
-  normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7 },
-  hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8 },
+  easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5, maxIr: 3500, maxArh: 0 },
+  normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7, maxIr: 4500, maxArh: 8000 },
+  hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 10000 },
 };
 const MIN_AGL = 450;
 
@@ -165,14 +171,14 @@ export class AIPilot {
     let fired = null;
     const closingT = -dot(t.vel, norm(sub(t.pos, ac.pos)));
     const zone = (key) => launchZone(ac.missileSpec(key), ac.speed, ac.pos.z, closingT)[0] * this.skill.zone;
-    if (ac.missileCount('AIM-9M') && d > 900 && d < Math.min(7000, zone('AIM-9M'))) {
+    if (ac.missileCount('AIM-9M') && d > 900 && d < Math.min(this.skill.maxIr, zone('AIM-9M'))) {
       if (ac.selected !== 'AIM-9M') ac.select('AIM-9M');
       else if (ac.irSeeker.candidate === t || ac.irSeeker.target === t) {
         if (!ac.irSeeker.locked) ac.irSeeker.lock();
         if (ac.irSeeker.target === t) fired = ac.fireMissile(world);
       }
     } else if (ac.missileCount('AIM-120A') && this.skill.arh && ac.radar.mode === STT && ac.radar.locked === t) {
-      if (d > 2500 && d < zone('AIM-120A')) {
+      if (d > 2500 && d < Math.min(this.skill.maxArh, zone('AIM-120A'))) {
         if (ac.selected !== 'AIM-120A') ac.select('AIM-120A');
         fired = ac.fireMissile(world);
       }

@@ -59,6 +59,7 @@ Ha egy hálózat a `github.io` címeket is tiltja, a letöltött egyfájlos vál
 | V | kabin / külső nézet |
 | **N** | kabinban: lenézés a **kijelzőkre** (ráközelít, olvasható); újra N = vissza. Külső nézetből egyből a kabinba és a kijelzőkre vált |
 | **J / K / L** | a bal / jobb / középső kabinkijelző lapozása (RDR, SA, SMS, ENG, RWR) |
+| **Tab** | F-16: EXTRÉM mód (tolóerő-vektorálás) be / ki – 9 G-s fordulók, teljes húzás 600 km/h alatt = Cobra |
 | Görgő / középső egérgomb | fegyverváltás / zoom (3 fokozat) |
 | Bal egérgomb / Space | gépágyú / rakéta |
 | 1 / 2 | AIM-9M / AIM-120A |
@@ -91,7 +92,7 @@ felszállás, X = indulás a levegőben, B = új meccs a kifutóról. (Böngész
 | **Nehézség** | Könnyű · Normál · Nehéz |
 | **Ellenség** | 1–4 ellenség az első hullámban |
 | **Egér** | érzékenység, fordított Y |
-| Gombok | Folytatás (ha fut meccs) · Felszállás a kifutóról · Indulás a levegőben |
+| Gombok | Folytatás (ha fut meccs) · Felszállás a kifutóról · Indulás a levegőben · **Oktatás** |
 
 **Fegyverzet-kiosztás** (`buildLoadout` a `specs.js`-ben): minden fegyver először azokat az állomásokat
 foglalja el, amelyeket csak ő használhat, utána a közöseket a saját sorrendjében – úgy, ahogy az igazi gépen:
@@ -107,6 +108,32 @@ alap fegyverzettel repülnek.
 
 A főmenü meccs közben is elérhető (Esc → Főmenü): onnan a **Folytatás** visszavisz, vagy új meccs indul
 ugyanazon a jeleneten (a terep és a modellek nem töltődnek újra).
+
+### Oktatás (`web/js/tutorial.js`)
+
+Nem kötelező, vezetett repülés a menüben kiválasztott géppel, levegőben indulva, hullámok nélkül, arkád
+módban. A jobb oldali kártya minden leckénél elmondja, **mit** csinál a funkció, **hogyan** kell használni és
+**mikor** érdemes, alatta a feladat és élő állapot (pl. „Drón: 12,4 km · radar lock OK”). A feladatot a játék
+ellenőrzi; sikerre 2,5 s múlva jön a következő lecke. Enter = olvasó leckénél tovább, feladatnál kihagyás;
+Esc = menü. Közben a HUD jobb oszlopa a bal alá kerül, hogy a kártya ne takarja.
+
+| # | Lecke | Feladat (amit a játék figyel) |
+|---|---|---|
+| 1 | Üdvözlés, a képernyő részei | Enter |
+| 2 | Repülés az egérrel, kézi irányítás | 90° fordulás |
+| 3 | Gáz, utánégető, fogyasztás | AB be, majd vissza 100%-ra |
+| 4 | Forduló, G, energia, sarok-sebesség | 6 G |
+| 5 | Kabin, egér-botkormány, kijelzők (N, J/K/L) | V → N → N |
+| 6 | Radar lock és AIM-120 (céldrón 22 km-ről, szemből) | a drón lelövése |
+| 7 | AIM-9 hőkövető (drón 3 km-re előtted) | a drón lelövése |
+| 8 | Gépágyú, előretartás-jelző (drón 900 m-re) | a drón lelövése |
+| 9 | Védekezés: RWR, MISSILE, notch, chaff / flare, éles forduló | egy hátulról-oldalról indított AIM-120 túlélése (ha eltalált volna, újra jön) |
+| 10 | F-16: extrém mód és Cobra · Hornet: nagy állásszög | Tab + 50° fölötti AoA · Hornet: 30° fölötti AoA |
+| 11 | Harci zóna, hullámok, leszállás, kiszolgálás | Enter → főmenü |
+
+A drónok (`DronePilot`) egyenesen vagy enyhén kanyarogva repülnek, radar nélkül, fegyvertelenül; ha
+elrepülnek vagy nem a te lövésedtől esnek le, új drón jön. A játékos gépe az oktatásban sebezhetetlen
+(`invulnerable`: a találat csak jelzés), a földbe csapódás után a lecke elölről indul.
 
 ### Harci zóna és biztonsági kör
 
@@ -171,6 +198,24 @@ tolóerővel és 9 G-vel az energiaharcban erősebb.
 
 **Ellenséges változatok** (`BANDITS`): ugyanazok a gépek gyengébb sárkánnyal – F-16C: 7 G, 190°/s, 20° AoA;
 F/A-18E: 6,3 G, 150°/s, 28° AoA.
+
+**F-16 EXTRÉM mód** (`F16C.tvc`, Tab): tolóerő-vektorálás, mint a kísérleti F-16 MATV / VISTA-n. Bekapcsolva:
+
+| | Normál | Extrém |
+|---|---|---|
+| Fúvócső-kitérés | – | ±20° a pitch bottal (a tolóerő egy része a gép „felfelé” tolja) |
+| Tolóerő / indukált ellenállás | 100% / 100% | 120% / 75% |
+| cL,max | 1,8 | 2,4 |
+| AoA-limit | 25° | 32° (instruktor), 80° teljes kézi húzásnál 600 km/h alatt (Cobra) |
+| Max pitch-sebesség / orsózás | 0,9 rad/s / 270°/s | 2,4 rad/s / 330°/s, kis sebességen is |
+| Egeres instruktor G-határa | a max G 85%-a | a teljes 9 G |
+| 9 G-ben tartva (3 km, 860 km/h-ról) | 2,6 s | 4,1 s |
+
+**Cobra és rakéták** (`Missile.checkCobra`): ha a rakéta célpontja 40° fölötti állásszögben van, miközben a
+rakéta 4 másodpercen belül érne oda, a rakéta egyszer „dönt”: a játékos ellen 90%, az AI ellen 60% eséllyel
+elveszíti a célt és elrepül mellette (MISSED). Mérve (bandita AIM-120 / AIM-9 hátulról, 5 km): jó időzítéssel
+8-ból 7 elvétette, túl korán (9 s) vagy semmit sem csinálva mind talált. A HUD bal oszlopában „TVC EXTRÉM”
+(Cobra közben „COBRA”) jelzi a módot.
 
 **Rakéták mindkét gépen:** AIM-9M és AIM-120A. Ellenállásuk a gépre 0,031 m² rakétánként (indítósínnel),
 ezért nagyobb szárnyú gépen kisebb együtthatót ad (a valóságnak megfelelően).
@@ -260,6 +305,11 @@ szaggatott vonal a várható találati pontig; saját rakéták rombusz-jelölő
 Viselkedés: járőrözés a harci zónában, célkövetés (rakéta, ágyú), védekezés (notch, flare / chaff,
 kitérés), terep- és pályahatár-kerülés; csak „tisztességes” célra támad (zónában, nem a biztonsági körben).
 
+**Legnagyobb lőtávolság** (a DLZ-hányadon felül), hogy senki ne kapjon rakétát „a semmiből”, amíg ő maga még
+nem tud lockolni: könnyű – AIM-9 3,5 km, AIM-120 nincs; normál – 4,5 / 8 km; nehéz – 5,5 / 10 km. A játékos a
+radarral 55 km-ről (F-16) / 70 km-ről (Hornet) lockolhat; ha egy ellenség lock-távolságon belül van és nincs
+lock, a legközelebbi jelölője alatt „T = lock” felirat jelenik meg.
+
 ### 6.7 Kabin, kijelzők, nézetek
 
 ![F-16 kabin, a kijelzőkre nézve (N)](f16_cockpit_displays.jpg)
@@ -297,7 +347,7 @@ Az F-16 képernyői a régi modell négy képernyő-négyszögére kerülnek (0�
 * **Egér-botkormány:** a bot ott marad, ahová teszed (nincs visszarugózás), 7%-os holtsáv; pointer lock
   nélkül a kurzor középtől mért eltérése a bot.
 * A kabinnézet a géphez rögzített; a fej a nyak körül fordul (±160°), hátranézéskor előre-oldalra dől;
-  G alatt a fej lesüllyed; 7,5 G felett elsötétülés, −1,8 G alatt bevörösödés.
+  G alatt a fej lesüllyed; 8,2 G felett lassan elszürkül a kép (egy tartott 9 G-s fordulónál ~6 s után), −1,8 G alatt bevörösödés.
 * A saját gép kabinnézetben külön, közeli (3 cm-es near plane) renderelési menetben rajzolódik (layer 1).
 * Külső nézet: War Thunder-féle követő kamera.
 
@@ -379,6 +429,7 @@ egy gép van: az építés törli a korábbi `F16` / `FA18` gyűjteményt.
 | `js/hud.js` | HUD, radar, RWR, G-hatások, zóna- és bázisjelölők |
 | `js/audio.js` | hangok |
 | `js/game.js` | kamera, bemenet (egér-botkormány), játékmenet (zóna, hullámok, kiszolgálás), betöltés, menü |
+| `js/tutorial.js` | az oktatás leckéi, céldrónok, rakéta-gyakorlat |
 
 ### 8.2 Megfeleltetés a Python változattal
 
@@ -453,7 +504,8 @@ játék saját függvényeivel mértük és próbáltuk ki (lásd 11.); automata
 | 22 | Kabinból joystickként irányítani, a kabinnézet ne takarjon, főmenü meccs közben / után | egér-botkormány kabinnézetben, nyak körüli fejforgatás előre-oldalra dőléssel, szünetmenü, főmenü Folytatással, új meccs ugyanazon a jeleneten | `a4f9287` |
 | 23 | Kabin: több infó olvashatóan (az alapok maradnak); F/A-18E Super Hornet Blenderben saját kabinnal; valós aerodinamika és tolóerő mindkettőnél; gép- és ellenfélválasztás, fegyverzet; a harc a térkép túloldalán | `aircraft_lib.py` + `build_fa18.py` (Super Hornet GLB), élő kabinkijelzők (`mfd.js`), N = kijelzők nézése, lencseeltolás kabinban; `FA18E` adatok, rakéta-ellenállás felület szerint, gépenkénti futómagasság; menü: saját gép, ellenfél, fegyverzet-szerkesztő; harci zóna és biztonsági kör | `92dc6ab` |
 | 24 | A kabin-botkormány ne álljon vissza magától középre | a bot ott marad, ahová teszed; 7%-os holtsáv, zöld pont a semlegesben | `4a9d873` |
-| 25 | Dokumentálj mindent | a dokumentáció és a README teljes átírása a jelenlegi állapotra | ez a commit |
+| 25 | Dokumentálj mindent | a dokumentáció és a README teljes átírása a jelenlegi állapotra | `ad1f7ca` |
+| 26 | Oktatás, ami tényleg elmagyaráz mindent (csak aki akarja); ne lőjenek rám 15 km-ről, amíg én nem tudok lockolni; az F-16 legyen jobb az F-18-nál, extrém mód tolóerő-vektorálással egy gombra, 9 G, Cobra rakéta ellen | `tutorial.js` (11 lecke, céldrónok, rakéta-gyakorlat, Oktatás gomb); AI lőtávolság-plafon (normál 8 / 4,5 km), „T = lock” jelzés; F-16 extrém mód (Tab): TVC, 9 G instruktor, cL,max 2,4, 80° Cobra, `Missile.checkCobra`; enyhébb G-sötétülés | – |
 
 ---
 

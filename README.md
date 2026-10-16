@@ -31,6 +31,32 @@ sokkal erősebbek: nehéz kikerülni őket, és közelről is eltalálnak. A pil
 húznak, pontatlanabbak, később veszik észre a rakétát, és csak a hatótávjuk biztonságosabb részéből lőnek. Radarral lockolnak,
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
+## Oktatás (nem kötelező)
+
+A főmenü **Oktatás** gombja egy vezetett repülést indít a kiválasztott géppel. 11 lecke, mindegyik elmagyarázza,
+**mit** csinál az adott funkció, **hogyan** használod és **mikor** érdemes, aztán kipróbálod (a játék magától
+észreveszi, ha sikerült): egeres repülés, gáz és utánégető, G és energia, kabin és kijelzők, radar lock +
+AIM-120 egy távoli céldrónra, AIM-9 közelről, gépágyú, védekezés egy rád lőtt rakéta ellen, F-16-on az extrém
+mód és a Cobra (Hornet: nagy állásszög), végül a harci zóna és a leszállás. A drónok nem lőnek vissza, és a
+lövések az oktatás alatt nem sebeznek. Enter = lépés kihagyása, Esc = kilépés.
+
+## F-16: extrém mód (tolóerő-vektorálás) és Cobra
+
+Az F-16-on a **Tab** bekapcsolja az EXTRÉM módot – mint a kísérleti F-16 MATV / VISTA-n, a fúvócső ±20°-ot fordul:
+
+* az egeres segítő is kihúzza a **9 G**-t, a gép tovább tartja (mérve: 9 G-ben 4,1 s a normál 2,6 s helyett),
+  32°-os állásszög, gyorsabb orsózás (330°/s), több tolóerő, kis sebességen is irányítható;
+* **Cobra:** 600 km/h alatt teljes húzás (S, vagy kabinban a bot teljesen hátra) – a gép 0,8 s alatt 80°-os
+  állásszögbe ágaskodik, és gyorsan lassul. Ha egy rakéta ekkor **3–4 másodpercen belül** van (a piros
+  rombusz mutatja), ~90% eséllyel elveszít; túl korán csinálva a rakéta újracéloz.
+
+Ezzel az F-16 a közelharcban erősebb a Super Hornetnél, akkor is, ha a Hornet több rakétát visz.
+
+**Ellenséges rakéták:** az ellenség csak közelről lő – normál nehézségen AIM-120-szal legfeljebb 8 km-ről,
+AIM-9-cel 4,5 km-ről (nehéz: 10 / 5,5 km, könnyű: csak AIM-9, 3,5 km) –, te pedig a radarral sokkal messzebbről
+lockolhatsz (T, F-16: 55 km, Hornet: 70 km). Ha egy ellenség lock-távolságon belül van, a jelölője alatt
+megjelenik a „T = lock” felirat.
+
 ## Második gép: F/A-18E Super Hornet
 
 ![F/A-18E Super Hornet a játékban](docs/fa18_flight.jpg)
@@ -182,6 +208,7 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 | C vagy jobb egérgomb (tartva) | szabad körülnézés |
 | Z (tartva) | zoom |
 | **N** / **J K L** | kabinban: kijelzők nézése (ráközelít) / a bal, jobb, középső kijelző lapozása |
+| **Tab** | F-16: extrém mód (tolóerő-vektorálás, 9 G, Cobra) be / ki |
 | V | kabin / külső nézet. A kabin a géppel együtt mozog (orsózik, bólint), G alatt a fej lesüllyed, nagy G-nél elsötétül a kép, negatív G-nél bevörösödik |
 | **Bal egérgomb** | gépágyú |
 | **Space** | rakéta indítása |
