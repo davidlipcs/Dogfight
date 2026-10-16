@@ -224,7 +224,7 @@ Csak dugd be (vagy kapcsold be Bluetooth-on), a játék magától felismeri. A m
 
 | Billentyű | Funkció |
 |---|---|
-| **Egér** | külső nézetben a gép orra a fehér körre áll; kabinnézetben (V) az egér a botkormány: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás. A bot ott marad, ahová teszed (nem rugózik vissza), középen kis holtsáv, a semleges állást zöld pont jelzi |
+| **Egér** | (érzékenység: főmenü / Esc → „Egér célzás” és „Botkormány” csúszka, 5–200%) külső nézetben a gép orra a fehér körre áll; kabinnézetben (V) az egér a botkormány: előre tolva orr le, magad felé húzva orr fel, oldalra orsózás. A bot ott marad, ahová teszed (nem rugózik vissza), középen kis holtsáv, a semleges állást zöld pont jelzi |
 | S / W | orr fel / orr le kézzel: amíg nyomod, az egeres segítő elengedi a gépet, a célzókör az orron marad (mint a War Thunderben); az S a teljes 9 G-t is kihúzza, az egeres segítő ~7,6 G-nél megáll |
 | A / D, Q / E | csűrő, oldalkormány kézi felülbírálása |
 | Shift / Ctrl (böngészőben Z is) | gáz fel / le: koppintás = 5%, tartva folyamatos. 100%-nál (MIL) megáll, ott még egy **Shift** = **utánégető**; lefelé az első nyomás kikapcsolja |

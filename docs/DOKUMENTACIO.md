@@ -91,7 +91,7 @@ felszállás, X = indulás a levegőben, B = új meccs a kifutóról. (Böngész
 | **Játékmód** | Arkád · Realisztikus |
 | **Nehézség** | Könnyű · Normál · Nehéz |
 | **Ellenség** | 1–4 ellenség az első hullámban |
-| **Egér** | érzékenység, fordított Y |
+| **Egér célzás / Botkormány** | két külön érzékenység-csúszka (5–200%, alap 60%), fordított Y; a szünet menüben (Esc) is állítható, a böngésző megjegyzi |
 | Gombok | Folytatás (ha fut meccs) · Felszállás a kifutóról · Indulás a levegőben · **Oktatás** |
 
 **Fegyverzet-kiosztás** (`buildLoadout` a `specs.js`-ben): minden fegyver először azokat az állomásokat
@@ -546,7 +546,8 @@ játék saját függvényeivel mértük és próbáltuk ki (lásd 11.); automata
 | 24 | A kabin-botkormány ne álljon vissza magától középre | a bot ott marad, ahová teszed; 7%-os holtsáv, zöld pont a semlegesben | `4a9d873` |
 | 25 | Dokumentálj mindent | a dokumentáció és a README teljes átírása a jelenlegi állapotra | `ad1f7ca` |
 | 26 | Oktatás, ami tényleg elmagyaráz mindent (csak aki akarja); ne lőjenek rám 15 km-ről, amíg én nem tudok lockolni; az F-16 legyen jobb az F-18-nál, extrém mód tolóerő-vektorálással egy gombra, 9 G, Cobra rakéta ellen | `tutorial.js` (11 lecke, céldrónok, rakéta-gyakorlat, Oktatás gomb); AI lőtávolság-plafon (normál 8 / 4,5 km), „T = lock” jelzés; F-16 extrém mód (Tab): TVC, 9 G instruktor, cL,max 2,4, 80° Cobra, `Missile.checkCobra`; enyhébb G-sötétülés | `d77a1ca` |
-| 27 | F-22 Raptor: 8 rakéta belül, nehezen lockolható (lopakodó), hasból kijövő rakéta szép animációval, jobb radar, max 8 G; a fejtámla ne lógjon ki egyik gépnél se; Blenderben festve mutasd | `build_f22.py` + `f22_shape.py` + `f22_paint.py`, `F22A` (2× F119, 78 m², APG-77 LPI, RCS 0,0006, 8 G, TVC mindig), belső fegyvertér kilövési sorrenddel és animációval, RCS-alsó korlát törölve, HUD „lopakodó” jelzés, F-22 oktatási lecke, menü; `fit_under_canopy` mindhárom gépre; `.blend` Material Preview nézettel, háttérben futtatható Blender-építés | – |
+| 27 | F-22 Raptor: 8 rakéta belül, nehezen lockolható (lopakodó), hasból kijövő rakéta szép animációval, jobb radar, max 8 G; a fejtámla ne lógjon ki egyik gépnél se; Blenderben festve mutasd | `build_f22.py` + `f22_shape.py` + `f22_paint.py`, `F22A` (2× F119, 78 m², APG-77 LPI, RCS 0,0006, 8 G, TVC mindig), belső fegyvertér kilövési sorrenddel és animációval, RCS-alsó korlát törölve, HUD „lopakodó” jelzés, F-22 oktatási lecke, menü; `fit_under_canopy` mindhárom gépre; `.blend` Material Preview nézettel, háttérben futtatható Blender-építés | `e889689` |
+| 28 | Az egér érzékenysége legyen állítható (túl érzékeny) | két csúszka (célzás, kabin-botkormány) százalékban, 5–200%, alap 60%; a főmenüben és a szünet menüben is, mindkét egérmódra (pointer lock és kurzoros) hat, `localStorage`-ban megmarad | – |
 
 ---
 

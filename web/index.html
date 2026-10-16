@@ -193,9 +193,16 @@
         </select>
       </div>
       <div class="row">
-        <label class="label" for="sens">Egér</label>
-        <input type="range" id="sens" min="0.03" max="0.25" step="0.01" value="0.09">
-        <label class="hint"><input type="checkbox" id="invert"> fordított Y</label>
+        <label class="label" for="sens">Egér célzás</label>
+        <input type="range" class="sens" id="sens" data-key="aim" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="aim">60%</span>
+        <label class="hint"><input type="checkbox" class="invert" id="invert"> fordított Y</label>
+      </div>
+      <div class="row">
+        <label class="label" for="stick">Botkormány</label>
+        <input type="range" class="sens" id="stick" data-key="stick" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="stick">60%</span>
+        <span class="hint">kabinnézetben (V)</span>
       </div>
     </div>
     <div id="current" class="hint" hidden></div>
@@ -215,6 +222,20 @@
     <div class="eyebrow">Szünet</div>
     <h1>Szünet</h1>
     <p id="pausestats"></p>
+    <div class="opts">
+      <div class="row">
+        <label class="label" for="p-sens">Egér célzás</label>
+        <input type="range" class="sens" id="p-sens" data-key="aim" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="aim">60%</span>
+        <label class="hint"><input type="checkbox" class="invert" id="p-invert"> fordított Y</label>
+      </div>
+      <div class="row">
+        <label class="label" for="p-stick">Botkormány</label>
+        <input type="range" class="sens" id="p-stick" data-key="stick" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="stick">60%</span>
+        <span class="hint">kabinnézetben (V)</span>
+      </div>
+    </div>
     <div class="buttons">
       <button class="primary" id="resume">Folytatás</button>
       <button id="to-menu">Főmenü</button>
@@ -233,6 +254,7 @@
         <h3>Repülés</h3>
         <dl>
           <dt>Egér</dt><dd>külső nézetben: a gép orra a fehér körre áll; kabinban (V): az egér a botkormány – előre tolva orr le, magad felé húzva orr fel, oldalra orsózás; a bot ott marad, ahová teszed, középre csak te viszed vissza (a kis kijelzőn zöld pont = semleges)</dd>
+          <dt>Érzékenység</dt><dd>főmenü vagy Esc (szünet): „Egér célzás” és „Botkormány” csúszka, 5–200%</dd>
           <dt>S / W</dt><dd>orr fel / orr le kézzel (amíg nyomod, a célzókör az orron marad)</dd>
           <dt>A / D</dt><dd>orsózás</dd>
           <dt>Q / E</dt><dd>oldalkormány</dd>

@@ -193,9 +193,16 @@
         </select>
       </div>
       <div class="row">
-        <label class="label" for="sens">Egér</label>
-        <input type="range" id="sens" min="0.03" max="0.25" step="0.01" value="0.09">
-        <label class="hint"><input type="checkbox" id="invert"> fordított Y</label>
+        <label class="label" for="sens">Egér célzás</label>
+        <input type="range" class="sens" id="sens" data-key="aim" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="aim">60%</span>
+        <label class="hint"><input type="checkbox" class="invert" id="invert"> fordított Y</label>
+      </div>
+      <div class="row">
+        <label class="label" for="stick">Botkormány</label>
+        <input type="range" class="sens" id="stick" data-key="stick" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="stick">60%</span>
+        <span class="hint">kabinnézetben (V)</span>
       </div>
     </div>
     <div id="current" class="hint" hidden></div>
@@ -215,6 +222,20 @@
     <div class="eyebrow">Szünet</div>
     <h1>Szünet</h1>
     <p id="pausestats"></p>
+    <div class="opts">
+      <div class="row">
+        <label class="label" for="p-sens">Egér célzás</label>
+        <input type="range" class="sens" id="p-sens" data-key="aim" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="aim">60%</span>
+        <label class="hint"><input type="checkbox" class="invert" id="p-invert"> fordított Y</label>
+      </div>
+      <div class="row">
+        <label class="label" for="p-stick">Botkormány</label>
+        <input type="range" class="sens" id="p-stick" data-key="stick" min="5" max="200" step="5" value="60">
+        <span class="hint sens-val" data-key="stick">60%</span>
+        <span class="hint">kabinnézetben (V)</span>
+      </div>
+    </div>
     <div class="buttons">
       <button class="primary" id="resume">Folytatás</button>
       <button id="to-menu">Főmenü</button>
@@ -233,6 +254,7 @@
         <h3>Repülés</h3>
         <dl>
           <dt>Egér</dt><dd>külső nézetben: a gép orra a fehér körre áll; kabinban (V): az egér a botkormány – előre tolva orr le, magad felé húzva orr fel, oldalra orsózás; a bot ott marad, ahová teszed, középre csak te viszed vissza (a kis kijelzőn zöld pont = semleges)</dd>
+          <dt>Érzékenység</dt><dd>főmenü vagy Esc (szünet): „Egér célzás” és „Botkormány” csúszka, 5–200%</dd>
           <dt>S / W</dt><dd>orr fel / orr le kézzel (amíg nyomod, a célzókör az orron marad)</dd>
           <dt>A / D</dt><dd>orsózás</dd>
           <dt>Q / E</dt><dd>oldalkormány</dd>
@@ -4681,6 +4703,7 @@ const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look dow
 const NECK = V(0, -0.09, -0.06), EYE_FROM_NECK = V(0, 0.09, 0.06), LEAN_SIDE = 0.18, LEAN_FWD = 0.12;
 const COCKPIT_SHIFT = 0.13;                           // cockpit view: picture shifted down by this part of its height
 const STICK_GAIN = 0.045;                             // mouse joystick: px of mouse travel per full deflection / sensitivity
+const SENS_BASE = 0.09;                               // "100 %" on the sensitivity sliders
 const STICK_DEADZONE = 0.07;                          // mouse joystick: neutral band around the centre
 const ease = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 
@@ -4690,7 +4713,7 @@ const $ = (id) => document.getElementById(id);
 class FlightCamera {
   constructor(camera, terrain) {
     this.camera = camera; this.terrain = terrain; this.eye = V(0, 2.4, 1.1);
-    this.sensitivity = 0.09; this.invertY = false;
+    this.sensitivity = SENS_BASE * 0.6; this.stickSens = 0.6; this.invertY = false;
     this.aim = new THREE.Quaternion(); this.look = new THREE.Quaternion();
     this.freeLook = false; this.cockpit = false; this.position = V(); this.fov = 70; this.phase = 0; this.zoom = 0;
     this.headYaw = 0; this.headPitch = 0; this.headG = 0;   // cockpit: head turn (rad) and G sag (m)
@@ -5075,7 +5098,8 @@ class Game {
     else if (inp.inside && !this.state.paused) {
       // no pointer lock (e.g. blocked by the page): the cursor works as a joystick around the screen centre
       const dz = (v) => (Math.abs(v) < 0.06 ? 0 : (v - Math.sign(v) * 0.06) / 0.94);
-      cam.rotate(-dz(inp.mx) * 95 * dt, -dz(inp.my) * 70 * dt * (cam.invertY ? -1 : 1));
+      const k = cam.sensitivity / SENS_BASE;
+      cam.rotate(-dz(inp.mx) * 95 * k * dt, -dz(inp.my) * 70 * k * dt * (cam.invertY ? -1 : 1));
     }
     const pad = this.pad.connected ? this.pad : null;
     if (pad) {
@@ -5126,11 +5150,12 @@ class Game {
   flyStick(dt, dx, dy) {
     const s = this.stick, inp = this.input, cam = this.cam, inv = cam.invertY ? -1 : 1;
     if (this.locked) {
-      const k = cam.sensitivity * STICK_GAIN;
+      const k = SENS_BASE * cam.stickSens * STICK_GAIN;
       s.x = clamp(s.x + dx * k, -1, 1); s.y = clamp(s.y + dy * k * inv, -1, 1);
     } else if (inp.inside && !this.state.paused) {   // no pointer lock: the cursor's offset from the centre is the stick
       const dz = (v) => (Math.abs(v) < 0.04 ? 0 : (v - Math.sign(v) * 0.04) / 0.96);
-      s.x = clamp(dz(inp.mx) * 1.6, -1, 1); s.y = clamp(dz(inp.my) * 1.6 * inv, -1, 1);
+      const k = 1.6 * cam.stickSens;
+      s.x = clamp(dz(inp.mx) * k, -1, 1); s.y = clamp(dz(inp.my) * k * inv, -1, 1);
     }
   }
 
@@ -5351,6 +5376,24 @@ async function boot() {
   $('menu').hidden = false;
   // offer the one-file offline copy where a plain download link works (GitHub Pages or a local server)
   if (!window.DOGFIGHT_ASSETS && /github\.io$|^localhost$|^127\./.test(location.hostname)) $('download').hidden = false;
+  // Mouse settings: aim sensitivity and cockpit stick sensitivity (5..200 % of SENS_BASE), inverted Y.  The
+  // sliders are on the main menu and on the pause screen (kept in step), remembered in this browser.
+  const settings = { aim: 60, stick: 60, invert: false };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem('dogfight-settings') || '{}')); } catch (e) { /* private mode */ }
+  const applySettings = () => {
+    for (const el of document.querySelectorAll('input.sens')) el.value = settings[el.dataset.key];
+    for (const el of document.querySelectorAll('.sens-val')) el.textContent = `${settings[el.dataset.key]}%`;
+    for (const el of document.querySelectorAll('input.invert')) el.checked = settings.invert;
+    const game = window.game;
+    if (game) { game.cam.sensitivity = SENS_BASE * settings.aim / 100; game.cam.stickSens = settings.stick / 100; game.cam.invertY = settings.invert; }
+    try { localStorage.setItem('dogfight-settings', JSON.stringify(settings)); } catch (e) { /* private mode */ }
+  };
+  for (const el of document.querySelectorAll('input.sens')) {
+    el.addEventListener('input', () => { settings[el.dataset.key] = Number(el.value); applySettings(); });
+    el.addEventListener('click', (e) => e.stopPropagation());
+  }
+  for (const el of document.querySelectorAll('input.invert')) el.addEventListener('change', () => { settings.invert = el.checked; applySettings(); });
+  applySettings();
   // Loadout editor: how many AIM-9M and AIM-120A; the stations are filled like the real jet would carry them
   // (specs.js buildLoadout), the row of chips shows where each one hangs.
   const arms = { 'AIM-9M': 0, 'AIM-120A': 0 };
@@ -5409,11 +5452,8 @@ async function boot() {
       catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
       window.game = game;
       game.onTutorialEnd = () => { showMenu(); $('current').textContent = 'Az oktatás véget ért. Folytatás = szabad repülés hullámokkal, vagy indíts új játékot.'; };
-      $('sens').addEventListener('input', (e) => { game.cam.sensitivity = Number(e.target.value); });
-      $('invert').addEventListener('change', (e) => { game.cam.invertY = e.target.checked; });
     }
-    game.cam.sensitivity = Number($('sens').value);
-    game.cam.invertY = $('invert').checked;
+    applySettings();
     game.resume();
   };
   const showMenu = () => {
