@@ -3036,6 +3036,7 @@ class HUD {
   }
 
   update(dt, player, world, cam, camCtl, game) {
+    this.player = player;
     const cv = this.canvas, dpr = window.devicePixelRatio || 1;
     const w = cv.clientWidth, h = cv.clientHeight;
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
@@ -3484,7 +3485,15 @@ class HUD {
   overlay(game) {
     const u = this.u, fs = 12 * u + 3;
     this.text(`HULLÁM ${game.wave}   LELŐVE ${game.kills}   HALÁL ${game.deaths}`, 20 * u, 22 * u, WHITE, fs);
-    this.text(this.cockpit ? 'H = súgó   Esc = menü   N = kijelzők nézése   J / K / L = lapozás' : 'H = súgó   Esc = menü   V = kabin   N = kijelzők', 20 * u, 42 * u, DIM, 11 * u + 2);
+    const hint = this.cockpit ? 'H = súgó   Esc = menü   N = kijelzők nézése   J / K / L = lapozás' : 'H = súgó   Esc = menü   V = kabin   N = kijelzők';
+    this.text(hint, 20 * u, 42 * u, DIM, 11 * u + 2);
+    // F-16: where the extreme mode is (it has no menu entry, only the key)
+    const p = this.player;
+    if (p && p.alive && p.spec.tvc) {
+      this.g.font = `${11 * u + 2}px ${MONO}`;
+      const x = 20 * u + this.g.measureText(hint + '   ').width;
+      this.text(p.extreme ? 'Tab = EXTRÉM mód KI' : 'Tab = EXTRÉM mód (TVC, 9 G, Cobra)', x, 42 * u, AMBER, 11 * u + 2);
+    }
     let y = 22 * u;
     for (const k of this.killfeed) { this.text(k.text, this.w - 20 * u, y, k.color, fs, 'right'); y += 20 * u + 3; }
     if (game.banner) this.text(game.banner, this.w / 2, this.h / 2 - 40 * u, WHITE, 44 * u + 6, 'center', 'Oswald, Impact, sans-serif');
