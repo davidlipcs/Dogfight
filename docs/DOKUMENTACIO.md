@@ -1,4 +1,4 @@
-# Dogfight – F-16C Viper, F/A-18E Super Hornet és F-22A Raptor: teljes dokumentáció
+# Dogfight – F-16C Viper, F/A-18E Super Hornet, F-15EX Eagle II és F-22A Raptor: teljes dokumentáció
 
 Ez a dokumentum mindent leír, ami a projektben elkészült: hol és hogyan lehet játszani, mit tud a játék,
 hogyan épülnek fel a gépek és a kód, hogyan kell karbantartani, és milyen lépésekben készült
@@ -85,9 +85,9 @@ felszállás, X = indulás a levegőben, B = új meccs a kifutóról. (Böngész
 
 | Beállítás | Lehetőségek |
 |---|---|
-| **Saját gép** | F-16C Viper · F/A-18E Super Hornet · F-22A Raptor (a cím is vált: Viper / Rhino / Raptor) |
+| **Saját gép** | F-16C Viper · F/A-18E Super Hornet · F-15EX Eagle II · F-22A Raptor (a cím is vált: Viper / Rhino / Eagle / Raptor) |
 | **Fegyverzet** | AIM-9M és AIM-120A darabszám (− / +), „Alap” gomb; alatta a függesztési pontok sora mutatja, melyik állomásra mi kerül, mellette a rakéták száma és tömege |
-| **Ellenfél** | F-16C · F/A-18E · F-22A · Vegyes (a három típus véletlenszerűen keverve) |
+| **Ellenfél** | F-16C · F/A-18E · F-15EX · F-22A · Vegyes (a négy típus véletlenszerűen keverve) |
 | **Játékmód** | Arkád · Realisztikus |
 | **Nehézség** | Könnyű · Normál · Nehéz |
 | **Ellenség** | 1–4 ellenség az első hullámban |
@@ -195,6 +195,26 @@ Mindkét gép ugyanazzal a repülésmodellel repül (`web/js/flight.js`); a kül
 fordítja az orrát (40°-os állásszög), de nehezebb és nagyobb az ellenállása (a döntött pilonok is), ezért
 lassabban gyorsul, és nagy állásszögnél gyorsan elveszti az energiáját – mint az igazi. A Viper több
 tolóerővel és 9 G-vel az energiaharcban erősebb.
+
+### F-15EX Eagle II (`F15EX`)
+
+| | F-15EX |
+|---|---|
+| Hajtómű | 2× F110-GE-129 (az F-16 hajtóműve): 2× 76,3 / 2× 131,6 kN, fogyasztás 3,28 / 14,5 kg/s |
+| Üres tömeg / üzemanyag | 14 500 / 10 000 kg (konform tartályokkal) |
+| Szárnyfelület / fesztáv / hossz | 56,5 m² / 13,05 m / 19,43 m |
+| cL,α / cL,max / cD0 / k | 3,7 / 1,7 / 0,0215 (+0,0012 pilonok) / 0,125 |
+| Max G / AoA / orsózás | 9 / 30° / 240°/s |
+| Tolóerő/tömeg (alap fegyverzet) | 1,31 |
+| Végsebesség tengerszinten / 11 km-en | M1,18 / M1,89; emelkedés ~350 m/s |
+| Tartós forduló 3 km, M0,6 | 5,6 G, 15,7°/s |
+| Radar | AN/APG-82(V)1 AESA: 110 km keresés, 90 km lock, 0,35 s |
+| RCS szemből / oldalról | 4 / 12 m² (nagy gép, messziről látszik) |
+| Gépágyú | M61A1, 511 lövés (jobb szárnytő) |
+| Fegyverzet | 1, 12: külső szárnypilon · 2–3, 10–11: belső pilon két sínje (AIM-9M / AIM-120A) · 4–9: konform tartály (AIM-120A) – legfeljebb 12; alap 4× AIM-9M + 4× AIM-120A |
+| Légfék | nagy hátsó légfék (`sb_dorsal`, 45°) |
+
+Ellenséges változat: 7 G, 180°/s, 22° AoA, 2× AIM-9M + 4× AIM-120A.
 
 ### F-22A Raptor (`F22A`)
 
@@ -410,6 +430,7 @@ Mindkét gép **Blender-szkriptből** épül, kézi modellezés nélkül; a szkr
 |---|---|
 | `tools/blender/aircraft_lib.py` | közös eszközök: mesh-darabok (`Part`), geometria (cső, doboz, szárnyprofil-felület, kerék, futóakna, futóajtó), anyagok (festés textúrával, matt / fém színnel, üveg, HUD-üveg, kijelző, lámpák), objektum-építés UV-val és csuklóval, renderképek, GLB-export |
 | `build_f16.py`, `f16_shape.py`, `f16_paint.py` | F-16C: alak-táblázatok, építés, festés (USAF háromszínű szürke, panelvonalak) |
+| `build_f15.py`, `f15_shape.py`, `f15_paint.py` | F-15EX: magas szárny, szögletes szívócsatornák, farokgerendák, függőleges kettős vezérsík, csupa-mozgó stabilizátor, F110 fúvócsövek, kétüléses kabin (két ülés, `fit_under_canopy`), nagy kijelző két félben (`screen_lad_l/r`) és UFC (`screen_ufc`), hátsó légfék (`sb_dorsal`), pilonok és konform-tartály indítók (`store_1..12`), „Mod Eagle” festés ET farokkóddal |
 | `build_f22.py`, `f22_shape.py`, `f22_paint.py` | F-22A: gyémánt szárny, chine-orr, ferde szívócsatornák, döntött kettős vezérsík, lapos vektoros fúvócsövek (`vec_L/R`), buborék-kabintető, 6 kijelzős kabin (`screen_pmfd`, `screen_mfd_l/r/c`, `screen_ufd_l/r`), három fegyvertér ajtókkal (`bay_main_L/R`, `bay_side_L/R`) és kilövő karokkal (`rack_1..8`), festés (kétszínű szürke, fűrészfogas ajtóélek, FF farokkód); `OPTS.pose` = előnézeti póz (futó be, ajtók csukva, karok ki) |
 | `build_fa18.py`, `fa18_shape.py`, `fa18_paint.py` | F/A-18E: keresztmetszetek (törzs + gondolák + LEX + szárny sima összeolvasztással), szívócsatornák, kettős döntött vezérsík, kabin, futómű, festés (US Navy kétszínű szürke, NAVY / NG / 200 jelzések, sárga-fekete farokcsík) |
 
@@ -547,7 +568,8 @@ játék saját függvényeivel mértük és próbáltuk ki (lásd 11.); automata
 | 25 | Dokumentálj mindent | a dokumentáció és a README teljes átírása a jelenlegi állapotra | `ad1f7ca` |
 | 26 | Oktatás, ami tényleg elmagyaráz mindent (csak aki akarja); ne lőjenek rám 15 km-ről, amíg én nem tudok lockolni; az F-16 legyen jobb az F-18-nál, extrém mód tolóerő-vektorálással egy gombra, 9 G, Cobra rakéta ellen | `tutorial.js` (11 lecke, céldrónok, rakéta-gyakorlat, Oktatás gomb); AI lőtávolság-plafon (normál 8 / 4,5 km), „T = lock” jelzés; F-16 extrém mód (Tab): TVC, 9 G instruktor, cL,max 2,4, 80° Cobra, `Missile.checkCobra`; enyhébb G-sötétülés | `d77a1ca` |
 | 27 | F-22 Raptor: 8 rakéta belül, nehezen lockolható (lopakodó), hasból kijövő rakéta szép animációval, jobb radar, max 8 G; a fejtámla ne lógjon ki egyik gépnél se; Blenderben festve mutasd | `build_f22.py` + `f22_shape.py` + `f22_paint.py`, `F22A` (2× F119, 78 m², APG-77 LPI, RCS 0,0006, 8 G, TVC mindig), belső fegyvertér kilövési sorrenddel és animációval, RCS-alsó korlát törölve, HUD „lopakodó” jelzés, F-22 oktatási lecke, menü; `fit_under_canopy` mindhárom gépre; `.blend` Material Preview nézettel, háttérben futtatható Blender-építés | `e889689` |
-| 28 | Az egér érzékenysége legyen állítható (túl érzékeny) | két csúszka (célzás, kabin-botkormány) százalékban, 5–200%, alap 60%; a főmenüben és a szünet menüben is, mindkét egérmódra (pointer lock és kurzoros) hat, `localStorage`-ban megmarad | – |
+| 28 | Az egér érzékenysége legyen állítható (túl érzékeny) | két csúszka (célzás, kabin-botkormány) százalékban, 5–200%, alap 60%; a főmenüben és a szünet menüben is, mindkét egérmódra (pointer lock és kurzoros) hat, `localStorage`-ban megmarad | `16c713e` |
+| 29 | F-15EX, hasonló legyen, mint az F-16 | `build_f15.py` + `f15_shape.py` + `f15_paint.py`, `F15EX` (2× F110, 56,5 m², 9 G, T/W 1,31), APG-82, 12 állomás (pilonok + konform tartályok), menü, kabin (nagy kijelző + UFC), oktatási lecke (energiaharc, 8 G), parkoló F-15 | – |
 
 ---
 

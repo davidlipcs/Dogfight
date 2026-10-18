@@ -1,4 +1,4 @@
-# Dogfight – F-16C, F/A-18E és F-22A légiharc (War Thunder stílusban)
+# Dogfight – F-16C, F/A-18E, F-15EX és F-22A légiharc (War Thunder stílusban)
 
 3D légiharc-játék **Pythonban**, a [Panda3D](https://www.panda3d.org/) motorral – és ugyanez a böngészőben is játszható (lásd lent).
 
@@ -56,6 +56,26 @@ Ezzel az F-16 a közelharcban erősebb a Super Hornetnél, akkor is, ha a Hornet
 AIM-9-cel 4,5 km-ről (nehéz: 10 / 5,5 km, könnyű: csak AIM-9, 3,5 km) –, te pedig a radarral sokkal messzebbről
 lockolhatsz (T, F-16: 55 km, Hornet: 70 km). Ha egy ellenség lock-távolságon belül van, a jelölője alatt
 megjelenik a „T = lock” felirat.
+
+## Negyedik gép: F-15EX Eagle II
+
+![F-15EX Eagle II a játékban](docs/f15_flight.jpg)
+
+Blenderben, szkriptből ([tools/blender/build_f15.py](tools/blender/build_f15.py), `f15_shape.py`, `f15_paint.py`):
+19,4 m hosszú, nagy, magasan ülő 45°-os szárny, szögletes oldalsó szívócsatornák, farokgerendákon két függőleges
+vezérsík és csupa-mozgó stabilizátor, két kerek F110 fúvócső, kétüléses buborék-kabintető (mindkét ülés a tető
+alatt), nagy hátsó légfék (B), „Mod Eagle” kétszínű szürke festés ET farokkóddal. Kabin: a nagy érintőképernyő
+(két élő fél: RDR / SMS és SA / ENG / RWR, J / K) és az UFC adatsor.
+
+**Az F-16-hoz hasonló:** ugyanaz a hajtómű (2× F110-GE-129, 263 kN), 9 G, tolóerő/tömeg 1,31 (F-16: 1,20),
+tartós forduló 3 km-en M0,6-nál 5,6 G / 15,7°/s (F-16: 5,3 G / 14,9°/s), végsebesség M1,18 / M1,89. A rakéták
+kívül vannak, mint az F-16-on: két szárnypilon oldalanként (a belsőn két sín) és AIM-120-ak a konform
+póttartályokon – alapból 4× AIM-9M + 4× AIM-120A, a menüben akár 12 rakéta. Nagy radarjel (messziről látják),
+APG-82 AESA radar (110 km).
+
+| | |
+|---|---|
+| ![F-15EX kabin](docs/f15_cockpit_displays.jpg) | ![Légfék](docs/f15_speedbrake.jpg) |
 
 ## Harmadik gép: F-22A Raptor
 

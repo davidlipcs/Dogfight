@@ -79,6 +79,12 @@ export const APG77 = {
   notchSpeed: 15, trackMemory: 1.0, rwrSymbol: '22', lpi: true,
 };
 
+export const APG82 = {
+  name: 'AN/APG-82(V)1 AESA', searchRange: 110000, scanAz: 60, scanEl: 14, scanRate: 280, sttGimbal: 60,
+  lockRange: 90000, acmRange: 18000, acmAz: 7, acmElLow: -8, acmElHigh: 45, lockTime: 0.35,
+  notchSpeed: 20, trackMemory: 0.8, rwrSymbol: '15',
+};
+
 export const ALE47 = { flares: 30, chaff: 30, flareIntensity: 3.0, flareLife: 4.0, chaffLife: 5.0, interval: 0.35 };
 
 // Station numbers follow the real aircraft (1 = left wingtip).  `pylons`: what each station can carry;
@@ -193,13 +199,50 @@ export const F22A = {
   },
 };
 
-export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A };
+// F-15EX Eagle II: the big twin-engine Eagle with the F-16's engines (2 x F110-GE-129), a fly-by-wire 9 G
+// airframe and a huge wing - it fights like a heavier, more powerful F-16: lots of thrust, good sustained
+// turns.  Missiles hang outside: two pylons per wing (the inner one with two rails) and AIM-120s on the
+// conformal fuel tanks.
+export const F15EX = {
+  id: 'f15', model: 'f15', name: 'F-15EX Eagle II', short: 'F-15EX', callsign: 'Eagle',
+  emptyMass: 14500, internalFuel: 10000, wingArea: 56.5, wingSpan: 13.05, length: 19.43,
+  // 2 x F110-GE-129 (the F-16's engine): 2 x 76.3 / 2 x 131.6 kN
+  engines: 2, thrustDry: 152600, thrustAb: 263200, fuelFlowDry: 3.28, fuelFlowAb: 14.5,
+  clAlpha: 3.7, clMax: 1.7, alphaStall: 32, alphaLimit: 30, cd0: 0.0215, kInduced: 0.125, pylonCd: 0.0012,
+  waveDrag: [[0, 0], [0.8, 0], [0.88, 0.004], [0.95, 0.018], [1.0, 0.03], [1.05, 0.035], [1.2, 0.036], [1.6, 0.027], [2.2, 0.02]],
+  gMax: 9, gMin: -3, rollRate: 240, yawBeta: 7, airbrakeCd: 0.07, hp: 120, rcsFront: 4, rcsSide: 12,
+  gearHeight: 2.25, tailStrike: 12, rotateIas: 64,
+  hitboxes: [
+    [[0, 0.5, 0], [1.4, 9.5, 0.9]], [[0, -1.2, 0.4], [6.5, 2.8, 0.35]],
+    [[0, -7.6, 0], [4.3, 1.6, 0.3]], [[0, -7.0, 1.8], [1.6, 1.8, 1.6]],
+  ],
+  gun: M61A1, gunPos: [1.35, 1.60, 0.75], radar: APG82, cm: ALE47,
+  stations: {
+    1: [-4.55, -2.45, -0.24], 2: [-2.82, -1.54, -0.27], 3: [-2.28, -1.54, -0.27],
+    4: [-1.45, 1.15, -1.08], 5: [-1.45, -0.45, -0.77], 6: [-1.40, -2.05, -0.80],
+    7: [1.40, -2.05, -0.80], 8: [1.45, -0.45, -0.77], 9: [1.45, 1.15, -1.08],
+    10: [2.28, -1.54, -0.27], 11: [2.82, -1.54, -0.27], 12: [4.55, -2.45, -0.24],
+  },
+  pylons: {
+    1: ['AIM-9M', 'AIM-120A'], 2: ['AIM-9M', 'AIM-120A'], 3: ['AIM-9M', 'AIM-120A'], 10: ['AIM-9M', 'AIM-120A'],
+    11: ['AIM-9M', 'AIM-120A'], 12: ['AIM-9M', 'AIM-120A'],
+    4: ['AIM-120A'], 5: ['AIM-120A'], 6: ['AIM-120A'], 7: ['AIM-120A'], 8: ['AIM-120A'], 9: ['AIM-120A'],
+  },
+  prefer: { 'AIM-120A': [4, 9, 5, 8, 6, 7, 1, 12, 3, 10, 2, 11], 'AIM-9M': [2, 11, 3, 10, 1, 12] },
+  loadouts: {
+    default: { 2: 'AIM-9M', 11: 'AIM-9M', 3: 'AIM-9M', 10: 'AIM-9M', 4: 'AIM-120A', 9: 'AIM-120A', 5: 'AIM-120A', 8: 'AIM-120A' },
+  },
+  firingOrder: [12, 1, 11, 2, 10, 3, 9, 4, 8, 5, 7, 6],
+};
+
+export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A, f15: F15EX };
 
 // the enemies fly the same jets with a weaker airframe: less G, slower roll, lower angle of attack limit
 export const BANDITS = {
   f16: { ...F16C, name: 'F-16C (ellenfél)', gMax: 7, rollRate: 190, alphaLimit: 20 },
   fa18: { ...FA18E, name: 'F/A-18E (ellenfél)', gMax: 6.3, rollRate: 150, alphaLimit: 28 },
   f22: { ...F22A, name: 'F-22A (ellenfél)', gMax: 6.8, rollRate: 190, tvcAlways: false, tvc: undefined },
+  f15: { ...F15EX, name: 'F-15EX (ellenfél)', gMax: 7, rollRate: 180, alphaLimit: 22 },
 };
 export const F16C_BANDIT = BANDITS.f16;
 

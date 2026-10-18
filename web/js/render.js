@@ -61,7 +61,7 @@ function puffTexture(seed = 3) {
 // screen_* objects); the F-16 pilot's own view still uses the older model built from code (assets/f16.json)
 // with its detailed instrument panel.
 const MOVING = ['lef_L', 'lef_R', 'flap_L', 'flap_R', 'ail_L', 'ail_R', 'stab_L', 'stab_R', 'rudder', 'rudder_L', 'rudder_R',
-  'sb_up_L', 'sb_up_R', 'sb_lo_L', 'sb_lo_R', 'vec_L', 'vec_R'];
+  'sb_up_L', 'sb_up_R', 'sb_lo_L', 'sb_lo_R', 'vec_L', 'vec_R', 'sb_dorsal'];
 const ROT = new THREE.Quaternion(), V3 = new THREE.Vector3();
 const VAPOR_STEP = { f16: [0.27, -1.0, -0.03], fa18: [0.45, -1.4, -0.05] };   // second LEX / strake vapour point
 const LEGACY_SCREENS = ['mfd_l', 'mfd_r', 'ded', 'rwr'];                   // the quads of f16.json's screens, in order
@@ -136,8 +136,8 @@ export class Models {
       // the pilot's eye: the old F-16 cockpit model has its own; the Hornet's is a point of its model
       cockpit: legacy ? 'legacy' : 'self', eye: legacy ? V(...this.data.eye) : ref.ref_eye,
       // the middle of the displays (N) and the field of view that fits them
-      panel: legacy ? V(0, 3.28, 0.63) : spec.model === 'f22' ? V(0, 4.98, 0.82 + modelZ) : V(0, 5.37, 1.0 + modelZ),
-      panelFov: legacy ? 30 : spec.model === 'f22' ? 42 : 40,
+      panel: legacy ? V(0, 3.28, 0.63) : { f22: V(0, 4.98, 0.82 + modelZ), f15: V(0, 5.42, 1.13 + modelZ) }[spec.model] || V(0, 5.37, 1.0 + modelZ),
+      panelFov: legacy ? 30 : { f22: 42, f15: 38 }[spec.model] || 40,
     };
   }
   // glTF material -> three.js: painted skin (textures), glass, lamps (unlit) or vertex coloured details
@@ -354,16 +354,18 @@ export function animateSurfaces(parts, dt, c, alphaDeg, flaps, brake, onGround) 
   move('stab_R', stab - c.roll * 5); move('stab_L', stab + c.roll * 5);
   // F-22 two dimensional nozzles: both flaps turn with the pitch stick (nose up = exhaust up)
   move('vec_R', -c.pitch * 20); move('vec_L', -c.pitch * 20);
+  move('sb_dorsal', brake * 45);                       // F-15: the big speed brake on the back
   if (parts.ail_L) {
     // Super Hornet: ailerons for roll, trailing edge flaps scheduled with AoA (and differential at low
     // speed), LEFs down to 34 degrees, two rudders.  The "speed brake" is the spoilers on the LEX plus the
     // rudders flared out and the ailerons up; on the runway the rudders toe in for the rotation.
     const tef = onGround ? flaps * 30 : flaps * 30 + clamp((alphaDeg - 4) * 0.8, 0, 12);
     move('flap_R', tef - c.roll * 8 * flaps); move('flap_L', tef + c.roll * 8 * flaps);
-    move('ail_R', -c.roll * 25 - brake * 15); move('ail_L', c.roll * 25 - brake * 15);
+    const ailBrake = parts.sb_dorsal ? 0 : brake * 15;
+    move('ail_R', -c.roll * 25 - ailBrake); move('ail_L', c.roll * 25 - ailBrake);
     const lef = onGround ? 0 : clamp(alphaDeg * 1.2 - 2, -3, 34);
     move('lef_R', lef); move('lef_L', lef);
-    const toe = onGround && flaps > 0.5 ? 20 : 0, flare = brake * 25;
+    const toe = onGround && flaps > 0.5 && !parts.sb_dorsal ? 20 : 0, flare = parts.sb_dorsal ? 0 : brake * 25;
     move('rudder_L', c.yaw * 25 + toe - flare); move('rudder_R', c.yaw * 25 - toe + flare);
     for (const n of ['sb_up_R', 'sb_up_L']) move(n, brake * 55);
     return;
@@ -663,9 +665,9 @@ export class SceneView {
       const tnk = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 9, 18).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xb4b4a8 }));
       tnk.position.set(ax1 + 60, ay0 + 40 + k * 22, 4.5); g.add(tnk);
     }
-    // parked F-16s, Super Hornets and a Raptor
-    for (let k = 0; k < 5; k++) {
-      const key = ['f16', 'f16', 'fa18', 'fa18', 'f22'][k], ac = this.models.aircraft(key);
+    // parked F-16s, Super Hornets, an Eagle and a Raptor
+    for (let k = 0; k < 6; k++) {
+      const key = ['f16', 'f16', 'fa18', 'fa18', 'f15', 'f22'][k], ac = this.models.aircraft(key);
       ac.position.set(tx + TAXIWAY_WIDTH + 45, ay0 + 90 + k * 48, this.models.types[key].gearHeight);
       ac.rotation.z = Math.PI / 2;
       g.add(ac);

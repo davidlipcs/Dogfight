@@ -8,6 +8,7 @@ venv/
 models/f16/textures/
 models/fa18/textures/
 models/f22/textures/
+models/f15/textures/
 *.blend
 *.blend1
 /Dogfight.zip

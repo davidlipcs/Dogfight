@@ -229,6 +229,20 @@ function lessons(spec) {
       check: (t) => t.player.stations.some((st) => st.launch && st.launch.t > 1.0) || t.flags.launched,
       status: (t) => (t.player.bayOpenAny > 0.05 ? 'Fegyvertér nyitva!' : `Fegyver: ${t.player.selected || '-'}`),
     });
+  } else if (spec.id === 'f15') {
+    list.push({
+      title: 'Az Eagle erőssége: tolóerő és 9 G',
+      html: `<p><b>Mit:</b> az F-15EX-ben két F110 hajtómű van (ugyanaz, mint az F-16-ban egy), és nagy szárnya van:
+        nagy tolóerővel és 9 G-vel fordul, mint egy nagyobb, erősebb F-16. Akár 12 rakétát is vihet (a menüben).</p>
+        <p><b>Hogyan:</b> tartsd az utánégetőt és a 650–850 km/h-s sebességet, és húzz élesen (egér messze, vagy ${k('S')}).
+        A nagy tolóerő miatt sokáig bírja a nagy G-t – ez az energiaharc.</p>
+        <p><b>Mikor:</b> hosszú fordulós harcban a Hornetet és a gyengébb ellenfeleket is kifordítod. A hátán lévő nagy
+        légfék (${k('B')}) gyorsan lelassít, ha túlrepülnéd a célt. Nagy radarjel, ezért messziről látnak.</p>`,
+      task: 'Húzz legalább 8 G-t.',
+      setup: (t) => { t.flags.g = 1; },
+      check: (t) => { t.flags.g = Math.max(t.flags.g, t.player.fm.gLoad); return t.flags.g >= 8; },
+      status: (t) => `Legnagyobb eddig: ${t.flags.g.toFixed(1)} G · ${Math.round(t.player.fm.ias * 3.6)} km/h`,
+    });
   } else if (f16) {
     list.push({
       title: 'Extrém mód: tolóerő-vektorálás és Cobra (F-16)',

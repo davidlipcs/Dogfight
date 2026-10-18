@@ -30,7 +30,7 @@ C_CHROME = (0.85, 0.86, 0.88)
 C_COCKPIT = (0.27, 0.29, 0.30)
 
 CTX = {"prefix": None, "tex": None, "uv": None, "collection": None, "root": None, "mats": {}}
-AIRCRAFT_COLLECTIONS = ("F16", "FA18", "F22")
+AIRCRAFT_COLLECTIONS = ("F16", "FA18", "F22", "F15")
 
 
 def begin(prefix, tex, uv, collection, **extra):
