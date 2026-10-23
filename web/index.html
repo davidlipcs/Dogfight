@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Dogfight Viper &amp; Rhino</title>
+<title>Dogfight Plus</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b1016">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="description" content="F-16C és F/A-18E légiharc szimulátor a böngészőben">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -109,6 +114,55 @@
   .tut-task.done b { color: var(--hud); }
   .tut-status { margin-top: 4px; font: 12px var(--mono); color: var(--muted); }
   .tut-foot { margin-top: 10px; font: 11px var(--mono); color: var(--muted); }
+  details.more { border: 1px solid var(--panel-edge); border-radius: 5px; padding: 0 12px; }
+  details.more[open] { padding-bottom: 12px; }
+  details.more > summary { cursor: pointer; padding: 10px 0; font: 600 12px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--hud); }
+  details.more > summary:focus-visible { outline: 2px solid var(--hud); outline-offset: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .stat { border: 1px solid var(--panel-edge); border-radius: 4px; padding: 6px 8px; }
+  .stat b { display: block; font: 600 20px var(--display); color: var(--text); }
+  .stat span { font: 11px var(--mono); color: var(--muted); }
+  .medals { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px; }
+  .medal { border: 1px dashed var(--panel-edge); border-radius: 4px; padding: 6px 8px; font-size: 12.5px; color: var(--muted); opacity: .6; }
+  .medal b { display: block; font: 600 14px var(--display); letter-spacing: .03em; color: var(--muted); }
+  .medal.got { border-style: solid; border-color: rgba(255,200,64,.6); background: rgba(255,200,64,.07); opacity: 1; color: var(--text); }
+  .medal.got b { color: var(--caution); }
+  .medal.got b::before { content: '★ '; }
+  #career-reset { margin-top: 10px; }
+  /* hangar / shop */
+  #hangar .card { width: min(900px, 100%); }
+  .hangar-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  #hangar-credits { font: 600 22px var(--display); color: var(--caution); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tab { padding: 7px 12px; font-size: 13px; }
+  .tab.on { background: var(--panel-edge); color: var(--text); }
+  #hangar-body .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+  #hangar-body .item { display: grid; gap: 6px; align-content: start; border: 1px solid var(--panel-edge); border-radius: 5px; padding: 10px 12px; }
+  #hangar-body .item.big { grid-column: span 2; }
+  @media (max-width: 560px) { #hangar-body .item.big { grid-column: auto; } }
+  #hangar-body .item.sel { border-color: var(--hud); background: rgba(107,255,133,.06); }
+  #hangar-body .item.locked { opacity: .55; border-style: dashed; }
+  #hangar-body .item b { font: 600 17px var(--display); letter-spacing: .02em; }
+  #hangar-body .item span { font-size: 13px; color: var(--muted); line-height: 1.4; }
+  #hangar-body .item em { font: 12px var(--mono); color: var(--hud); font-style: normal; }
+  #hangar-body .item .price { font: 600 13px var(--mono); color: var(--caution); }
+  #hangar-body .item .owned { font: 12px var(--mono); color: var(--hud); }
+  #hangar-body .item .tipp { color: var(--text); border-left: 3px solid var(--caution); padding-left: 8px; }
+  #hangar-body .item dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
+  #hangar-body .item dt { color: var(--muted); } #hangar-body .item dd { margin: 0; font-family: var(--mono); }
+  #hangar-body .item button { justify-self: start; }
+  .swatch { display: block; width: 100%; height: 34px; border-radius: 4px; border: 1px solid var(--panel-edge); }
+  .pips { display: flex; gap: 4px; } .pip { width: 22px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); }
+  .pip.on { background: var(--hud); }
+  #hangar-msg { color: var(--caution); font-size: 13px; min-height: 1em; }
+  .filebtn { font: 600 15px var(--display); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; padding: 11px 18px;
+    border-radius: 4px; border: 1px solid var(--panel-edge); }
+  .keys-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px; }
+  .keyrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 9px; font: 500 13px var(--body);
+    letter-spacing: 0; text-transform: none; }
+  .keyrow kbd { font: 600 12px var(--mono); color: var(--caution); }
+  .keyrow.wait { border-color: var(--caution); }
+  .shopbtn { border-color: var(--caution); color: var(--caution); }
   @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 </style>
 <style>[hidden]{display:none!important} body{margin:0}</style>
@@ -130,14 +184,25 @@
 
 <div id="menu" class="screen dim" hidden>
   <div class="card">
-    <div class="eyebrow">F-16C · F/A-18E · F-15EX · F-22A · AIM-9M · AIM-120A</div>
+    <div class="eyebrow">Plus kiadás · F-16C · F/A-18E · F-15EX · F-22A · AIM-9M · AIM-120A</div>
     <h1>Dogfight <span id="brand">Viper</span></h1>
     <p>Külső nézetben a gép orra arra áll, ahová az egérrel célzol; kabinnézetben (V) az egér a botkormány, a kijelzőkön radar, térkép, fegyverzet és hajtómű adatok. Az ellenség a térkép túloldalán, a harci zónában vár, a bázis körül nem támad. Arkád módban a rakéták maguktól újratöltődnek, realisztikusban csak a bázison leszállva.</p>
+    <div class="buttons"><button type="button" class="shopbtn" id="open-hangar">🛒 Hangár / Shop</button><span class="hint" id="menu-credits" style="align-self:center"></span></div>
     <div class="tut-cta">
       <button id="start-tutorial">▶ Oktatás</button>
       <span>Először játszol? Lépésről lépésre elmagyaráz mindent (repülés, kabin, radar, rakéták, védekezés, F-16 extrém mód), és közben ki is próbálod. Nem kötelező – a kiválasztott géppel megy.</span>
     </div>
     <div class="opts">
+      <div class="row">
+        <span class="label">Küldetés</span>
+        <div class="seg" role="radiogroup" aria-label="Küldetés">
+          <input type="radio" name="scen" id="s-waves" value="waves" checked><label for="s-waves">Hullámok</label>
+          <input type="radio" name="scen" id="s-duel" value="duel"><label for="s-duel">Párbaj 1v1</label>
+          <input type="radio" name="scen" id="s-surv" value="survival"><label for="s-surv">Túlélés</label>
+          <input type="radio" name="scen" id="s-race" value="race"><label for="s-race">Gyűrűverseny</label>
+        </div>
+        <span class="hint" id="scen-hint"></span>
+      </div>
       <div class="row">
         <span class="label">Saját gép</span>
         <div class="seg" role="radiogroup" aria-label="Saját gép">
@@ -145,6 +210,7 @@
           <input type="radio" name="plane" id="p-fa18" value="fa18"><label for="p-fa18">F/A-18E Super Hornet</label>
           <input type="radio" name="plane" id="p-f15" value="f15"><label for="p-f15">F-15EX Eagle II</label>
           <input type="radio" name="plane" id="p-f22" value="f22"><label for="p-f22">F-22A Raptor</label>
+          <input type="radio" name="plane" id="p-f15a" value="f15a"><label for="p-f15a" id="l-f15a">F-15 ACTIVE</label>
         </div>
         <span class="hint" id="plane-hint"></span>
       </div>
@@ -183,7 +249,17 @@
           <input type="radio" name="diff" id="d-easy" value="easy"><label for="d-easy">Könnyű</label>
           <input type="radio" name="diff" id="d-normal" value="normal" checked><label for="d-normal">Normál</label>
           <input type="radio" name="diff" id="d-hard" value="hard"><label for="d-hard">Nehéz</label>
+          <input type="radio" name="diff" id="d-ace" value="ace"><label for="d-ace">Ász</label>
         </div>
+        <span class="hint" id="diff-hint"></span>
+      </div>
+      <div class="row">
+        <span class="label">Kísérő</span>
+        <div class="seg" role="radiogroup" aria-label="Kísérőgép">
+          <input type="radio" name="wing" id="w-0" value="0" checked><label for="w-0">Nincs</label>
+          <input type="radio" name="wing" id="w-1" value="1"><label for="w-1">1 kísérőgép</label>
+        </div>
+        <span class="hint">melletted repül és harcol (párbajban nincs)</span>
       </div>
       <div class="row">
         <label class="label" for="enemies">Ellenség</label>
@@ -198,7 +274,7 @@
         <label class="label" for="sens">Egér célzás</label>
         <input type="range" class="sens" id="sens" data-key="aim" min="5" max="200" step="5" value="60">
         <span class="hint sens-val" data-key="aim">60%</span>
-        <label class="hint"><input type="checkbox" class="invert" id="invert"> fordított Y</label>
+        <label class="hint"><input type="checkbox" class="invert" id="invert" data-key="invert"> fordított Y</label>
       </div>
       <div class="row">
         <label class="label" for="stick">Botkormány</label>
@@ -206,6 +282,84 @@
         <span class="hint sens-val" data-key="stick">60%</span>
         <span class="hint">kabinnézetben (V)</span>
       </div>
+      <details class="more">
+        <summary>Beállítások: hang, grafika, napszak, érintés</summary>
+        <div class="opts">
+          <div class="row">
+            <label class="label" for="vol">Hangerő</label>
+            <input type="range" id="vol" data-key="volume" min="0" max="100" step="5" value="70">
+            <span class="hint sens-val" data-key="volume" data-unit="%">70%</span>
+            <label class="hint"><input type="checkbox" data-key="voice" checked> hangos figyelmeztetések (angol)</label>
+          </div>
+          <div class="row">
+            <span class="label">Grafika</span>
+            <div class="seg" role="radiogroup" aria-label="Grafikai minőség">
+              <input type="radio" name="quality" id="q-low" value="low" data-key="quality"><label for="q-low">Gyors</label>
+              <input type="radio" name="quality" id="q-med" value="medium" data-key="quality"><label for="q-med">Közepes</label>
+              <input type="radio" name="quality" id="q-high" value="high" data-key="quality" checked><label for="q-high">Szép</label>
+            </div>
+            <span class="hint">gyenge gépen: Gyors</span>
+          </div>
+          <div class="row">
+            <label class="label" for="fov">Látószög</label>
+            <input type="range" id="fov" data-key="fov" min="50" max="100" step="1" value="70">
+            <span class="hint sens-val" data-key="fov" data-unit="°">70°</span>
+            <span class="hint">széles monitoron nagyobb</span>
+          </div>
+          <div class="row">
+            <span class="label">Napszak</span>
+            <div class="seg" role="radiogroup" aria-label="Napszak">
+              <input type="radio" name="tod" id="t-day" value="day" data-key="tod" checked><label for="t-day">Nappal</label>
+              <input type="radio" name="tod" id="t-sunset" value="sunset" data-key="tod"><label for="t-sunset">Naplemente</label>
+              <input type="radio" name="tod" id="t-over" value="overcast" data-key="tod"><label for="t-over">Borús</label>
+              <input type="radio" name="tod" id="t-night" value="night" data-key="tod"><label for="t-night">Éjszaka</label>
+            </div>
+          </div>
+          <div class="row">
+            <span class="label">Érintés</span>
+            <div class="seg" role="radiogroup" aria-label="Érintéses vezérlés">
+              <input type="radio" name="touch" id="tc-auto" value="auto" data-key="touch" checked><label for="tc-auto">Automatikus</label>
+              <input type="radio" name="touch" id="tc-on" value="on" data-key="touch"><label for="tc-on">Be</label>
+              <input type="radio" name="touch" id="tc-off" value="off" data-key="touch"><label for="tc-off">Ki</label>
+            </div>
+            <label class="hint"><input type="checkbox" data-key="rumble" checked> kontroller rezgés</label>
+          </div>
+          <div class="row">
+            <label class="label" for="music">Zene</label>
+            <select id="music" data-key="music">
+              <option value="off">Ki</option>
+              <option value="patrol">Hajnali járőr</option>
+              <option value="burner">Utánégető</option>
+              <option value="cobra">Kobra</option>
+              <option value="night">Éjszakai bevetés</option>
+              <option value="own">Saját zene</option>
+            </select>
+            <input type="range" id="mvol" data-key="musicVol" min="0" max="100" step="5" value="50">
+            <span class="hint sens-val" data-key="musicVol" data-unit="%">50%</span>
+            <label class="hint filelink"><input type="file" id="own-music" accept="audio/*" hidden><u>saját zene betöltése…</u></label>
+            <span class="hint" id="own-name"></span>
+          </div>
+          <div class="row">
+            <span class="label">Gombok</span>
+            <details class="more" style="flex:1"><summary>Gombkiosztás átállítása</summary><div class="keys-list" id="keys-list"></div></details>
+          </div>
+          <div class="row">
+            <span class="label">Teszt</span>
+            <button type="button" class="small" id="bench">Teljesítményteszt</button>
+            <span class="hint" id="bench-msg">8 mp-es légiharc; utána beállítja a gépedhez illő grafikát</span>
+          </div>
+          <div class="row" id="install-row" hidden>
+            <span class="label">Telepítés</span>
+            <button type="button" class="small primary" id="install">Telepítés alkalmazásként</button>
+            <span class="hint">a kezdőképernyőről indul, internet nélkül is</span>
+          </div>
+        </div>
+      </details>
+      <details class="more" id="career">
+        <summary>Karrier és kitüntetések</summary>
+        <div id="career-body"></div>
+        <button type="button" class="small" id="career-reset">Statisztika törlése</button>
+      </details>
     </div>
     <div id="current" class="hint" hidden></div>
     <div class="buttons">
@@ -215,7 +369,18 @@
     </div>
     <div id="menuerr"></div>
     <a id="download" class="hint" href="dogfight-offline.html" download="Dogfight-F16.html" hidden>⤓ Letöltés egy fájlban (internet nélkül is megy, dupla kattintással indul)</a>
-    <div class="hint">Kattintás után az egér a játékhoz kötődik · Esc = elengedés · H = súgó · kontrollerrel: A = indítás</div>
+    <div class="hint">Kattintás után az egér a játékhoz kötődik · Esc = elengedés · H = súgó · U = rakétakamera · kontrollerrel: A = indítás · telefonon érintéssel</div>
+  </div>
+</div>
+
+<div id="hangar" class="screen dim" hidden>
+  <div class="card">
+    <div class="hangar-head"><div><div class="eyebrow">Hangár · Shop</div><h1 style="font-size:40px">Hangár</h1></div><div id="hangar-credits"></div></div>
+    <p>Minden pont, amit a levegőben szerzel, kredit is: lelövés, hullám, párbaj, kicselezett rakéta, gyűrűverseny.</p>
+    <div class="tabs" id="hangar-tabs"></div>
+    <div id="hangar-msg"></div>
+    <div id="hangar-body"></div>
+    <div class="buttons"><button type="button" class="primary" id="hangar-close">Vissza a menübe</button></div>
   </div>
 </div>
 
@@ -229,13 +394,32 @@
         <label class="label" for="p-sens">Egér célzás</label>
         <input type="range" class="sens" id="p-sens" data-key="aim" min="5" max="200" step="5" value="60">
         <span class="hint sens-val" data-key="aim">60%</span>
-        <label class="hint"><input type="checkbox" class="invert" id="p-invert"> fordított Y</label>
+        <label class="hint"><input type="checkbox" class="invert" id="p-invert" data-key="invert"> fordított Y</label>
       </div>
       <div class="row">
         <label class="label" for="p-stick">Botkormány</label>
         <input type="range" class="sens" id="p-stick" data-key="stick" min="5" max="200" step="5" value="60">
         <span class="hint sens-val" data-key="stick">60%</span>
         <span class="hint">kabinnézetben (V)</span>
+      </div>
+      <div class="row">
+        <label class="label" for="p-vol">Hangerő</label>
+        <input type="range" id="p-vol" data-key="volume" min="0" max="100" step="5" value="70">
+        <span class="hint sens-val" data-key="volume" data-unit="%">70%</span>
+      </div>
+      <div class="row">
+        <label class="label" for="p-fov">Látószög</label>
+        <input type="range" id="p-fov" data-key="fov" min="50" max="100" step="1" value="70">
+        <span class="hint sens-val" data-key="fov" data-unit="°">70°</span>
+      </div>
+      <div class="row">
+        <span class="label">Napszak</span>
+        <div class="seg" role="radiogroup" aria-label="Napszak">
+          <input type="radio" name="p-tod" id="pt-day" value="day" data-key="tod"><label for="pt-day">Nappal</label>
+          <input type="radio" name="p-tod" id="pt-sunset" value="sunset" data-key="tod"><label for="pt-sunset">Naplemente</label>
+          <input type="radio" name="p-tod" id="pt-over" value="overcast" data-key="tod"><label for="pt-over">Borús</label>
+          <input type="radio" name="p-tod" id="pt-night" value="night" data-key="tod"><label for="pt-night">Éjszaka</label>
+        </div>
       </div>
     </div>
     <div class="buttons">
@@ -283,6 +467,8 @@
           <dt>F</dt><dd>AIM-9M lock / elengedés (±30° az orr előtt)</dd>
           <dt>Y</dt><dd>következő radarcél kijelölése</dd>
           <dt>M</dt><dd>célpont jelölők</dd>
+          <dt>U</dt><dd>rakétakamera be / ki: a kilőtt rakétát követi a becsapódásig</dd>
+          <dt>O</dt><dd>bullet time (ha a Hangárban megvetted)</dd>
           <dt>Esc · P · Enter</dt><dd>menü (főmenü, új játék) · szünet · újraéledés</dd>
         </dl>
       </div>
@@ -308,6 +494,27 @@
           <dt>D-pad</dt><dd>fel: futómű · le: fék · bal: nézet · jobb: zoom</dd>
           <dt>L3 · R3</dt><dd>körülnézés (tartva, jobb karral) · jelölők</dd>
           <dt>Start · Back</dt><dd>szünet · súgó</dd>
+          <dt>Rezgés</dt><dd>gépágyú, találat, rakétaindítás, közeli robbanás, rakétariasztás (kikapcsolható)</dd>
+        </dl>
+      </div>
+      <div>
+        <h3>Telefon / tablet</h3>
+        <dl>
+          <dt>Bal kör</dt><dd>célzókör mozgatása (kabinban: botkormány)</dd>
+          <dt>GÁZ sáv</dt><dd>húzd fel / le; a legfelső rész az utánégető</dd>
+          <dt>Gombok</dt><dd>ÁGYÚ (tartva) · RAKÉTA · LOCK · FLARE (tartva) · FEGYVER · FÉK</dd>
+          <dt>Felül</dt><dd>szünet · nézet · futómű · IR lock · TVC (F-16)</dd>
+        </dl>
+      </div>
+      <div>
+        <h3>Játékmódok és pontok</h3>
+        <dl>
+          <dt>Hullámok</dt><dd>egyre több ellenség; a bázison leszállva újratölthetsz</dd>
+          <dt>Párbaj</dt><dd>egy ellenfél szemből, 9 km-ről; minden kör tele géppel indul</dd>
+          <dt>Túlélés</dt><dd>egy életed van, a hullámok gyorsan jönnek</dd>
+          <dt>Gyűrűverseny</dt><dd>18 gyűrű a völgyekben, időre; a borostyán jelölő mutatja a következőt</dd>
+          <dt>Hangár</dt><dd>a pontjaid kreditek: gép, festés, fejlesztés, mód vehető belőlük</dd>
+          <dt>Pontok</dt><dd>ágyú 150 · AIM-9M 100 · AIM-120A 80 · manőverkill 120, nehézséggel és sorozattal szorozva; hullám- és párbajbónusz, kicselezett rakéta +50</dd>
         </dl>
       </div>
     </div>

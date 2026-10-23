@@ -235,7 +235,19 @@ export const F15EX = {
   firingOrder: [12, 1, 11, 2, 10, 3, 9, 4, 8, 5, 7, 6],
 };
 
-export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A, f15: F15EX };
+// F-15 ACTIVE (NASA, 1993-99): an F-15B with canards and pitch/yaw thrust-vectoring nozzles on two
+// F100-PW-229 engines.  The same Eagle model, re-tuned: no conformal tanks (lighter, less drag, less fuel),
+// the -229's thrust (2 x 79 / 2 x 129 kN), canards for more lift, and thrust vectoring on Tab like the F-16.
+export const F15A = {
+  ...F15EX, id: 'f15a', name: 'F-15 ACTIVE (NASA)', short: 'F-15 ACTIVE', callsign: 'Active',
+  emptyMass: 12900, internalFuel: 6100, thrustDry: 158000, thrustAb: 258000, fuelFlowDry: 3.3, fuelFlowAb: 14.8,
+  cd0: 0.0198, clMax: 1.85, alphaStall: 34, alphaLimit: 32, rollRate: 270, hp: 110,
+  tvc: { vector: 20, alphaNormal: 34, alphaPostStall: 85, rollRate: 300, pitchRate: 2.5, thrustScale: 1.12,
+    kScale: 0.75, clMax: 2.5, lowSpeedAuthority: 0.7 },
+  loadouts: { default: { 2: 'AIM-9M', 11: 'AIM-9M', 3: 'AIM-9M', 10: 'AIM-9M', 4: 'AIM-120A', 9: 'AIM-120A' } },
+};
+
+export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A, f15: F15EX, f15a: F15A };
 
 // the enemies fly the same jets with a weaker airframe: less G, slower roll, lower angle of attack limit
 export const BANDITS = {

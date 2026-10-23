@@ -1,7 +1,7 @@
 // Procedural WebAudio sounds (port of dogfight/audio.py): engine, afterburner, gun, Sidewinder growl /
 // lock tone, RWR tones, launch, hits and explosions.  Created on the first click (browser autoplay rules).
 import { IR } from './specs.js';
-import { len, sub } from './util.js';
+import { len, sub, dot, norm } from './util.js';
 
 const RATE = 22050;
 
@@ -39,9 +39,19 @@ export class Sounds {
       launch: buffer(c, 1.6, (t) => { lp2 += (noise() - lp2) * 0.25; return lp2 * 2.2 * Math.exp(-t * 1.6) * Math.min(1, t * 30); }),
       hit: buffer(c, 0.25, (t) => noise() * Math.exp(-t * 18)),
       explosion: buffer(c, 2.5, (t) => { lp += (noise() - lp) * 0.05; return lp * 6 * Math.exp(-t * 1.5) * Math.min(1, t * 80); }),
+      // added: wind and buffet, other jets flying by, missiles whooshing past, the sonic boom, chimes
+      wind: buffer(c, 2, () => { lp2 += (noise() - lp2) * 0.12; return lp2 * 2.4; }),
+      flyby: buffer(c, 2, () => { lp += (noise() - lp) * 0.2; return lp * 2.6; }),
+      whoosh: buffer(c, 1, () => { lp2 += (noise() - lp2) * 0.5; return lp2 * 1.4; }),
+      boom: buffer(c, 1.4, (t) => { lp += (noise() - lp) * 0.06; return (lp * 7 + 0.6 * Math.sin(2 * Math.PI * 38 * t)) * Math.exp(-t * 3.2) * Math.min(1, t * 400); }),
+      splash: buffer(c, 0.7, (t) => 0.3 * Math.sin(2 * Math.PI * (t < 0.18 ? 880 : 1320) * t) * Math.exp(-((t < 0.18 ? t : t - 0.18)) * 5)),
+      medal: buffer(c, 1.1, (t) => { const f = t < 0.15 ? 784 : t < 0.3 ? 988 : 1175; const t0 = t < 0.15 ? t : t < 0.3 ? t - 0.15 : t - 0.3;
+        return 0.28 * (Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(4 * Math.PI * f * t)) * Math.exp(-t0 * 4); }),
     };
+    this.volume = volume;
   }
   resume() { if (this.ctx && this.ctx.state !== 'running') this.ctx.resume(); }
+  setVolume(v) { this.volume = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); }
   play(name, volume = 1, rate = 1) {
     if (!this.ctx) return;
     const s = this.ctx.createBufferSource(), g = this.ctx.createGain();
@@ -70,8 +80,10 @@ export class Sounds {
       const dist = len(sub(d.pos, player.pos));
       if (dist < 12000) this.play('explosion', Math.max(0.15, 1 - dist / 12000), 0.8 + 0.3 * Math.random());
     } else if (kind === 'hit' && (d.target === player || d.shooter === player)) this.play('hit', 0.7);
+    else if (kind === 'kill' && d.killer === player && d.victim !== player) this.play('splash', 0.6);
+    else if (kind === 'medal') this.play('medal', 0.7);
   }
-  update(player, paused) {
+  update(player, paused, world = null, listener = null) {
     if (!this.ctx) return;
     if (!player || !player.alive || paused) { this.stopAll(); return; }
     const e = player.fm.engine, e1 = Math.min(e, 1);
@@ -87,6 +99,33 @@ export class Sounds {
     const near = player.rwr.incoming.length ? player.rwr.incoming[0].dist : 1e9;
     this.loop('rwr_launch', level >= 3, 0.45, 1 + 0.8 * Math.max(0, Math.min(1, (8000 - near) / 8000)));
     this.loop('rwr_lock', level === 2, 0.3);
+    // wind over the canopy rises with the airspeed, and buffets at a high angle of attack
+    const ias = player.fm.ias || 0, aoa = Math.abs(player.fm.alpha || 0) * 57.3;
+    const wind = Math.min(1, Math.max(0, (ias - 50) / 320)) * 0.22 + Math.min(1, Math.max(0, (aoa - 14) / 16)) * 0.25 * Math.min(1, ias / 120);
+    this.loop('wind', wind > 0.01, wind, 0.55 + Math.min(1, ias / 500) * 0.7);
+    // sonic boom when the player goes through Mach 1 (either way), not more than once every few seconds
+    const sup = player.fm.mach >= 1;
+    if (this.prevSup !== undefined && sup !== this.prevSup && performance.now() - (this.boomT || 0) > 4000) { this.play('boom', 0.7); this.boomT = performance.now(); }
+    this.prevSup = sup;
+    if (world) {
+      // other jets passing close: engine roar from where they are, pitch shifted by their closing speed (Doppler)
+      const ear = listener || player.pos;
+      let best = null, bd = 900;
+      for (const a of world.aircraft) {
+        if (a === player || !a.alive) continue;
+        const d = len(sub(a.pos, ear));
+        if (d < bd) { bd = d; best = a; }
+      }
+      if (best) {
+        const los = norm(sub(best.pos, ear)), closing = -dot(sub(best.vel, player.vel), los);
+        const k = 1 - bd / 900;
+        this.loop('flyby', true, 0.75 * k * k * (0.5 + 0.5 * Math.min(1, best.engineSetting)), Math.max(0.55, Math.min(1.7, 1 + closing / 420)));
+      } else this.loop('flyby', false);
+      // a missile flying close by
+      let md = 500;
+      for (const m of world.missiles) if (m.alive && m.shooter !== player) md = Math.min(md, len(sub(m.pos, ear)));
+      this.loop('whoosh', md < 500, 0.6 * (1 - md / 500) ** 2, 1.4);
+    }
     if (player.rwr.newSearch && !this.prevNew) this.play('rwr_new', 0.3);
     this.prevNew = player.rwr.newSearch;
   }

@@ -5,6 +5,25 @@ import { RUNWAY_LENGTH, RUNWAY_WIDTH, TAXIWAY_OFFSET, TAXIWAY_WIDTH, APRON } fro
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.55, 0.70).normalize();
 const HORIZON = new THREE.Color(0.72, 0.81, 0.90);
 const ZENITH = new THREE.Color(0.19, 0.38, 0.72);
+// time of day presets: sun (or moon) direction and light, sky gradient, fog, sea, clouds, reflections
+const TIMES = {
+  day: { sun: [-0.45, 0.55, 0.70], sunCol: 0xfff4e0, sunI: 2.2, sky: 0xbcd2f0, ground: 0x4a5236, hemiI: 0.95,
+    hor: [0.72, 0.81, 0.90], zen: [0.19, 0.38, 0.72], below: [0.62, 0.70, 0.76], glow: [1, 0.95, 0.85], glowK: 0.22,
+    fog: 1.9e-5, sea: 0x2b5674, cloud: 0xffffff, sprite: 0xfff2cc, spriteS: 120, exposure: 1.0, stars: false,
+    env: ['#3a66b8', '#c9daf0', '#e8eef5', '#5a6a4a', '#2c3424'] },
+  sunset: { sun: [-0.82, 0.52, 0.11], sunCol: 0xffa465, sunI: 2.4, sky: 0x9c8fb8, ground: 0x3d3326, hemiI: 0.72,
+    hor: [0.98, 0.66, 0.42], zen: [0.20, 0.26, 0.50], below: [0.52, 0.44, 0.42], glow: [1, 0.55, 0.22], glowK: 0.95,
+    fog: 2.3e-5, sea: 0x2d3d57, cloud: 0xffcfae, sprite: 0xffb070, spriteS: 170, exposure: 1.05, stars: false,
+    env: ['#33407a', '#e9a77a', '#ffd2a0', '#4a3c2c', '#211a14'] },
+  overcast: { sun: [-0.3, 0.4, 0.86], sunCol: 0xdfe5ea, sunI: 0.95, sky: 0xc7ced5, ground: 0x575c50, hemiI: 1.45,
+    hor: [0.70, 0.73, 0.76], zen: [0.50, 0.55, 0.60], below: [0.62, 0.65, 0.67], glow: [1, 1, 1], glowK: 0.04,
+    fog: 4.2e-5, sea: 0x3c505c, cloud: 0xc3c8cd, sprite: null, spriteS: 0, exposure: 1.0, stars: false,
+    env: ['#7d8791', '#b8bfc6', '#c9cfd4', '#555a50', '#2e322c'] },
+  night: { sun: [0.35, -0.55, 0.62], sunCol: 0x9fb4ff, sunI: 0.32, sky: 0x2a3550, ground: 0x0e1014, hemiI: 0.3,
+    hor: [0.07, 0.10, 0.17], zen: [0.01, 0.015, 0.05], below: [0.035, 0.045, 0.06], glow: [0.55, 0.65, 1], glowK: 0.12,
+    fog: 2.0e-5, sea: 0x0a1424, cloud: 0x343c4a, sprite: 0xe4ebff, spriteS: 45, exposure: 0.95, stars: true,
+    env: ['#05070f', '#141c30', '#202a40', '#0b0d10', '#040506'] },
+};
 
 // ------------------------------------------------------------------ geometry
 function geom(g) {
@@ -109,7 +128,8 @@ export class Models {
     this.glbMat = {};
     for (const [key, g] of Object.entries(glb)) this.glbMat[key] = g.materials.map((m) => this.material(m));
     this.types = {};
-    for (const spec of Object.values(specs)) this.types[spec.model] = this.typeInfo(spec);
+    for (const spec of Object.values(specs)) if (!this.types[spec.model]) this.types[spec.model] = this.typeInfo(spec);   // first spec per model
+    this.skinCache = {};
   }
   // Reference points of a Blender model in the aircraft frame (+Y forward, +Z up) and the effects hung on
   // them.  The flight model's origin sits spec.gearHeight above the ground; the model is shifted down so its
@@ -165,8 +185,22 @@ export class Models {
   // F-22 internal carriage (in `bays`): doors (extras.bay = degrees that close them, extras.group), launchers
   // rack_N (extras.rack = degrees that swing them down, or slide_x/y/z = metres they slide out) and the
   // missiles' places store_N.
-  instance(key, parts, gear, bays) {
-    const mats = this.glbMat[key];
+  // a paint scheme (hangar.js SKINS) on the painted (textured) materials of a model; glass, lamps and details stay
+  skinMats(key, skin) {
+    if (!skin || skin.id === 'factory') return this.glbMat[key];
+    const ck = `${key}:${skin.id}`;
+    if (this.skinCache[ck]) return this.skinCache[ck];
+    return (this.skinCache[ck] = this.glbMat[key].map((m) => {
+      if (!m.map || m.transparent) return m;
+      const c = m.clone();
+      c.color.setHex(skin.color); c.emissive.setHex(skin.emissive);
+      if (skin.metal !== null) { c.metalness = skin.metal; c.metalnessMap = null; c.envMapIntensity = 0.35 + skin.metal; }
+      if (skin.rough !== null) { c.roughness = skin.rough; c.roughnessMap = null; }
+      return c;
+    }));
+  }
+  instance(key, parts, gear, bays, skin = null) {
+    const mats = this.skinMats(key, skin);
     const build = (n) => {
       const o = new THREE.Object3D();
       o.name = n.name; o.position.fromArray(n.position); o.quaternion.fromArray(n.quaternion); o.scale.fromArray(n.scale);
@@ -197,24 +231,31 @@ export class Models {
     return model;
   }
   makeEnv() {
-    // tiny equirect sky for reflections (canopy, paint sheen)
-    const c = document.createElement('canvas');
+    // tiny equirect sky for reflections (canopy, paint sheen); repainted for the time of day (paintEnv)
+    const c = this.envCanvas = document.createElement('canvas');
     c.width = 256; c.height = 128;
-    const g = c.getContext('2d');
-    const grd = g.createLinearGradient(0, 0, 0, 128);
-    grd.addColorStop(0, '#3a66b8'); grd.addColorStop(0.47, '#c9daf0'); grd.addColorStop(0.5, '#e8eef5');
-    grd.addColorStop(0.53, '#5a6a4a'); grd.addColorStop(1, '#2c3424');
-    g.fillStyle = grd; g.fillRect(0, 0, 256, 128);
-    const sun = g.createRadialGradient(150, 30, 0, 150, 30, 18);
-    sun.addColorStop(0, 'rgba(255,255,240,1)'); sun.addColorStop(1, 'rgba(255,255,240,0)');
-    g.fillStyle = sun; g.fillRect(120, 0, 60, 60);
     const t = new THREE.CanvasTexture(c);
     t.mapping = THREE.EquirectangularReflectionMapping;
+    this.envTex = t;
+    this.paintEnv(TIMES.day.env, true);
     return t;
   }
-  aircraft(key = 'f16') {
+  paintEnv(cols, sun) {
+    const g = this.envCanvas.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, 128);
+    grd.addColorStop(0, cols[0]); grd.addColorStop(0.47, cols[1]); grd.addColorStop(0.5, cols[2]);
+    grd.addColorStop(0.53, cols[3]); grd.addColorStop(1, cols[4]);
+    g.fillStyle = grd; g.fillRect(0, 0, 256, 128);
+    if (sun) {
+      const s = g.createRadialGradient(150, 30, 0, 150, 30, 18);
+      s.addColorStop(0, 'rgba(255,255,240,1)'); s.addColorStop(1, 'rgba(255,255,240,0)');
+      g.fillStyle = s; g.fillRect(120, 0, 60, 60);
+    }
+    if (this.envTex) this.envTex.needsUpdate = true;
+  }
+  aircraft(key = 'f16', skin = null) {
     const root = new THREE.Group(), parts = {}, gear = [], bays = { doors: [], racks: {}, stores: {} };
-    const model = this.instance(key, parts, gear, bays);
+    const model = this.instance(key, parts, gear, bays, skin);
     root.userData.bays = bays;
     model.position.z = this.types[key].modelZ;
     root.userData.model = model;
@@ -446,10 +487,10 @@ export class SceneView {
     scene.fog = new THREE.FogExp2(HORIZON.clone(), 1.9e-5);
     this.camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.6, 160000);
     this.camera.up.set(0, 0, 1);
-    const sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
+    const sun = this.sunLight = new THREE.DirectionalLight(0xfff4e0, 2.2);
     sun.position.copy(SUN_DIR).multiplyScalar(1000);
     scene.add(sun);
-    const hemi = new THREE.HemisphereLight(0xbcd2f0, 0x4a5236, 0.95);
+    const hemi = this.hemi = new THREE.HemisphereLight(0xbcd2f0, 0x4a5236, 0.95);
     hemi.position.set(0, 0, 1);
     scene.add(hemi);
     // own aircraft in cockpit view: layer 1, drawn in a second pass with a tiny near plane
@@ -458,7 +499,7 @@ export class SceneView {
     this.cockpitCam.up.set(0, 0, 1);
     this.cockpitCam.layers.set(1);
     this.glowTex = softTexture(64, 2.2);
-    this.smoke = new Particles(scene, softTexture(64, 1.4), false, 2500);
+    this.smoke = new Particles(scene, softTexture(64, 1.4), false, 4000);
     this.fire = new Particles(scene, this.glowTex, true, 1200);
     this.visuals = new Map(); this.missileVis = new Map();
     this.buildSky(); this.buildSea(); this.buildTerrain(); this.buildClouds(); this.buildAirfield();
@@ -470,7 +511,53 @@ export class SceneView {
     this.tracers = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.tracers.frustumCulled = false;
     scene.add(this.tracers);
-    this.time = 0; this.cockpitView = false;
+    this.time = 0; this.cockpitView = false; this.quality = 'high'; this.timeOfDay = 'day';
+  }
+  // graphics quality: low hides the clouds and the contrails (the pixel ratio is set by the game)
+  setQuality(q) {
+    this.quality = q;
+    if (this.clouds) this.clouds.visible = q !== 'low';
+  }
+  setTimeOfDay(name) {
+    const t = TIMES[name] || TIMES.day;
+    this.timeOfDay = TIMES[name] ? name : 'day';
+    const dir = new THREE.Vector3(...t.sun).normalize();
+    this.sunDir = dir;
+    this.sunLight.position.copy(dir).multiplyScalar(1000);
+    this.sunLight.color.setHex(t.sunCol); this.sunLight.intensity = t.sunI;
+    this.hemi.color.setHex(t.sky); this.hemi.groundColor.setHex(t.ground); this.hemi.intensity = t.hemiI;
+    const hor = new THREE.Color(...t.hor);
+    this.scene.background = hor.clone();
+    this.scene.fog.color.copy(hor); this.scene.fog.density = t.fog;
+    this.paintSky(t, dir);
+    this.sunSprite.visible = !!t.sprite;
+    if (t.sprite) {
+      this.sunSprite.material.color.setHex(t.sprite);
+      this.sunSprite.scale.set(t.spriteS, t.spriteS, 1);
+      this.sunSprite.position.copy(dir).multiplyScalar(900);
+    }
+    this.stars.visible = t.stars;
+    this.seaMat.color.setHex(t.sea);
+    this.seaMat.specular.setHex(t.stars ? 0x223344 : 0x8899aa);
+    for (const m of this.cloudMats) m.color.setHex(t.cloud);
+    this.models.paintEnv(t.env, !!t.sprite && !t.stars);
+    this.renderer.toneMappingExposure = t.exposure;
+  }
+  // sky dome colours: the gradient from the horizon to the zenith, plus a glow around the sun
+  paintSky(t, dir) {
+    const geo = this.sky.geometry, p = geo.attributes.position, col = geo.attributes.color;
+    const hor = new THREE.Color(...t.hor), zen = new THREE.Color(...t.zen), below = new THREE.Color(...t.below), glow = new THREE.Color(...t.glow);
+    const d = new THREE.Vector3(), c = new THREE.Color(), flatSun = new THREE.Vector3(dir.x, dir.y, 0).normalize();
+    for (let i = 0; i < p.count; i++) {
+      d.set(p.getX(i), p.getY(i), p.getZ(i)).normalize();
+      const el = d.z;
+      if (el < 0) c.copy(below); else c.copy(hor).lerp(zen, Math.pow(clamp(el / 0.75, 0, 1), 0.8));
+      const around = Math.max(0, d.dot(dir)), flat = Math.max(0, new THREE.Vector3(d.x, d.y, 0).normalize().dot(flatSun));
+      const k = t.glowK * (Math.pow(around, 6) + 0.45 * Math.pow(flat, 3) * Math.pow(1 - Math.min(1, Math.abs(el) * 2.5), 2));
+      c.r = Math.min(1, c.r + glow.r * k); c.g = Math.min(1, c.g + glow.g * k); c.b = Math.min(1, c.b + glow.b * k);
+      col.setXYZ(i, c.r, c.g, c.b);
+    }
+    col.needsUpdate = true;
   }
 
   buildSky() {
@@ -489,11 +576,23 @@ export class SceneView {
     this.sunSprite.scale.set(120, 120, 1);
     this.sunSprite.position.copy(SUN_DIR).multiplyScalar(900);
     this.sky.add(this.sunSprite);
+    // stars (night only)
+    const sr = rng(11), sp = [];
+    for (let i = 0; i < 1600; i++) {
+      const z = Math.pow(sr(), 0.7), a = sr() * Math.PI * 2, rr = Math.sqrt(1 - z * z);
+      sp.push(Math.cos(a) * rr * 950, Math.sin(a) * rr * 950, z * 950);
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xdfe8ff, size: 1.6, sizeAttenuation: false, fog: false, depthTest: false, depthWrite: false, transparent: true, opacity: 0.85 }));
+    this.stars.renderOrder = -9; this.stars.visible = false;
+    this.sky.add(this.stars);
     this.scene.add(this.sky);
   }
   buildSea() {
     const g = new THREE.PlaneGeometry(320000, 320000, 32, 32);
-    const m = new THREE.Mesh(g, new THREE.MeshPhongMaterial({ color: 0x2b5674, specular: 0x8899aa, shininess: 60 }));
+    this.seaMat = new THREE.MeshPhongMaterial({ color: 0x2b5674, specular: 0x8899aa, shininess: 60 });
+    const m = new THREE.Mesh(g, this.seaMat);
     m.position.z = -1.5;
     this.scene.add(m);
   }
@@ -569,7 +668,7 @@ export class SceneView {
   }
   buildClouds() {
     const tex = puffTexture(), r = rng(5), lim = this.terrain.half * 0.95;
-    const mats = [0.75, 0.85, 0.95].map((o) => new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: o, depthWrite: false }));
+    const mats = this.cloudMats = [0.75, 0.85, 0.95].map((o) => new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: o, depthWrite: false }));
     this.clouds = new THREE.Group();
     for (let k = 0; k < 70; k++) {
       const cx = r.uniform(-lim, lim), cy = r.uniform(-lim, lim), cz = r.uniform(2600, 3600), size = r.uniform(500, 1100);
@@ -696,6 +795,7 @@ export class SceneView {
   }
   explosion(pos, size, ground) {
     const r = this.world.rnd;
+    this.fire.spawn(pos, null, 0.2, [60 * size, 150 * size], [[1, 0.93, 0.78, 0.95], [1, 0.55, 0.2, 0]]);      // the flash
     for (let i = 0; i < 8 * size + 4; i++) this.fire.spawn(add(pos, this.rand3(3 * size)), this.rand3(25 * size), 0.5 + 0.5 * r(), [4 * size, 22 * size], [[1, 0.75, 0.35, 1], [0.9, 0.25, 0.05, 0]], 2.5);
     const sc = ground ? [0.35, 0.3, 0.25, 0.85] : [0.25, 0.23, 0.21, 0.75];
     for (let i = 0; i < 10 * size + 4; i++) this.smoke.spawn(add(pos, this.rand3(4 * size)), this.rand3(12 * size), 4 + 3 * r(), [8 * size, 40 * size], [sc, [0.45, 0.43, 0.42, 0]], 0.8, ground ? 2 : 0.5);
@@ -706,7 +806,7 @@ export class SceneView {
     let v = this.visuals.get(ac);
     if (v) return v;
     const type = this.models.types[ac.spec.model] || this.models.types.f16;
-    const root = new THREE.Group(), outside = this.models.aircraft(type.key);
+    const root = new THREE.Group(), outside = this.models.aircraft(type.key, ac.skin || null);
     root.add(outside);
     const stores = new Map(), bays = outside.userData.bays;
     if (type.spec.bays) {
@@ -834,7 +934,8 @@ export class SceneView {
       if (!b.tracer || n >= 600) continue;
       const tail = add(b.pos, mul(b.vel, -0.014));
       this.tracerPos.set([b.pos.x, b.pos.y, b.pos.z, tail.x, tail.y, tail.z], n * 6);
-      this.tracerCol.set([1, 0.85, 0.35, 0.6, 0.25, 0.05], n * 6);
+      const tc = b.owner && b.owner.tracerColor;
+      this.tracerCol.set(tc || [1, 0.85, 0.35, 0.6, 0.25, 0.05], n * 6);
       n++;
     }
     const tg = this.tracers.geometry;
@@ -893,6 +994,25 @@ export class SceneView {
       }
     }
     if (!ac.alive) return;
+    // contrails high up, from every engine
+    if (this.quality !== 'low' && ac.pos.z > 7200 && ac.speed > 140) {
+      v.contrail = (v.contrail || 0) - dt;
+      if (v.contrail <= 0) {
+        v.contrail = 0.07;
+        const k = Math.min(1, (ac.pos.z - 7200) / 1500) * 0.5;
+        for (const n of v.type.nozzles) this.smoke.spawn(add(ac.pos, xform(q, add(n, V(0, -5, 0)))), mul(ac.vel, 0.05), 7, [1.4, 8], [[1, 1, 1, k], [1, 1, 1, 0]]);
+      }
+    }
+    // vapour cone right at the speed of sound in denser air
+    const M = ac.fm.mach;
+    if (M > 0.965 && M < 1.035 && ac.pos.z < 9000) {
+      const a = 0.4 * (1 - Math.abs(M - 1) / 0.035), mid = add(ac.pos, mul(ac.forward, -1.5));
+      for (let i = 0; i < 4; i++) {
+        const ang = this.world.rnd() * Math.PI * 2;
+        const pp = add(mid, add(mul(ac.fm.right, Math.cos(ang) * 3.4), mul(ac.fm.up, Math.sin(ang) * 2.6)));
+        this.smoke.spawn(pp, mul(ac.vel, 0.97), 0.16, [2.4, 4.2], [[1, 1, 1, a], [1, 1, 1, 0]]);
+      }
+    }
     const alpha = ac.fm.alpha / DEG;
     if (alpha > 13 && ac.speed > 70) {
       const a = 0.38 * Math.min(1, (alpha - 13) / 9);

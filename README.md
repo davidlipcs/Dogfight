@@ -31,6 +31,19 @@ sokkal erősebbek: nehéz kikerülni őket, és közelről is eltalálnak. A pil
 húznak, pontatlanabbak, később veszik észre a rakétát, és csak a hatótávjuk biztonságosabb részéből lőnek. Radarral lockolnak,
 rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
+## Dogfight Plus – újdonságok
+
+* **Játékmódok:** Hullámok, **Párbaj 1v1**, **Túlélés** (egy élet), **Gyűrűverseny** (18 gyűrű a völgyekben, időre).
+* **Kísérőgép**, **Ász** nehézség, pontszám sorozat-szorzóval, 16 kitüntetés, karrier-statisztika.
+* **Hangár / Shop:** a pontokból kredit lesz – új gép (**F-15 ACTIVE**, NASA, tolóerő-vektorálással), 10 festés,
+  fejlesztések (hajtómű, páncél, flare, lőszer), módok (bullet time – O, végtelen flare, óriás robbanás, lila nyomjelző),
+  ellenség-adatlapok (Hírszerzés), mentés letöltése / betöltése fájlba.
+* **Kamerák:** rakétakamera (U), killcam. **Napszak:** nappal, naplemente, borús, éjszaka csillagokkal.
+* **Hang:** zenelejátszó (4 beépített szám + saját zene), hangos figyelmeztetések (Pull up, Missile), szél, Doppler, hangrobbanás.
+* **Irányítás:** gombkiosztás átállítása, kontroller-rezgés, **érintéses vezérlés** telefonon / tableten.
+* **Grafika:** minőségi szint, látószög, kondenzcsík, párakúp; **teljesítményteszt**, ami beállítja a grafikát.
+* **Telepíthető app** (GitHub Pages-ről), offline gyorsítótárral.
+
 ## Oktatás (nem kötelező)
 
 A főmenü **Oktatás** gombja egy vezetett repülést indít a kiválasztott géppel. 11 lecke, mindegyik elmagyarázza,
