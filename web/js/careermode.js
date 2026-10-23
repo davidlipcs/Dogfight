@@ -267,7 +267,8 @@ export class CareerMode {
       const fl = this.flightFates(flight, r);
       if (r.won) { this.s.qra = done + 1; if (this.s.qra >= n) { this.s.qra = 0; this.next(); if (role === 'wing') { this.s.rank = 1; this.award('Előléptetés: főhadnagy'); } } }
       if (r.why === 'shot_intruder') { this.s.court = (this.s.court || 0) + 1; }
-      this.debrief({ ...r, title: m.title, extra: fl });
+      const text = r.why === 'escaped' ? 'A célpont elhagyta a légterünket, mielőtt odaértél. Legközelebb gyorsabban a levegőbe!' : r.why === 'intruder_lost' ? 'A célpont magától lezuhant – a feladatot nem lehetett befejezni, de ez nem a te hibád.' : r.why === 'shot_intruder' ? 'Lelőtted az idegen gépet békeidőben: hadbírósági eljárás indul ellened.' : '';
+      this.debrief({ ...r, title: m.title, text, extra: fl });
     });
   }
   // ---- the people you fly with: pilots of the roster (portrait, call sign, skills)

@@ -171,6 +171,7 @@ export class AIPilot {
   gunSolution(t) { return gunLead(this.ac.pos, this.ac.vel, t.pos, t.vel, this.ac.spec.gun, 2)[0]; }
   weapons(world, t, d) {
     const ac = this.ac;
+    if (this.holdFire) return;                   // peacetime: weapons hold (air policing)
     if (d < 1100 && angleBetween(ac.forward, this.gunSolution(t)) < this.skill.gunCone * DEG) ac.trigger = true;
     if (this.missileTimer > 0) return;
     let fired = null;

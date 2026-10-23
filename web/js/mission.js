@@ -86,6 +86,8 @@ export class Mission {
       ac.power = grp.power;
       new AIPilot(ac, m.allySkill || 'normal', this.area); this.blue.push(ac);
     }
+    // air policing: weapons hold for everybody on your side, the lead and the wingman as well
+    if (m.kind === 'intercept') for (const a of this.blue) if (a.pilot) a.pilot.holdFire = true;
     // the other side
     this.red = [];
     k = 0;
@@ -96,7 +98,7 @@ export class Mission {
       const ac = mk(spec, 'red', pos, hdg + Math.PI, `${spec.short} ${k + 1}`);
       ac.power = grp.power;
       if (m.kind === 'intercept') {
-        const route = [add(P, mul(side, -30000)), add(P, mul(side, -60000))].map((q) => V(q.x, q.y, pos.z));
+        const lim2 = g.terrain.half - 6000, route = [add(P, mul(side, -30000)), add(P, mul(side, -60000))].map((q) => V(clamp(q.x, -lim2, lim2), clamp(q.y, -lim2, lim2), pos.z));
         ac.fm.pos = add(add(P, mul(side, 22000)), mul(this.dir, 3000)); ac.fm.pos.z = 7000;
         new TransitPilot(ac, route);
         ac.passive = true;
@@ -130,7 +132,12 @@ export class Mission {
     if (v.team === 'red') {
       this.redLost.push(v.spec.id || v.spec.model);
       if (d.killer === this.p) this.kills.push(v.spec.short);
-      if (this.m.kind === 'intercept') { this.failNote = 'Lelőtted a polgári/idegen gépet békeidőben – hadbíróság!'; this.finish(false, 'shot_intruder'); return; }
+      if (this.m.kind === 'intercept') {
+        // only a shot from your own side is a crime; if the intruder simply crashed, the job is lost, nobody is to blame
+        if (d.killer && d.killer.team === 'blue') { this.failNote = 'Lelőtted a polgári/idegen gépet békeidőben – hadbíróság!'; this.finish(false, 'shot_intruder'); }
+        else { this.say('awacs', `${this.g.radio.callsign}, the target is down on its own. Mission over, RTB.`); this.finish(false, 'intruder_lost'); }
+        return;
+      }
       if (this.lead && this.lead.alive && d.killer === this.lead) this.say('lead', 'Splash one!', 200);
     } else if (v.team === 'blue') {
       if (v !== this.p) this.blueLost.push(v.spec.id || v.spec.model);
@@ -160,6 +167,11 @@ export class Mission {
         this.escortTime = d < 3500 ? this.escortTime + dt : this.escortTime;
         if (this.escortTime > 40) { this.phase = 'done'; this.say('awacs', `${this.g.radio.callsign}, good work, target left the area. RTB.`); this.finish(true); return; }
       }
+    }
+    // the intruder flew on out of our airspace before you got to it
+    if (m.kind === 'intercept' && reds[0] && this.phase !== 'escort' && this.phase !== 'done' && reds[0].pilot.route
+      && reds[0].pilot.leg >= reds[0].pilot.route.length - 1 && len(V(reds[0].pos.x - reds[0].pilot.route[1].x, reds[0].pos.y - reds[0].pilot.route[1].y, 0)) < 3500) {
+      this.say('awacs', `${this.g.radio.callsign}, the target has left our airspace. Mission over, RTB.`); reds[0].alive = false; this.finish(false, 'escaped'); return;
     }
     if (m.kind !== 'intercept' && !reds.length && this.red.length) { this.say('awacs', `${this.g.radio.callsign}, picture clean. Good work, RTB.`); this.finish(true); return; }
     if (m.kind === 'cap' && this.t > (m.minutes || 8) * 60) { this.say('awacs', 'CAP time complete, RTB.'); this.finish(true); return; }
