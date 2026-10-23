@@ -24,11 +24,13 @@ import { buildWorld, PLACES } from './world.js';
 import { Radio } from './radio.js';
 import { MapPicker } from './mappick.js';
 import { CareerMode } from './careermode.js';
+import { Base, Lobby } from './base.js';
 
 // The fight happens on the far side of the map: the enemies live in the combat zone and never attack anyone
 // near the home base (safe area), so taking off and landing is quiet.  An air start puts the player on the
 // way there, just outside the zone.
 const ZONE = { x: -14000, y: 16000, r: 16000 }, ENGAGE_MARGIN = 12000, SAFE_RADIUS = 14000;
+const TAKEOFF_HINT_NOAB = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig  ·  felemelkedési sebességnél emeld az egeret (vagy S)  ·  G = futómű';
 const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret (vagy S)  ·  G = futómű';
 const CAT_HINT = 'KATAPULT: adj teljes gázt (Shift tartva, 100%), és a katapult kilő az orr felé  ·  utána húzd az orrot (S), G = futómű';
 const SPLASH = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
@@ -138,7 +140,20 @@ class FlightCamera {
     const step = Math.abs(ang) < 2.5 ? clamp(ang, -rate * dt, rate * dt) : ang * Math.min(1, rate * 0.6 * dt);
     return qmul(q, qaxis(V(0, 1, 0), step));
   }
+  // on foot (base.js): the eyes of the walker
+  walkView(dt) {
+    const w = this.walker, cam = this.camera;
+    const view = qmul(qaxis(V(0, 0, 1), w.yaw), qaxis(V(1, 0, 0), w.pitch));
+    this.position = w.eye; cam.position.copy(this.position);
+    cam.quaternion.copy(qmul(view, CAM_FIX));
+    this.fov += (this.baseFov - this.fov) * Math.min(1, dt * 8);
+    if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+    if (cam.view && cam.view.enabled) cam.clearViewOffset();
+    this.shift = 0;
+    cam.updateMatrixWorld();
+  }
   update(dt, ac) {
+    if (this.walker && this.walker.active) { this.walkView(dt); return; }
     this.aim = FlightCamera.level(this.aim, dt);
     if (this.freeLook) this.look = FlightCamera.level(this.look, dt);
     if (!ac) return;
@@ -328,6 +343,7 @@ class Game {
     this.view.scene.add(this.carrier.build(this.models));
     this.view.carrierParked = this.carrier.parked;
     this.cam = new FlightCamera(this.view.camera, this.terrain);
+    this.base = new Base(this);
     this.hud = new HUD($('hud'));
     this.sounds = new Sounds(0.7);
     this.input = new Input(canvas);
@@ -370,6 +386,7 @@ class Game {
     requestAnimationFrame((t) => this.frame(t));
   }
 
+  get walking() { return this.base.walker.active; }
   // the map: the original island (place without lat) or a 102 km piece of the real world (world.js).  The
   // terrain object, the carrier and the scene stay the same objects, their contents are replaced.
   async loadPlace(place, onProgress) {
@@ -401,6 +418,7 @@ class Game {
   // a new match on the same scene (terrain, models and the renderer stay)
   newMatch(opts) {
     this.opts = opts;
+    this.base.walker.leave(); this.base.dispose(); this.base.jetsOnGround = [];
     const v = this.view;
     for (const vis of v.visuals.values()) v.scene.remove(vis.root);
     for (const mv of v.missileVis.values()) v.scene.remove(mv.mesh);
@@ -418,6 +436,7 @@ class Game {
     this.threats.clear(); this.hitBy.clear();
     this.spawnPlayer();
     this.startTutorial();
+    if (!this.opts.activity) this.base.build();         // the buildings stand at every base
   }
   get scenario() { return this.opts.tutorial ? 'waves' : this.opts.scenario || 'waves'; }
   // the optional guided flight (main menu -> Oktatás); no enemy waves while it runs
@@ -426,6 +445,7 @@ class Game {
     // the radio: everything open in free play; the career gives only the calls taught so far
     this.radio.unlocked = this.opts.radioUnlocked || null;
     this.radio.callsign = this.opts.callsign || 'VIPER 1-1';
+    this.radio.portraits = this.opts.portraits || {};
     this.radio.cleared = { taxi: false, takeoff: false, land: false };
     this.nav.zone = { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }; this.state.missionLine = '';
     if (this.player) this.player.autopilot = null;
@@ -510,7 +530,7 @@ class Game {
     else {
       ac.fm.placeOnGround(pos.x, pos.y, this.terrain.height(pos.x, pos.y), heading);
       ac.controls.throttle = 0;
-      this.state.subBanner = this.opts.carrierStart && this.carrier.active !== false ? CAT_HINT : TAKEOFF_HINT;
+      this.state.subBanner = this.opts.carrierStart && this.carrier.active !== false ? CAT_HINT : spec.noAB ? TAKEOFF_HINT_NOAB : TAKEOFF_HINT;
     }
     w.addAircraft(ac);
     this.player = ac; this.pilot = new PlayerPilot(ac);
@@ -597,6 +617,15 @@ class Game {
   canAct() { return !this.state.paused && this.player && this.player.alive; }
   onKey(k) {
     if (this.inMenu) return;                          // the main menu is open: its buttons do the work
+    if (this.tutorial && this.tutorial.onKey && !this.state.paused && this.tutorial.onKey(k)) return;
+    if (this.walking) {                               // on foot: E uses what is near, Esc = menu
+      if (k === 'e' && !this.state.paused) { this.base.interact(); return; }
+      if (k === 'Escape') { if (!this.state.paused) { if (this.opts.lobby && this.onLobbyEsc) this.onLobbyEsc(); else this.pause(); } return; }
+      if (k === 'h' || k === 'F1') { this.toggleHelp(); return; }
+      if (k === 'i' && !this.state.paused) { this.radioDown = true; this.radio.keyDown(); return; }
+      if (k === 'Enter' || k === 'NumpadEnter') { if (this.tutorial) this.tutorial.enter(); return; }
+      return;
+    }
     if (k === 'h' || k === 'F1') { this.toggleHelp(); return; }
     if (k === 'Escape') { if (!this.state.paused) this.pause(); return; }
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
@@ -751,7 +780,7 @@ class Game {
     const c = this.player.controls;
     this.thrPress = performance.now();
     if (dir > 0) {
-      if (c.throttle >= 0.999) { if (c.throttle < MAX_AB) { c.throttle = MAX_AB; this.hud.message('UTÁNÉGETŐ BE', 'warn', 1.2, 'thr'); } }
+      if (c.throttle >= 0.999) { if (c.throttle < MAX_AB && !this.player.spec.noAB) { c.throttle = MAX_AB; this.hud.message('UTÁNÉGETŐ BE', 'warn', 1.2, 'thr'); } }
       else c.throttle = Math.min(1, Math.floor(c.throttle * 20 + 1e-6) / 20 + 0.05);
     } else if (c.throttle > 1.001) { c.throttle = 1; this.hud.message('UTÁNÉGETŐ KI', 'info', 1.2, 'thr'); }
     else c.throttle = Math.max(0, Math.ceil(c.throttle * 20 - 1e-6) / 20 - 0.05);
@@ -765,6 +794,7 @@ class Game {
 
   // ------------------------------------------------------------ pause/help
   pause() {
+    if (this.opts.lobby && this.walking && !this.inMenu && this.onLobbyEsc) { this.onLobbyEsc(); return; }   // Esc in the lobby: its menu
     this.state.paused = true;
     if (document.pointerLockElement) document.exitPointerLock();
     this.showOverlay(this.helpVisible || this.inMenu ? null : 'pause');
@@ -861,7 +891,8 @@ class Game {
       if ((!this.player.alive || this.player.ejected) && this.pad.pressed(PAD.A)) this.respawn();
     }
     if (!st.paused) {
-      if (this.player.alive && !this.player.ejected && !this.player.autopilot) this.applyInput(dt);
+      if (this.walking) this.base.walker.update(dt);
+      else if (this.player.alive && !this.player.ejected && !this.player.autopilot) this.applyInput(dt);
       else this.input.takeDelta();
       // bullet time (hangar mod): the world runs slower while it is on; it recharges in 20 s
       const bt = this.bt;
@@ -885,6 +916,8 @@ class Game {
       this.extraEvent(kind, d);
       if (this.tutorial) this.tutorial.onEvent(kind, d);
     }
+    if (this.walking && this.inMenu) this.base.walker.idle(dt);     // the lobby behind the menu: a slow look round
+    this.base.update(dt);
     const sdt = st.paused ? 0 : dt;
     this.updateFollow(sdt);
     this.cam.update(sdt, this.player);
@@ -898,6 +931,7 @@ class Game {
     if (vis && vis.screens && !vis.displays) vis.displays = new CockpitDisplays(this.player.spec, vis.screens);
     if (vis && vis.displays && this.view.cockpitView) vis.displays.update(sdt, this.player, this.world, nav);
     this.view.render();
+    st.walking = this.walking;
     st.modeLine = this.modeLine();
     st.credits = this.hangar.data.credits;
     st.meatball = this.meatball();
@@ -1180,7 +1214,7 @@ class Game {
     if (!p.alive) return;
     const field = this.terrain.airfield;
     const airborne = !p.onGround && p.pos.z - this.terrain.height(p.pos.x, p.pos.y) > 150;
-    if (st.subBanner === TAKEOFF_HINT && airborne) {
+    if ((st.subBanner === TAKEOFF_HINT || st.subBanner === TAKEOFF_HINT_NOAB) && airborne) {
       st.subBanner = '';
       this.hud.message('SIKERES FELSZÁLLÁS - húzd be a futóművet (G)', 'good', 4);
     }
@@ -1534,10 +1568,13 @@ async function boot() {
     }
     applySettings();
     game.newMatch(opts);
+    if (o.tod) game.view.setTimeOfDay(o.tod);
     game.resume();
     return game;
   };
   const careerMode = new CareerMode(launch);
+  careerMode.onClose = () => goLobby();
+  window.dogfightCareer = careerMode;
   $('open-career').addEventListener('click', () => { const g = window.game; if (g) { g.inMenu = true; g.pause(); g.showOverlay(null); } careerMode.open(); });
   // a match somewhere else: download and build the place (progress screen), then start
   const goPlace = async (game, opts) => {
@@ -1556,22 +1593,40 @@ async function boot() {
     applySettings();
     game.resume();
   };
-  const showMenu = () => {
+  // the entry view: the air base itself (base.js Lobby), the menu to the left of it.  Leaving a fight comes back
+  // here; only the Kilépés button leaves the game.
+  const lobbyOpts = () => ({ airStart: false, carrierStart: false, difficulty: 'normal', enemies: 0, mode: 'arcade', aircraft: document.querySelector('input[name=plane]:checked').value,
+    enemyTypes: ['f16'], loadout: 'default', tutorial: false, scenario: 'waves', wingman: 0, lobby: true, activity: (g) => new Lobby(g) });
+  const showLobbyMenu = () => {
     const game = window.game;
     renderCareer(); refreshShop();
-    if (!game) return;
-    game.inMenu = true;
-    game.pause();
-    game.showOverlay(null);
-    const st = game.state;
-    $('continue').hidden = false;
-    $('current').hidden = false;
-    $('current').textContent = `Futó játék: ${st.wave}. hullám · ${st.score} pont · lelőve ${st.kills} · halál ${st.deaths}` +
-      (game.player && !game.player.alive ? ' · lelőttek, a Folytatás után Enter = újraéledés' : '');
-    $('start-ground').classList.remove('primary');
+    $('menu').classList.add('lobby');
+    $('continue').hidden = true; $('current').hidden = true;
+    $('start-ground').classList.add('primary');
     $('menu').hidden = false;
-    $('continue').focus();
+    if (game) { game.inMenu = true; game.pause(); game.showOverlay(null); }
+    $('start-ground').focus();
   };
+  const goLobby = async () => {
+    let game = window.game;
+    const opts = lobbyOpts();
+    $('menu').hidden = true;
+    if (!game) { game = makeGame(opts); if (!game) return; }
+    else {
+      try { if (game.place) await game.loadPlace(null); } catch (e) { console.error(e); }
+      game.newMatch(opts);
+    }
+    game.onLobbyStart = () => start(false);
+    game.onLobbyEsc = () => showLobbyMenu();
+    game.onLobbySelect = (k) => { const el = document.querySelector(`input[name=plane][value="${k}"]`); if (el) { el.checked = true; el.dispatchEvent(new Event('change')); } };
+    applySettings();
+    showLobbyMenu();
+  };
+  const showMenu = () => { goLobby(); };
+  window.dogfightLobby = goLobby;
+  $('lobby-walk').addEventListener('click', () => { const g = window.game; if (g) { $('menu').hidden = true; g.resume(); } });
+  $('quit').addEventListener('click', () => { if (window.game) window.game.pause(); try { window.close(); } catch (e) { /* not allowed */ } $('bye').hidden = false; });
+  $('bye-back').addEventListener('click', () => { $('bye').hidden = true; });
   $('continue').addEventListener('click', () => window.game && window.game.resume());
   $('to-menu').addEventListener('click', (e) => { e.stopPropagation(); showMenu(); });
   $('resume').addEventListener('click', (e) => { e.stopPropagation(); if (window.game) window.game.resume(); });
@@ -1610,6 +1665,7 @@ async function boot() {
     const el = document.documentElement;
     if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
   });
+  goLobby();                                    // the entry view
 }
 
 // leaving by accident (Ctrl+W while Ctrl is the throttle key) asks first

@@ -111,7 +111,7 @@ export class FlightModel {
     const qbar = 0.5 * rho * speed * speed;
     const mass = this.mass;
 
-    this.spool(clamp(c.throttle, 0, MAX_AB), dt);
+    this.spool(clamp(c.throttle, 0, this.spec.noAB ? 1 : MAX_AB), dt);   // turboprop / plain turbofan trainers: no afterburner
     const tv = this.tvc;
     const thrust = this.thrustAt(this.engine, rho, mach) * (tv ? tv.thrustScale : 1);
     this.thrust = thrust;

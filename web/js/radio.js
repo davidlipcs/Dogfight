@@ -106,7 +106,7 @@ const asset = (p) => (window.DOGFIGHT_ASSETS && window.DOGFIGHT_ASSETS[p.replace
 export class Radio {
   constructor(game) {
     this.g = game; this.speaker = new Speaker(); this.log = []; this.open = false; this.listeners = [];
-    this.callsign = 'VIPER 1-1'; this.unlocked = null;            // null: everything (free play)
+    this.callsign = 'VIPER 1-1'; this.unlocked = null; this.portraits = {};            // null: everything (free play)
     this.cleared = { taxi: false, takeoff: false, land: false };
     this.SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
     this.listening = false;
@@ -218,7 +218,7 @@ export class Radio {
   render() {
     const el = $('radio-log');
     if (!el) return;
-    el.innerHTML = this.log.map((l) => `<div class="rl ${l.who}">${PORTRAITS[l.who] ? `<img src="${asset(PORTRAITS[l.who])}" alt="">` : ''}<b>${NAMES[l.who] || l.who}</b> ${l.text}</div>`).join('');
+    el.innerHTML = this.log.map((l) => `<div class="rl ${l.who}">${this.portraits[l.who] || PORTRAITS[l.who] ? `<img src="${this.portraits[l.who] || asset(PORTRAITS[l.who])}" alt="">` : ''}<b>${NAMES[l.who] || l.who}</b> ${l.text}</div>`).join('');
     clearTimeout(this.fade);
     el.classList.remove('old');
     this.fade = setTimeout(() => el.classList.add('old'), 9000);

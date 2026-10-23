@@ -261,6 +261,51 @@
     .cr-big, .gear-grid .pilot-img { max-width: 240px; }
     .cr-stages { columns: 1; }
   }
+
+  /* ---- on foot: prompts and objective labels */
+  #walkhud { position: fixed; inset: 0; z-index: 7; pointer-events: none; }
+  #walkhud .wk-prompt { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); background: rgba(8,14,18,.82); border: 1px solid var(--caution); border-radius: 6px; padding: 8px 16px; font: 600 17px var(--display); color: #fff; letter-spacing: .03em; }
+  #walkhud kbd { font: 700 14px var(--mono); color: #111; background: var(--caution); border-radius: 4px; padding: 1px 7px; margin-right: 6px; }
+  #walkhud .wk-mark { position: absolute; transform: translate(-50%, -50%); text-align: center; text-shadow: 0 0 4px #000, 0 0 8px #000; }
+  #walkhud .wk-mark b { display: block; font: 600 15px var(--display); color: var(--caution); letter-spacing: .04em; }
+  #walkhud .wk-mark span { font: 12px var(--mono); color: #fff; }
+  #walkhud .wk-info { position: absolute; left: 16px; bottom: 16px; font: 13px var(--mono); color: #d9ffe0; text-shadow: 0 0 4px #000; max-width: 46vw; }
+  /* ---- the lobby: the menu sits to the left of the base */
+  #menu.lobby { background: linear-gradient(90deg, rgba(5,9,12,.78) 0%, rgba(5,9,12,.45) 48%, rgba(5,9,12,0) 78%); place-items: safe center start; padding-left: clamp(8px, 3vw, 48px); }
+  #menu.lobby .card { max-height: calc(100vh - 32px); overflow-y: auto; }
+  #lobby-walk { border-color: var(--hud); color: var(--hud); }
+  #quit { border-color: #a24; color: #f88; }
+  #bye { position: fixed; inset: 0; z-index: 40; background: #05090c; display: grid; place-items: center; text-align: center; color: var(--text); }
+  #bye h1 { margin-bottom: 8px; }
+  /* ---- the handwritten flight log */
+  #logbook { z-index: 25; background: rgba(5, 9, 12, 0.88); }
+  .paper { width: min(760px, 100%); background: #efe6cd; color: #1d2a46; border-radius: 4px; padding: 26px 34px 22px 64px; position: relative; box-shadow: 0 20px 70px rgba(0,0,0,.65);
+    background-image: repeating-linear-gradient(transparent 0, transparent 33px, rgba(70,110,170,.35) 33px, rgba(70,110,170,.35) 34px); background-position: 0 70px; }
+  .paper::before { content: ''; position: absolute; left: 46px; top: 0; bottom: 0; width: 2px; background: rgba(200,60,60,.5); }
+  .paper h2 { margin: 0 0 4px; font: 700 20px var(--display); letter-spacing: .08em; color: #5b4a2a; text-transform: uppercase; }
+  .paper .hdr { font: 13px/1.5 var(--mono); color: #4a4a40; margin-bottom: 10px; }
+  .paper textarea { width: 100%; min-height: 238px; background: transparent; border: 0; outline: 0; resize: vertical; color: #17306b; line-height: 34px; font-size: 24px;
+    font-family: 'Segoe Script', 'Bradley Hand', 'Lucida Handwriting', 'Brush Script MT', 'Comic Sans MS', cursive; }
+  .paper .need { font: 12px var(--mono); color: #7a3c20; min-height: 18px; }
+  .paper .row-btn { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 6px; }
+  .paper button { background: #1d2a46; color: #f3ecd6; border-color: #1d2a46; }
+  .paper button:disabled { opacity: .45; }
+  .paper .tips { font: 13px/1.4 var(--mono); color: #55503f; margin: 0 0 8px; }
+  .logrow { border-left: 3px solid var(--caution); padding: 6px 12px; background: rgba(255,255,255,.04); margin-bottom: 8px; }
+  .logrow b { color: #fff; } .logrow span { display: block; font: 12px var(--mono); color: var(--muted); }
+  .logrow p { color: var(--text); font-style: italic; margin-top: 4px; }
+
+  #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 30; transition: opacity .9s; }
+  #fade.on { opacity: 1; }
+  .cr-stages-mini { margin: 0 0 8px; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; }
+  .cr-stages-mini li { font-size: 12px; color: var(--muted); } .cr-stages-mini li.done { color: var(--hud); } .cr-stages-mini li.now { color: var(--caution); font-weight: 600; }
+  #tutorial ul.pre { list-style: none; padding-left: 0; } #tutorial ul.pre li { color: var(--muted); } #tutorial ul.pre li.ok { color: var(--hud); }
+
+  .cr-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+  .cr-chip input { position: absolute; opacity: 0; }
+  .cr-chip span { display: inline-block; border: 1px solid var(--panel-edge); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .cr-chip span small { color: inherit; opacity: .75; }
+  .cr-chip input:checked + span { border-color: var(--caution); color: #fff; background: rgba(255,200,64,.12); }
 </style>
 <style>[hidden]{display:none!important} body{margin:0}</style>
 </head>
@@ -470,6 +515,10 @@
       <button id="start-air">Indulás a levegőben</button>
       <button id="start-carrier">Indulás a hordozóról</button>
     </div>
+    <div class="buttons">
+      <button id="lobby-walk">🚶 Séta a bázison (gépválasztás)</button>
+      <button id="quit">⏻ Kilépés</button>
+    </div>
     <div id="menuerr"></div>
     <a id="download" class="hint" href="dogfight-offline.html" download="Dogfight-F16.html" hidden>⤓ Letöltés egy fájlban (internet nélkül is megy, dupla kattintással indul)</a>
     <div class="hint">Kattintás után az egér a játékhoz kötődik · Esc = elengedés · H = súgó · U = rakétakamera · kontrollerrel: A = indítás · telefonon érintéssel</div>
@@ -483,6 +532,10 @@
   <div id="radio-list"></div>
 </div>
 <div id="gcredit" hidden></div>
+<div id="walkhud" hidden><div class="wk-marks"></div><div class="wk-prompt" hidden></div><div class="wk-info"></div></div>
+<div id="logbook" class="screen dim" hidden></div>
+<div id="fade"></div>
+<div id="bye" hidden><div><h1>Viszlát, pilóta!</h1><p>A játék leállt. Bezárhatod a lapot – vagy tölts újra, ha még repülnél.</p><p><button type="button" id="bye-back" class="primary" style="margin-top:14px">Vissza a bázisra</button></p></div></div>
 <div id="career-screen" class="screen dim" hidden></div>
 <div id="gearup" class="screen dim" hidden></div>
 <div id="mappick" class="screen dim" hidden>

@@ -48,7 +48,7 @@ export class Mission {
     const p = g.player, start = add(P, mul(this.dir, -16000));
     const z = Math.max(5000, g.terrain.height(start.x, start.y) + 1800);
     const hdg = Math.atan2(this.dir.x, this.dir.y);
-    if (m.kind !== 'scramble') {                        // air start: on the way to the fight
+    if (m.kind !== 'scramble' && !m.groundStart) {      // air start: on the way to the fight
       const fm = p.fm;
       fm.onGround = false; fm.pos = V(start.x, start.y, z); fm.vel = mul(V(Math.sin(hdg), Math.cos(hdg), 0), 230);
       fm.quat = qheading(hdg / DEG, 0); fm.gearDown = false; fm.gearPos = 0; fm.groundZ = undefined;
@@ -58,6 +58,8 @@ export class Mission {
     g.radio.callsign = m.callsign || 'VIPER 1-1';
     // your flight: the AI lead (you on its wing) or your AI wingman
     const side = V(this.dir.y, -this.dir.x, 0);
+    // after a take-off the rest of the flight is already up ahead, on the way to the fight
+    const ref = m.groundStart ? V(p.pos.x + this.dir.x * 3500, p.pos.y + this.dir.y * 3500, p.pos.z + 1600) : p.pos;
     const blueSpec = (t) => BANDITS[t] || BANDITS.f16;
     const mk = (spec, team, pos, heading, name) => {
       const loadout = spec.internal || spec.id === 'f16' ? 'default' : buildLoadout(spec, 2, 4).layout;
@@ -67,19 +69,19 @@ export class Mission {
     };
     this.blue = [];
     if (m.role === 'wing') {
-      const lead = this.lead = mk(blueSpec(m.leadType || m.playerType), 'blue', add(p.pos, add(mul(this.dir, 260), mul(side, -180))), hdg, `${(m.callsign || 'VIPER 1-1').replace(/-\d$/, '-1')} (vezér)`);
-      lead.pos.z = p.pos.z + 20;
+      const lead = this.lead = mk(blueSpec(m.leadType || m.playerType), 'blue', add(ref, add(mul(this.dir, 260), mul(side, -180))), hdg, `${m.leadName || (m.callsign || 'VIPER 1-1').replace(/-\d$/, '-1')} (vezér)`);
+      lead.pos.z = ref.z + 20;
       new LeadPilot(lead, 'wing', m.kind === 'intercept' ? null : this.area);
       lead.isLead = true; this.blue.push(lead);
       g.radio.callsign = (m.callsign || 'VIPER 1-1').replace(/-\d$/, '-2');
     } else if (m.wingman !== false) {
-      const w = mk(blueSpec(m.playerType), 'blue', add(p.pos, add(mul(this.dir, -260), mul(side, 170))), hdg, `${m.wingName || 'Kísérő'} (2-es)`);
+      const w = mk(blueSpec(m.wingType || m.playerType), 'blue', add(ref, add(mul(this.dir, -260), mul(side, 170))), hdg, `${m.wingName || 'Kísérő'} (2-es)`);
       new WingmanPilot(w, p); g.wingman = w; this.blue.push(w);
     }
     // more friendly flights (allies), on both sides of yours
     let k = 0;
     for (const grp of m.blue || []) for (let i = 0; i < grp.n; i++, k++) {
-      const pos = add(add(p.pos, mul(side, (k % 2 ? 1 : -1) * (2500 + 1200 * Math.floor(k / 2)))), mul(this.dir, -800 * Math.floor(k / 2)));
+      const pos = add(add(ref, mul(side, (k % 2 ? 1 : -1) * (2500 + 1200 * Math.floor(k / 2)))), mul(this.dir, -800 * Math.floor(k / 2)));
       const ac = mk(blueSpec(grp.type), 'blue', pos, hdg, `${grp.label || 'Szövetséges'} ${k + 1} (${blueSpec(grp.type).short})`);
       ac.power = grp.power;
       new AIPilot(ac, m.allySkill || 'normal', this.area); this.blue.push(ac);
@@ -103,6 +105,7 @@ export class Mission {
     }
     this.radioOff = g.radio.onCall((call) => this.heard(call));
     this.panel = $('tutorial'); this.panel.hidden = false;
+    this.embedded = !!m.embedded;                        // a Sortie (sortie.js) runs the rest: take-off, landing, the log
     this.say('lead', this.briefLine());
     if (m.role === 'wing') this.expect('ack', 10);
     this.render();
@@ -178,6 +181,11 @@ export class Mission {
       blueLost: this.blueLost.concat(lostOwn ? [this.m.playerType] : []), redLost: this.redLost,
       radio: this.calls.expected ? Math.round(100 * this.calls.made / this.calls.expected) : 100, time: this.t,
     };
+    if (this.embedded) {
+      this.g.hud.message(won ? 'KÜLDETÉS TELJESÍTVE – térj haza' : 'KÜLDETÉS VÉGE', won ? 'good' : 'warn', 6, 'mission');
+      setTimeout(() => this.leave(), 800);
+      return;
+    }
     this.g.hud.message(won ? 'KÜLDETÉS TELJESÍTVE – Enter: jelentés' : 'KÜLDETÉS VÉGE – Enter: jelentés', won ? 'good' : 'warn', 6, 'mission');
     this.g.state.subBanner = 'Enter: jelentés (debriefing)';
     this.render();
@@ -188,9 +196,7 @@ export class Mission {
     if (this.left) return;
     this.left = true;
     if (this.radioOff) this.radioOff();
-    this.panel.hidden = true;
-    this.g.tutorial = null;
-    this.g.state.banner = this.g.state.subBanner = '';
+    if (!this.embedded) { this.panel.hidden = true; this.g.tutorial = null; this.g.state.banner = this.g.state.subBanner = ''; }
     if (this.onEnd) this.onEnd(this.result || { won: false, status: 'abort', kills: 0, blueLost: [], redLost: [], radio: 0 });
   }
   render() {

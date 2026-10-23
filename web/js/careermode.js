@@ -8,10 +8,12 @@
 import { CALLS, recognise } from './radio.js';
 import { School, gearUp } from './school.js';
 import { InstructorPilot } from './autopilot.js';
-import { Mission } from './mission.js';
+import { Sortie } from './sortie.js';
 import { POWERS, FRONTS, QUALITY, NATION_NAMES, newWar, loadWar, saveWar, seenFleet, totalFleet, trustOf, alliedWith, atWar,
   proposeAlliance, proposeCeasefire, simulateDay, aiDiplomacy, applyMission, pickTypes, frontEnemies, changeTrust } from './campaign.js';
 import { makeRoster, rating, afterSortie, restDay, portraitUrl, RANKS, STATUS_HU } from './roster.js';
+const TODS = [['day', 'nappal'], ['overcast', 'borult'], ['sunset', 'naplemente'], ['night', 'éjszaka']];
+const KINDS = { sweep: 'Légtérfölény (sweep)', cap: 'Légtérvédelmi járőr (CAP)' };
 
 const $ = (id) => document.getElementById(id);
 const KEY = 'dogfight-career2', ROSTER_KEY = 'dogfight-roster';
@@ -87,7 +89,7 @@ export class CareerMode {
   }
   // ------------------------------------------------------------------ screens
   open() { $('menu').hidden = true; this.root.hidden = false; this.render(); }
-  close() { this.root.hidden = true; $('menu').hidden = false; }
+  close() { this.root.hidden = true; if (this.onClose) this.onClose(); else $('menu').hidden = false; }
   frame(inner, eyebrow = 'Karrier') {
     this.root.innerHTML = `<div class="card cr-card"><div class="cr-top"><div class="eyebrow">${eyebrow}</div><button type="button" class="small" id="cr-close">✕ Főmenü</button></div>${inner}</div>`;
     $('cr-close').onclick = () => this.close();
@@ -104,7 +106,9 @@ export class CareerMode {
       <ol class="cr-stages">${rows}</ol>
       <div class="buttons"><button type="button" class="primary" id="cr-go">▶ ${this.stage.name}</button>
       <button type="button" class="small" id="cr-calls">Megtanult rádióhívások (${this.s.lessons.length ? CALLS.filter((c) => this.s.lessons.includes(c.lesson)).length : 0})</button>
+      <button type="button" class="small" id="cr-logb">Repülési napló (${(this.s.logbook || []).length})</button>
       <button type="button" class="small" id="cr-reset">Új karrier</button></div>`);
+    $('cr-logb').onclick = () => this.logbookScreen();
     $('cr-go').onclick = () => this.play();
     $('cr-calls').onclick = () => this.callsList();
     $('cr-reset').onclick = () => { if (confirm('Biztosan új karriert kezdesz? A mostani elveszik.')) { this.s = null; this.war = null; this.roster = null; localStorage.removeItem(KEY); localStorage.removeItem(ROSTER_KEY); this.render(); } };
@@ -253,18 +257,71 @@ export class CareerMode {
   }
   qra(role) {
     const n = role === 'wing' ? 3 : 2, done = this.s.qra || 0;
+    this.ensureRoster();
     const m = { kind: 'intercept', role, playerType: this.fleetJet(), red: [{ type: Math.random() < 0.5 ? 'su35' : 'mig31', n: 1, power: 'ru' }], title: `Légtérrendészet ${done + 1}. / ${n}`, bearing: 70 * Math.PI / 180,
-      callsign: `${this.s.callsign} 1-${role === 'wing' ? 2 : 1}` };
+      callsign: `${this.s.callsign} 1-${role === 'wing' ? 2 : 1}`, scramble: true, tod: 'day' };
+    const flight = this.autoFlight(role);
+    this.applyFlight(m, flight);
     this.fly(m, { lat: 57.6, lon: 24.6, name: 'Baltikum (Észtország)' }, (r) => {
       this.s.sorties++; this.s.radio.push(r.radio); this.radioAvg();
+      const fl = this.flightFates(flight, r);
       if (r.won) { this.s.qra = done + 1; if (this.s.qra >= n) { this.s.qra = 0; this.next(); if (role === 'wing') { this.s.rank = 1; this.award('Előléptetés: főhadnagy'); } } }
-      if (r.why === 'shot_intruder') { this.s.alive = !this.s.permadeath ? true : true; this.s.court = (this.s.court || 0) + 1; }
-      this.debrief(r);
+      if (r.why === 'shot_intruder') { this.s.court = (this.s.court || 0) + 1; }
+      this.debrief({ ...r, title: m.title, extra: fl });
     });
+  }
+  // ---- the people you fly with: pilots of the roster (portrait, call sign, skills)
+  ensureRoster() { if (!this.roster) this.roster = makeRoster('us', 240, Math.floor(Math.random() * 1e6)); this.save(); }
+  pilot(id) { return (this.roster || []).find((p) => p.id === id); }
+  // the squadron assigns them: a good pilot to lead you, a steady one to follow you
+  autoFlight(role, n = 1) {
+    const ready = (this.roster || []).filter((p) => p.status === 'ready').sort(() => Math.random() - 0.5);
+    if (role === 'wing') return { leadId: (ready.sort((a, b) => b.rank - a.rank || rating(b) - rating(a))[0] || {}).id, wingIds: [] };
+    return { leadId: null, wingIds: ready.slice(0, n).map((p) => p.id) };
+  }
+  applyFlight(m, fl) {
+    m.flight = fl; m.portraits = {};
+    const lead = this.pilot(fl.leadId), wings = (fl.wingIds || []).map((id) => this.pilot(id)).filter(Boolean);
+    if (lead) { m.leadName = `${lead.callsign}`; m.leadType = lead.type; m.portraits.lead = portraitUrl(lead); }
+    if (wings[0]) { m.wingName = wings[0].callsign; m.wingType = wings[0].type; m.portraits.wing = portraitUrl(wings[0]); m.allySkill = this.skillOf(wings); }
+    m.blue = (m.blue || []).filter((b) => !b.pilotId);
+    wings.slice(1).forEach((p) => m.blue.push({ type: p.type, n: 1, power: 'us', label: p.callsign, pilotId: p.id }));
+    if (!wings.length && !lead) m.wingman = false;
+  }
+  skillOf(pilots) { const a = pilots.reduce((x, p) => x + rating(p), 0) / Math.max(1, pilots.length); return a > 78 ? 'ace' : a > 66 ? 'hard' : 'normal'; }
+  // after the sortie: experience and fate of the pilots who flew with you
+  flightFates(fl, r) {
+    const ids = [fl.leadId, ...(fl.wingIds || [])].filter(Boolean), out = [];
+    const lost = Math.max(0, (r.blueLost || []).length - (r.status === 'ok' ? 0 : 1));
+    const others = Math.max(0, (r.redLost || []).length - (r.kills || 0));
+    ids.forEach((id, i) => {
+      const p = this.pilot(id); if (!p) return;
+      const fate = afterSortie(p, { kills: i < others ? 1 : 0, shotDown: i < lost, overEnemy: r.overEnemy });
+      const txt = { ok: 'épségben hazatért', kia: '<b>HŐSI HALOTT</b>', pow: 'hadifogságba esett', rescued: 'katapultált, kimentették (sebesült)' }[fate];
+      out.push(`<div class="cr-pilot"><img src="${portraitUrl(p)}" alt=""><div><b>${RANKS[p.rank]} ${p.name} „${p.callsign}”</b><span>${txt}</span></div></div>`);
+    });
+    this.save();
+    return out.length ? `<h3>A köteléked</h3><div class="cr-roster">${out.join('')}</div>` : '';
   }
   // ---- launching a flight and the debriefing after it
   async fly(m, place, after) {
-    await this.go({ callsign: m.callsign || `${this.s.callsign} 1-1`, aircraft: m.playerType, airStart: true, scenario: 'waves', tutorial: false, wingman: 0, activity: (g) => new Mission(g, m, (r) => { this.handleFate(r); after(r); }) }, place);
+    await this.go({ callsign: m.callsign || `${this.s.callsign} 1-1`, aircraft: m.playerType, airStart: false, scenario: 'waves', tutorial: false, wingman: 0, tod: m.tod || 'day',
+      portraits: m.portraits || {},
+      activity: (g) => new Sortie(g, { ...m, permadeath: this.s.permadeath }, (r) => { this.handleFate(r); this.saveLog(m, r); after(r); }) }, place);
+  }
+  // the hand written log goes into the pilot's log book
+  saveLog(m, r) {
+    if (!r.log) return;
+    (this.s.logbook = this.s.logbook || []).unshift({ n: this.s.sorties + 1, day: this.war && this.war.started ? this.war.day : null, title: m.title, won: !!r.won, kills: r.kills || 0, status: r.status, scramble: !!r.scramble, text: r.log });
+    this.s.logbook = this.s.logbook.slice(0, 200);
+    this.save();
+  }
+  logbookScreen(back) {
+    const L = this.s.logbook || [];
+    this.frame(`<h2>Repülési napló</h2><p class="hint">A saját kezű jelentéseid, a legutóbbi elöl.</p>
+      ${L.length ? L.map((e) => `<div class="logrow"><b>${e.n}. bevetés – ${e.title}</b><span>${e.day ? `${e.day}. nap · ` : ''}${e.scramble ? 'riadó · ' : ''}${e.won ? 'siker' : 'nem sikerült'} · lelövés: ${e.kills}${e.status && e.status !== 'ok' ? ` · ${e.status === 'ejected' ? 'katapultált' : 'lelőtték'}` : ''}</span><p>${String(e.text).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</p></div>`).join('') : '<p>Még üres: minden bevetés után be kell adnod a jelentésed.</p>'}
+      <div class="buttons"><button type="button" id="cr-back">Vissza</button></div>`, 'Karrier · napló');
+    $('cr-back').onclick = () => (back ? back() : this.render());
   }
   handleFate(r) {
     if (r.status === 'shot_down' && this.s.permadeath) { this.s.alive = false; }
@@ -324,7 +381,8 @@ export class CareerMode {
         <div class="hint">${canChoose ? 'Őrnagyként te választod a frontot.' : `A parancs: ${(FRONTS.find((f) => f.id === assigned) || {}).name}. (Őrnagytól te választhatsz.)`}</div>
         <div class="cr-fronts">${frontBtns}</div>
         <div class="buttons">${away ? `<button type="button" class="primary" id="cr-wait">${this.s.pow ? 'Hadifogságban…' : 'Kórházban…'} (még ${away}) – teljen az idő ▶</button>`
-          : `<button type="button" class="primary" id="cr-fly">▶ Bevetés: ${(FRONTS.find((f) => f.id === assigned) || {}).name}</button>`}
+          : `<button type="button" class="primary" id="cr-fly">📋 Parancs és eligazítás: ${(FRONTS.find((f) => f.id === assigned) || {}).name}</button>`}
+          <button type="button" id="cr-log">Napló (${(this.s.logbook || []).length})</button>
           ${canCommand ? '<button type="button" id="cr-roster">Pilóták (kiküldés)</button>' : ''}
           ${canPolitics ? '<button type="button" id="cr-politics">Politika</button>' : ''}
           <button type="button" class="small" id="cr-skip">Egy nap telik (pihenő)</button></div>
@@ -333,31 +391,117 @@ export class CareerMode {
       <div><h3>Légierők</h3>${Object.keys(POWERS).map(fleetRow).join('')}
         <p class="hint">A saját (és a szövetséges) számokat pontosan látod, a többiekét a hírszerzés becsüli – a felderítő bevetések pontosítják.</p></div>
     </div>`, 'Karrier · hadműveleti központ');
-    for (const b of this.root.querySelectorAll('[data-front]')) b.onclick = () => { if (canChoose) { this.s.assigned = b.dataset.front; this.save(); this.warRoom(); } };
-    if ($('cr-fly')) $('cr-fly').onclick = () => this.warMission(assigned);
+    for (const b of this.root.querySelectorAll('[data-front]')) b.onclick = () => { if (canChoose) { this.s.assigned = b.dataset.front; this.s.order = null; this.save(); this.warRoom(); } };
+    if ($('cr-fly')) $('cr-fly').onclick = () => this.briefing(assigned);
+    if ($('cr-log')) $('cr-log').onclick = () => this.logbookScreen(() => this.warRoom());
     if ($('cr-wait')) $('cr-wait').onclick = () => { this.passDays(DAYS); if (this.s.hospital) this.s.hospital--; if (this.s.pow) this.s.pow--; this.save(); this.warRoom(); };
     $('cr-skip').onclick = () => { this.passDays(1); this.warRoom(); };
     if ($('cr-roster')) $('cr-roster').onclick = () => this.rosterScreen(assigned);
     if ($('cr-politics')) $('cr-politics').onclick = () => this.politics();
   }
   passDays(n) { for (let i = 0; i < n; i++) { simulateDay(this.war); if (this.war.day % 4 === 0) aiDiplomacy(this.war); if (this.roster) restDay(this.roster); } this.save(); }
-  // a mission at the front: the enemies there by their real fleets, your flight and help, sized by rank
-  warMission(frontId) {
+  // the order of the day: the front, the enemies there by their real fleets, your flight and help, sized by rank.
+  // You do not choose it: it is given to you.  From captain you choose your wingmen, from major the front, the
+  // kind of mission, the time of day and the jet - except when the klaxon sounds (an alert is not planned).
+  makeOrder(frontId, over = {}) {
     const w = this.war, f = FRONTS.find((x) => x.id === frontId), enemies = frontEnemies(w, frontId), rank = this.s.rank || 0;
+    this.ensureRoster();
     const foe = enemies[Math.floor(Math.random() * enemies.length)];
     const big = Math.random() < 0.35 + rank * 0.05;
     const nRed = big ? 4 + Math.floor(Math.random() * 7) : 2 + Math.floor(Math.random() * 2);
     const red = pickTypes(w.powers[foe].fleet, nRed).map((t) => ({ type: t, n: 1, power: foe }));
-    // help: your own side, plus allies there (Europe on the European fronts once you are allied)
     const blue = [], nBlue = Math.max(0, nRed - 2 + (rank >= 2 ? 0 : 1));
     for (const t of pickTypes(w.powers.us.fleet, nBlue)) blue.push({ type: t === 'f22' && Math.random() < 0.5 ? 'f15' : t, n: 1, power: 'us', label: 'USAF' });
     for (const id of Object.keys(POWERS)) if (id !== 'us' && alliedWith(w, 'us', id) && f.sides.includes(id)) for (const t of pickTypes(w.powers[id].fleet, 2)) blue.push({ type: t, n: 1, power: id, label: POWERS[id].short });
     const role = rank < 1 ? 'wing' : 'lead';
-    const m = { kind: Math.random() < 0.3 ? 'cap' : 'sweep', role, playerType: this.fleetJet(), red, blue, skill: ['normal', 'normal', 'hard', 'hard', 'ace', 'ace', 'ace'][rank], minutes: 8,
-      title: `${f.name}: ${red.length} ${POWERS[foe].short} gép`, bearing: Math.random() * Math.PI * 2, callsign: `${this.s.callsign} 1-${role === 'wing' ? 2 : 1}`, front: frontId };
-    this.fly(m, { lat: f.lat, lon: f.lon, name: f.name }, (r) => this.afterWarMission(m, foe, r));
+    return { front: frontId, foe, role, red, blue, rank, skill: ['normal', 'normal', 'hard', 'hard', 'ace', 'ace', 'ace'][rank], minutes: 8, bearing: Math.random() * Math.PI * 2,
+      kind: over.kind || (Math.random() < 0.3 ? 'cap' : 'sweep'), jet: over.jet || this.fleetJet(), tod: over.tod || 'day',
+      scramble: over.scramble !== undefined ? over.scramble : Math.random() < 0.3, flight: this.autoFlight(role, 1) };
   }
-  afterWarMission(m, foe, r) {
+  order(frontId) {
+    if (!this.s.order || this.s.order.front !== frontId) { this.s.order = this.makeOrder(frontId); this.save(); }
+    return this.s.order;
+  }
+  missionOf(o) {
+    const f = FRONTS.find((x) => x.id === o.front);
+    const m = { kind: o.kind, role: o.role, playerType: o.jet, red: o.red, blue: o.blue.map((b) => ({ ...b })), skill: o.skill, minutes: o.minutes, bearing: o.bearing, front: o.front,
+      title: `${f.name}: ${o.red.length} ${POWERS[o.foe].short} gép`, callsign: `${this.s.callsign} 1-${o.role === 'wing' ? 2 : 1}`, scramble: o.scramble, tod: o.tod };
+    this.applyFlight(m, o.flight);
+    return m;
+  }
+  crewHtml(o) {
+    const row = (p, label) => p ? `<div class="cr-pilot"><img src="${portraitUrl(p)}" alt=""><div><b>${label}: ${RANKS[p.rank]} ${p.name} „${p.callsign}”</b><span>${p.type.toUpperCase()} · közelharc ${p.dogfight} · rakétás ${p.bvr} · idegek ${p.nerve}</span></div></div>` : '';
+    return row(this.pilot(o.flight.leadId), 'Vezér') + (o.flight.wingIds || []).map((id) => row(this.pilot(id), 'Kísérő')).join('');
+  }
+  briefing(frontId) {
+    const o = this.order(frontId), w = this.war, f = FRONTS.find((x) => x.id === o.front), rank = this.s.rank || 0;
+    const jetName = (k) => k.toUpperCase();
+    const redTxt = [...new Set(o.red.map((r) => r.type))].map((t) => t.toUpperCase()).join(', ');
+    const canWing = rank >= 2 && !o.scramble, canPlan = rank >= 3 && !o.scramble;
+    this.frame(`<div class="cr-recruit"><img src="${person('general')}" alt="" class="cr-big"><div>
+      <h1>${o.scramble ? '🚨 RIADÓ!' : 'Parancs'}</h1>
+      <p><b>${f.name}</b> – ${f.why}</p>
+      ${o.scramble ? '<p>„Nincs idő a részletekre! Az ellenség már úton van. <b>Fuss a gépedhez</b>, a kifutó mellett áll, járatva. Indulj, a többit rádión kapod.”</p>'
+        : `<p>Feladat: <b>${KINDS[o.kind]}</b> · ellenség: <b>${o.red.length} gép</b> (${o.foe ? POWERS[o.foe].short : ''}: ~${redTxt}) · ${TODS.find((t) => t[0] === o.tod)[1]}</p>
+           <p>A gépeden (<b>${jetName(o.jet)}</b>) előbb fel kell venned a felszerelést, át kell vizsgálnod a kabinban mindent, engedélyt kérsz a toronytól, és csak aztán szállsz fel. Hazafelé le kell szállnod, és a bevetés végén kézzel írt jelentést adsz le.</p>`}
+      ${this.crewHtml(o)}
+      <div class="buttons"><button type="button" class="primary" id="cr-go2">${o.scramble ? '🚨 Futás a géphez' : '▶ Indulás a felszereléshez'}</button>
+        ${canWing ? '<button type="button" id="cr-wingmen">Kísérők kiválasztása</button>' : ''}
+        ${canPlan ? '<button type="button" id="cr-plan">Tervezés: hely, idő, gép</button>' : ''}
+        <button type="button" class="small" id="cr-back">Vissza</button></div>
+      ${rank < 2 ? '<p class="hint">Századostól te választhatod a kísérőidet, őrnagytól a helyet, az időpontot és a gépet is.</p>' : ''}</div></div>`, 'Karrier · eligazítás');
+    $('cr-go2').onclick = () => this.startOrder(o);
+    $('cr-back').onclick = () => this.warRoom();
+    if ($('cr-wingmen')) $('cr-wingmen').onclick = () => this.wingScreen(o);
+    if ($('cr-plan')) $('cr-plan').onclick = () => this.planScreen(o);
+    void w;
+  }
+  startOrder(o) {
+    const f = FRONTS.find((x) => x.id === o.front), m = this.missionOf(o);
+    this.fly(m, { lat: f.lat, lon: f.lon, name: f.name }, (r) => { this.s.order = null; this.afterWarMission(m, o.foe, r, o.flight); });
+  }
+  // rank 2+: pick the pilots who fly with you
+  wingScreen(o) {
+    const R = this.roster, kind = o.kind === 'cap' ? 'cap' : 'sweep', max = 3;
+    this.pickedW = this.pickedW || new Set(o.flight.wingIds || []);
+    const ready = R.filter((p) => p.status === 'ready').sort((a, b) => rating(b, kind) - rating(a, kind));
+    const row = (p) => `<label class="cr-pilot${this.pickedW.has(p.id) ? ' sel' : ''}"><input type="checkbox" data-wid="${p.id}" ${this.pickedW.has(p.id) ? 'checked' : ''}>
+      <img src="${portraitUrl(p)}" alt=""><div><b>${RANKS[p.rank]} ${p.name} „${p.callsign}”</b><span>${NATION_NAMES[p.nation]} · ${p.type.toUpperCase()} · ${p.sorties} bevetés · ${p.kills} győzelem</span>
+      <span>közelharc ${p.dogfight} · rakétás ${p.bvr} · idegek ${p.nerve} · fáradtság ${Math.round(p.fatigue * 100)}% · <b>${rating(p, kind)}</b></span></div></label>`;
+    this.frame(`<h2>Kísérők kiválasztása</h2><p class="hint">Legfeljebb ${max} pilóta repül veled. A legjobb választás a feladattól függ (légtérfölényhez a közelharcosok, járőrhöz a higgadtak). ${this.pickedW.size} kiválasztva.</p>
+      <div class="buttons"><button type="button" class="primary" id="cr-ok">Kész ▶</button><button type="button" id="cr-best">A legjobb ${max}</button></div>
+      <div class="cr-roster">${ready.slice(0, 60).map(row).join('')}</div>`, 'Karrier · kísérők');
+    for (const c of this.root.querySelectorAll('[data-wid]')) c.onchange = () => {
+      const id = Number(c.dataset.wid);
+      if (c.checked) { if (this.pickedW.size >= max) { c.checked = false; return; } this.pickedW.add(id); } else this.pickedW.delete(id);
+      this.wingScreen(o);
+    };
+    $('cr-best').onclick = () => { this.pickedW = new Set(ready.slice(0, max).map((p) => p.id)); this.wingScreen(o); };
+    $('cr-ok').onclick = () => { o.flight = { leadId: null, wingIds: [...this.pickedW] }; this.pickedW = null; this.save(); this.briefing(o.front); };
+  }
+  // rank 3+: where, what kind, when, with what
+  planScreen(o) {
+    const w = this.war, me = w.player;
+    const fronts = FRONTS.filter((f) => f.sides.includes(me) && frontEnemies(w, f.id).length);
+    const jets = ['f16', 'f35', 'fa18', 'f15', 'f22'].filter((k) => (w.powers.us.fleet[k] || 0) > 0);
+    const opt = (name, val, cur, text) => `<label class="cr-chip"><input type="radio" name="${name}" value="${val}" ${cur === val ? 'checked' : ''}><span>${text}</span></label>`;
+    this.frame(`<h2>Tervezés</h2><p class="hint">Őrnagyként te döntesz: hova, milyen feladatra, mikor és mivel megyünk.</p>
+      <h3>Hova</h3><div class="cr-chips">${fronts.map((f) => opt('front', f.id, o.front, `${f.name} <small>(hevesség ${Math.round(w.fronts[f.id].heat * 100)}%)</small>`)).join('')}</div>
+      <h3>Feladat</h3><div class="cr-chips">${Object.entries(KINDS).map(([k, t]) => opt('kind', k, o.kind, t)).join('')}</div>
+      <h3>Mikor</h3><div class="cr-chips">${TODS.map(([k, t]) => opt('tod', k, o.tod, t)).join('')}</div>
+      <h3>Mivel</h3><div class="cr-chips">${jets.map((k) => opt('jet', k, o.jet, `${k.toUpperCase()} <small>(raktáron: ${w.powers.us.fleet[k]})</small>`)).join('')}</div>
+      <div class="buttons"><button type="button" class="primary" id="cr-ok">Jóváhagyom ▶</button><button type="button" id="cr-back">Mégse</button></div>`, 'Karrier · tervezés');
+    const val = (n) => (this.root.querySelector(`input[name=${n}]:checked`) || {}).value;
+    $('cr-back').onclick = () => this.briefing(o.front);
+    $('cr-ok').onclick = () => {
+      const front = val('front') || o.front;
+      const n = front === o.front ? o : this.makeOrder(front, { scramble: false });
+      n.kind = val('kind') || o.kind; n.tod = val('tod') || o.tod; n.jet = val('jet') || o.jet; n.scramble = false;
+      if (front !== o.front) { n.flight = o.flight; this.s.assigned = front; }
+      this.s.order = n; this.save(); this.briefing(front);
+    };
+  }
+  afterWarMission(m, foe, r, flight) {
     const w = this.war;
     const losses = { [foe]: {}, us: {} };
     for (const t of r.redLost) losses[foe][t] = (losses[foe][t] || 0) + 1;
@@ -377,9 +521,10 @@ export class CareerMode {
     if (r.won && m.red.length >= 8) { this.award('Distinguished Flying Cross'); extra.push('Distinguished Flying Cross – győzelem túlerő ellen'); }
     const promoteAt = [0, 3, 8, 14, 22, 32, 45];
     const score = this.s.sorties + this.s.kills * 2;
-    while ((this.s.rank || 0) < 6 && score >= promoteAt[(this.s.rank || 0) + 1]) { this.s.rank = (this.s.rank || 0) + 1; extra.push(`ELŐLÉPTETÉS: ${RANKS[this.s.rank]}${this.s.rank === 3 ? ' – mostantól te választod a frontot' : this.s.rank === 4 ? ' – pilótákat küldhetsz ki' : this.s.rank === 5 ? ' – politikai döntések' : ''}`); }
+    while ((this.s.rank || 0) < 6 && score >= promoteAt[(this.s.rank || 0) + 1]) { this.s.rank = (this.s.rank || 0) + 1; extra.push(`ELŐLÉPTETÉS: ${RANKS[this.s.rank]}${this.s.rank === 2 ? ' – mostantól te választod a kísérőidet' : this.s.rank === 3 ? ' – mostantól te választod a helyet, az időpontot és a gépet' : this.s.rank === 4 ? ' – pilótákat küldhetsz ki' : this.s.rank === 5 ? ' – politikai döntések' : ''}`); }
     this.save();
-    this.debrief({ ...r, title: m.title, extra: extra.map((e) => `<p class="cr-award">🎖 ${e}</p>`).join('') });
+    if (r.scramble && r.scrambleSec != null) extra.push(r.scrambleSec <= 150 ? `Riadó → felszállás: ${r.scrambleSec} s – gyors reakció!` : `Riadó → felszállás: ${r.scrambleSec} s – lassú volt.`);
+    this.debrief({ ...r, title: m.title, extra: extra.map((e) => `<p class="cr-award">🎖 ${e}</p>`).join('') + (flight ? this.flightFates(flight, r) : '') });
   }
   // ---- the pilots: pick who flies a mission you do not fly yourself
   rosterScreen(frontId) {

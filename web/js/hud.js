@@ -79,6 +79,12 @@ export class HUD {
     this.popups = this.popups.filter((m) => m.t > 0);
     this.gEffects(player, dt);
     this.damageFlash(dt);
+    if (game.walking) {                                   // on foot: no flight symbols, just the messages
+      let my = this.h / 2 - 130 * this.u;
+      for (const m of this.messages) { this.text(m.text, this.w / 2, my, m.color, 16 * this.u + 3, 'center'); my += 22 * this.u + 4; }
+      this.circle(this.w / 2, this.h / 2, 2 * this.u, 'rgba(255,255,255,0.7)');
+      return;
+    }
     if (player && player.alive && camCtl.cockpit && camCtl.panelLook) {
       // looking down at the displays: only the warnings and messages stay over them
       this.cockpit = true;

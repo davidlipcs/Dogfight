@@ -856,9 +856,18 @@ export class SceneView {
       new THREE.MeshLambertMaterial({ map: rtex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
     rw.position.z = 0.08;
     g.add(rw);
-    const concrete = new THREE.MeshLambertMaterial({ color: 0x8a8a85, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+    // concrete: slabs with joints and stains, seen from a walker's eye height as well as from the air
+    const cc = document.createElement('canvas'); cc.width = cc.height = 256;
+    const cx = cc.getContext('2d');
+    cx.fillStyle = '#6f706c'; cx.fillRect(0, 0, 256, 256);
+    for (let k = 0; k < 2600; k++) { cx.fillStyle = `rgba(${Math.random() < 0.5 ? '40,40,38' : '120,120,114'},${Math.random() * 0.22})`; cx.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 4, 1 + Math.random() * 4); }
+    for (let k = 0; k < 14; k++) { cx.fillStyle = `rgba(25,22,18,${0.04 + Math.random() * 0.07})`; cx.beginPath(); cx.ellipse(Math.random() * 256, Math.random() * 256, 6 + Math.random() * 22, 3 + Math.random() * 9, Math.random() * 3, 0, 7); cx.fill(); }
+    cx.strokeStyle = 'rgba(20,20,20,0.55)'; cx.lineWidth = 2; cx.strokeRect(0, 0, 256, 256);
+    const concreteTex = new THREE.CanvasTexture(cc);
+    concreteTex.wrapS = concreteTex.wrapT = THREE.RepeatWrapping; concreteTex.encoding = THREE.sRGBEncoding; concreteTex.anisotropy = 8;
     const slab = (x0, y0, x1, y1) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), concrete);
+      const t = concreteTex.clone(); t.needsUpdate = true; t.repeat.set((x1 - x0) / 7.5, (y1 - y0) / 7.5);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.MeshLambertMaterial({ map: t, color: 0xb8b8b2, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
       m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0.05); g.add(m);
     };
     const hl = RUNWAY_LENGTH / 2, tx = TAXIWAY_OFFSET;
@@ -895,11 +904,12 @@ export class SceneView {
       tnk.position.set(ax1 + 60, ay0 + 40 + k * 22, 4.5); g.add(tnk);
     }
     // parked F-16s, Super Hornets, an Eagle and a Raptor
+    this.parkedDecor = [];
     for (let k = 0; k < 6; k++) {
       const key = ['f16', 'f16', 'fa18', 'fa18', 'f15', 'f22'][k], ac = this.models.aircraft(key);
       ac.position.set(tx + TAXIWAY_WIDTH + 45, ay0 + 90 + k * 48, this.models.types[key].gearHeight);
       ac.rotation.z = Math.PI / 2;
-      g.add(ac);
+      g.add(ac); this.parkedDecor.push(ac);
     }
     // runway edge, threshold and approach lights
     const lamp = (px, py, color, size) => {
@@ -1016,7 +1026,7 @@ export class SceneView {
       if (v.type.spec.bays) this.models.setBays(v.outside, ac);
       const e = ac.engineSetting;
       v.flames.forEach((flame, k) => {
-        if (ac.alive && e > 1) {
+        if (ac.alive && e > 1 && !v.type.spec.noAB) {
           const ab = (e - 1) / 0.1, fl = 1 + 0.08 * Math.sin(this.time * 61 + k * 2.1) + 0.05 * Math.sin(this.time * 23 + k);
           const r = (0.78 + 0.14 * ab) * v.type.flameScale;
           flame.visible = true; flame.scale.set(r, (2 + 3.2 * ab) * fl * v.type.flameScale, r);

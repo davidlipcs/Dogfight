@@ -60,6 +60,15 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 - **Katapultálás**: Ctrl+E kétszer. A pilóta ejtőernyővel túléli, a gép elveszik (a háborúban a gépszámból is).
 - **F-35A Lightning II** a gépek között.
 
+## Plus 5 – bázis, séta, bevetés a műveleti épülettől a naplóig
+
+- **Belépő nézet**: a játék a repülőtéren indul, a menü a gépsor mellett áll. Harcból kilépve (Esc → Főmenü) ide érkezel vissza, nem látod, hol tartottál; csak a **Kilépés** gomb lép ki a játékból.
+- **Séta a bázison** (WASD, Shift = futás, egér / nyilak = nézés, E = használ): a gépsor minden típusa ott áll, E-vel választasz gépet, a saját gépednél E = felszállás.
+- **Karrier-bevetés**: a parancsot kapod, nem választod. Előbb felveszed a felszerelést (konténer), odasétálsz a géphez, beülsz, a kabinban ellenőrzöd a botot, hajtóművet, légféket, kijelzőket, fegyvert és rádiót, gurulási és felszállási engedélyt kérsz, felszállsz, teljesíted a feladatot, **visszatérsz és leszállsz**, kiszállsz, bemész a műveleti épületbe, és **kézzel írt naplót** adsz le (legalább pár mondat). A napló a pilótanaplóba kerül.
+- **Riadó**: néha csak be kell szaladni a kifutó melletti gépbe és indulni, nincs kabinellenőrzés.
+- **Rangok**: századostól te választod a kísérőidet (arckép és képességek alapján), őrnagytól a helyet, az időpontot és a gépet is. Alatta a vezért, kísérőt és feladatot kapod.
+- **Javítások**: a T-6 kabinja (a szemmagasság hibás volt), nincs utánégető a T-6 és a T-45 gépen, rendes betonburkolat az aprón.
+
 ## Oktatás (nem kötelező)
 
 A főmenü **Oktatás** gombja egy vezetett repülést indít a kiválasztott géppel. 11 lecke, mindegyik elmagyarázza,
