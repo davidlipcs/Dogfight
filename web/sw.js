@@ -1,6 +1,6 @@
 // Offline cache for the installed app (console-anywhere): everything the game loads is kept after the first
 // visit, so it starts without internet.  Same-origin files: cache first, then refreshed in the background.
-const CACHE = 'dogfight-plus-v4';
+const CACHE = 'dogfight-plus-v5';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'js/three.min.js', 'js/game.js',
   'js/util.js', 'js/specs.js', 'js/terrain.js', 'js/sim.js', 'js/ai.js', 'js/render.js', 'js/glb.js', 'js/hud.js', 'js/mfd.js',
   'js/tutorial.js', 'js/audio.js', 'js/flight.js', 'js/weapons.js', 'js/career.js', 'js/voice.js', 'js/touch.js', 'js/hangar.js',
@@ -14,9 +14,12 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  // the game's code and pages: the network first (a fix reaches you at once), the cache when offline;
+  // everything else (models, textures): the cache first, refreshed in the background
+  const code = e.request.mode === 'navigate' || /\.(js|html)$/.test(url.pathname) || url.pathname.endsWith('/');
   e.respondWith(caches.open(CACHE).then(async (c) => {
     const hit = await c.match(e.request, { ignoreSearch: true });
     const net = fetch(e.request).then((r) => { if (r.ok) c.put(e.request, r.clone()); return r; }).catch(() => hit);
-    return hit || net;
+    return code ? net.then((r) => r || hit) : hit || net;
   }));
 });
