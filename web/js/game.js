@@ -1665,6 +1665,22 @@ async function boot() {
     const el = document.documentElement;
     if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
   });
+  // the task panel must show everything at once (the mouse is locked, so it cannot be scrolled): when the text is
+  // longer than the screen, the whole panel shrinks until it fits
+  const tp = $('tutorial');
+  let fitting = false;
+  const fitPanel = () => {
+    if (tp.hidden || fitting) return;
+    fitting = true;
+    let z = 1;
+    tp.style.zoom = '1'; tp.style.maxHeight = `${innerHeight - 72}px`;
+    while (tp.scrollHeight > tp.clientHeight + 1 && z > 0.55) { z = Math.round((z - 0.04) * 100) / 100; tp.style.zoom = String(z); tp.style.maxHeight = `${(innerHeight - 72) / z}px`; }
+    fitting = false;
+  };
+  let fitQueued = false;
+  const queueFit = () => { if (fitQueued) return; fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fitPanel(); }); };
+  new MutationObserver(() => { if (!fitting) queueFit(); }).observe(tp, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('resize', queueFit);
   goLobby();                                    // the entry view
 }
 
