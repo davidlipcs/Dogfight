@@ -329,9 +329,11 @@ def body_hw(y):
     return float(BODY[2](y))
 
 
-def lower_z(x, y):
-    """The lowest skin under (x, y): the body or a duct / nacelle hanging under it."""
-    z = float(body_bottom(y, abs(x))[0]) if abs(x) < body_hw(y) else 9.0
+def lower_z(x, y, strict=False):
+    """The lowest skin under (x, y): the body or a duct / nacelle hanging under it.  Outside the body (and the
+    ducts): 9.0 with `strict`, else the body's underside at its edge."""
+    hw = body_hw(y)
+    z = float(body_bottom(y, abs(x))[0]) if abs(x) < hw else (9.0 if strict else float(body_bottom(y, hw * 0.95)[0]))
     for d in DUCTS:
         if d.covers(y, x):
             z = min(z, d.bottom(y, x))
@@ -488,7 +490,7 @@ def configure(cfg):
     g["CANOPY_H"] = Curve([(r[0], r[2]) for r in rows])
     g["CANOPY_Y0"], g["CANOPY_Y1"] = min(r[0] for r in rows), max(r[0] for r in rows)
     g["ARCHES"] = c.get("arches", [])
-    g["WINDSCREEN_ARCH"] = c.get("arches", [CANOPY_Y1 - 0.6])[0]
+    g["WINDSCREEN_ARCH"] = (c.get("arches") or [CANOPY_Y1 - 0.6])[0]
     g["CANOPY_TINT"] = c.get("tint", (0.40, 0.36, 0.20))
     ck = cfg["cockpit"]
     g["SEATS"] = ck["seats"]

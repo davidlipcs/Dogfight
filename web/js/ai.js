@@ -244,11 +244,20 @@ export class AIPilot {
 // lead, then fights it like any AI pilot, and comes back to the formation when the sky is clear.
 const WING_REACH = 26000;
 export class WingmanPilot extends AIPilot {
-  constructor(ac, lead) { super(ac, 'wing', null); this.lead = lead; }
+  // order (the radio): 'free' fights what comes near the lead, 'engage' goes for the lead's target (or any),
+  // 'cover' stays close and only takes enemies near the lead, 'rejoin' leaves the fight and flies formation
+  constructor(ac, lead) { super(ac, 'wing', null); this.lead = lead; this.order = 'free'; }
   fair(t) {
     const l = this.lead;
     if (!l || !l.alive) return true;
-    return len(sub(t.pos, l.pos)) < WING_REACH;
+    if (this.order === 'rejoin') return false;
+    if (this.order === 'engage') return true;
+    return len(sub(t.pos, l.pos)) < (this.order === 'cover' ? 6000 : WING_REACH);
+  }
+  think(world) {
+    super.think(world);
+    const l = this.lead;
+    if (this.order === 'engage' && l && l.radar && l.radar.locked && l.radar.locked.alive && this.state !== 'defend') this.target = l.radar.locked;
   }
   patrol() {
     const l = this.lead, ac = this.ac;

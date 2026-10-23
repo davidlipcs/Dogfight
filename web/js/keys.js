@@ -5,7 +5,7 @@ export const ACTIONS = [
   ['1', 'AIM-9M választás'], ['2', 'AIM-120A választás'], ['r', 'Radar be / ki'], ['s', 'Orr fel'], ['w', 'Orr le'],
   ['a', 'Orsózás balra'], ['d', 'Orsózás jobbra'], ['q', 'Oldalkormány balra'], ['e', 'Oldalkormány jobbra'],
   ['shift', 'Gáz fel / utánégető'], ['z', 'Gáz le'], ['b', 'Fék / légfék'], ['g', 'Futómű'], ['c', 'Körülnézés'],
-  ['v', 'Kabin / külső nézet'], ['u', 'Rakétakamera'], ['o', 'Bullet time (mod)'], ['m', 'Jelölők'], ['Tab', 'TVC (F-16, F-15 ACTIVE)'],
+  ['v', 'Kabin / külső nézet'], ['i', 'Rádió (tartsd: beszéd · nyomd: lista / írás)'], ['u', 'Rakétakamera'], ['o', 'Bullet time (mod)'], ['m', 'Jelölők'], ['Tab', 'TVC (F-16, F-15 ACTIVE)'],
 ];
 const NAMES = { Space: 'Szóköz', shift: 'Shift', Tab: 'Tab', Enter: 'Enter', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 export const keyLabel = (k) => NAMES[k] || (k.length === 1 ? k.toUpperCase() : k.replace(/^Key|^Numpad/, ''));

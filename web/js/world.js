@@ -254,10 +254,24 @@ export async function buildWorld({ lat, lon, name, size = 102400, res = 1024, te
   const sat = await paintImagery(ctx, texSize, frame, size, (f) => onProgress('Műholdképek letöltése…', 0.5 + f * 0.48));
   let max = -1e9;
   for (let i = 0; i < grid.length; i++) if (grid[i] > max) max = grid[i];
+  // the land around it up to the horizon (only to look at): 330 km, 1.5 km cells, a small texture
+  onProgress('A látóhatár tája…', 0.985);
+  let far = null;
+  try {
+    const FS = 330000, FR = 220, fh = FS / 2, fn = FR + 1, fc = FS / FR;
+    const fg = await elevationGrid(frame, FS, FR);
+    const fcan = document.createElement('canvas');
+    fcan.width = fcan.height = 1024;
+    const fctx = fcan.getContext('2d');
+    paintGround(fctx, 1024, fg.grid, fn, fc, fh, lat);
+    await paintImagery(fctx, 1024, frame, FS).catch(() => null);
+    far = { size: FS, res: FR, grid: fg.grid, canvas: fcan, inner: half };
+  } catch (e) { far = null; }
   onProgress('Kész', 1);
   return {
     data: { size, res, grid, airfield: { x: field.x, y: field.y, elevation: field.elevation } },
     canvas,
     info: { name, lat, lon, carrier, imagery: sat.ok / Math.max(1, sat.all), maxHeight: max, frame },
+    far,
   };
 }

@@ -19,6 +19,7 @@ const TIPS = {
   gripen: 'Kicsi, könnyű és fürge, kicsi a radarjele. Közelről, hőkövetővel a legjobb.',
   typhoon: 'Erős hajtóművek, kiváló gyorsulás és fordulás – az egyik legveszélyesebb ellenfél.',
   rafale: 'Sokoldalú kacsaszárnyas delta, jól fordul alacsony sebességen is. Tartsd a távolságot.',
+  f35: 'Lopakodó, belső fegyvertérrel, kiváló érzékelőkkel – messziről lát és lő. Közelharcban nehezebb, mint egy F-16: kényszerítsd fordulóharcra.',
   j20: 'Nagy, lopakodó elfogó, hosszú hatótávú rakétákkal. Közelről, hőkövetővel kapd el.',
   generic: (s) => `${s.short}: ${s.gMax} G, ${s.rollRate}°/s orsózás.`,
 };

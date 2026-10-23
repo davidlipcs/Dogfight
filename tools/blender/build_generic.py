@@ -558,6 +558,8 @@ def build_cockpit():
         yp = sy + CK.get("panel_dist", 0.90)
         if k == 0:
             yp = min(yp, y1 - 0.10)
+            if yp - ey < 0.55:
+                print("WARNING: the front panel is only %.2f m ahead of the eye" % (yp - ey))
         else:
             yp = min(yp, seats[k - 1] - 0.16)
         wp = min(S.cockpit_w(yp) - 0.02, 0.34)
@@ -666,7 +668,7 @@ def plan_gear():
     fold = m.get("fold", "in")
     xh = m.get("hinge_x", x - 0.12 if fold != "out" else x + 0.1)
     yh = m.get("hinge_y", y + 0.15 if fold != "fwd" else y - 0.25)
-    zl = S.lower_z(xh, yh)
+    zl = S.lower_z(xh, yh, strict=True)
     if zl > 5.0:                       # under the wing
         zl = float(S.wing_z(xh)) - float(S.wing_t(xh)) * float(S.wing_chord(xh)) * 0.4
     zh = zl + m.get("hinge_up", 0.12)
@@ -696,7 +698,7 @@ def leg_door(rect, hinge, axis, angle, sign=1.0):
     for yy in ys:
         row = []
         for xx in xs:
-            zz = S.lower_z(sign * xx, yy)
+            zz = S.lower_z(sign * xx, yy, strict=True)
             if zz > 5.0:
                 zz = float(S.wing_z(xx)) - f16_shape.yt(np.clip((S.wing_le(xx) - yy) / S.wing_chord(xx), 0, 1), S.wing_t(xx)) * S.wing_chord(xx)
             row.append((sign * xx, yy, float(zz) - 0.004))

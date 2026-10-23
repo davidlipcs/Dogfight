@@ -21,7 +21,9 @@ import { keyEditor, buildMap } from './keys.js';
 import { Race, fmtTime, RACE_RINGS } from './race.js';
 import { Carrier, DECK_Z } from './carrier.js';
 import { buildWorld, PLACES } from './world.js';
+import { Radio } from './radio.js';
 import { MapPicker } from './mappick.js';
+import { CareerMode } from './careermode.js';
 
 // The fight happens on the far side of the map: the enemies live in the combat zone and never attack anyone
 // near the home base (safe area), so taking off and landing is quiet.  An air start puts the player on the
@@ -46,6 +48,58 @@ const ease = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 const $ = (id) => document.getElementById(id);
 
 // ------------------------------------------------------------------ camera
+// the ejection seat and the parachute: a short rocket ride up, the drogue, then the canopy opens and the pilot
+// comes down at ~6 m/s, drifting with the wind; on the ground the canopy collapses
+class Parachute {
+  constructor(scene, pos, vel, up) {
+    this.scene = scene; this.pos = pos.clone(); this.vel = vel.clone().addScaledVector(up, 45); this.t = 0; this.landed = false;
+    const g = this.group = new THREE.Group();
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0xd8742c, roughness: 0.8, side: THREE.DoubleSide });
+    const white = new THREE.MeshStandardMaterial({ color: 0xe9e6dc, roughness: 0.8, side: THREE.DoubleSide });
+    const canopy = this.canopy = new THREE.Group();
+    for (let k = 0; k < 12; k++) {                     // gores in two colours
+      const gore = new THREE.Mesh(new THREE.SphereGeometry(4.2, 4, 8, k * Math.PI / 6, Math.PI / 6, 0, Math.PI / 2.4), k % 2 ? canopyMat : white);
+      canopy.add(gore);
+    }
+    canopy.rotation.x = Math.PI / 2; canopy.position.z = 7.5;
+    const lines = new THREE.BufferGeometry(), lp = [];
+    for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; lp.push(0, 0, 0.9, Math.cos(a) * 3.3, Math.sin(a) * 3.3, 7.5 + 0.6); }
+    lines.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+    canopy.userData.lines = new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x333333 }));
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.25, 1.1, 4, 8) : new THREE.CylinderGeometry(0.25, 0.25, 1.4, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a5236, roughness: 0.9 }));
+    body.rotation.x = Math.PI / 2; body.position.z = 0.1;
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), new THREE.MeshStandardMaterial({ color: 0x55595c, roughness: 0.4 }));
+    helmet.position.z = 0.95;
+    g.add(body, helmet, canopy, canopy.userData.lines);
+    canopy.visible = false; canopy.userData.lines.visible = false;
+    g.position.copy(this.pos);
+    scene.add(g);
+  }
+  update(dt, terrain) {
+    if (!dt) return;
+    this.t += dt;
+    const ground = terrain.height(this.pos.x, this.pos.y);
+    if (this.landed) return;
+    const open = this.t > 2.2;
+    if (open && !this.canopy.visible) { this.canopy.visible = true; this.canopy.userData.lines.visible = true; this.canopy.scale.set(0.2, 0.2, 0.2); }
+    if (this.canopy.visible && this.canopy.scale.x < 1) { const s = Math.min(1, this.canopy.scale.x + dt * 1.2); this.canopy.scale.set(s, s, s); }
+    const k = open ? 0.9 : 0.12;                       // drag
+    this.vel.x += (2.5 - this.vel.x) * Math.min(1, k * dt);          // drift with a light wind
+    this.vel.y += (1.5 - this.vel.y) * Math.min(1, k * dt);
+    this.vel.z += -9.81 * dt;
+    if (open) this.vel.z += (-6 - this.vel.z) * Math.min(1, 1.6 * dt);
+    else this.vel.z -= this.vel.z * Math.min(1, 0.12 * dt);
+    this.pos.addScaledVector(this.vel, dt);
+    if (this.pos.z <= Math.max(ground, 0) + 0.2) {
+      this.pos.z = Math.max(ground, 0) + 0.2; this.landed = true; this.vel.set(0, 0, 0);
+      this.canopy.rotation.x = 0.2; this.canopy.position.set(4, 0, 0.5); this.canopy.scale.set(1, 1, 0.15); this.canopy.userData.lines.visible = false;
+    }
+    this.group.position.copy(this.pos);
+  }
+  dispose() { this.scene.remove(this.group); }
+}
+
 class FlightCamera {
   constructor(camera, terrain) {
     this.camera = camera; this.terrain = terrain; this.eye = V(0, 2.4, 1.1);
@@ -157,12 +211,17 @@ class Input {
         if (!this.held.has('control') && this.handlers.press) this.handlers.press('control');
         this.codeName.set(e.code, 'control'); this.held.add('control'); return;
       }
+      if (e.ctrlKey && e.code === 'KeyE') { e.preventDefault(); if (this.handlers.press) this.handlers.press('eject'); return; }   // the ejection handle
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       this.codeName.set(e.code, name);
       if (!this.held.has(name) && this.handlers.press) this.handlers.press(name);
       this.held.add(name);
     });
-    addEventListener('keyup', (e) => { const n = this.codeName.get(e.code) || this.tr(Input.name(e)); this.held.delete(n); this.codeName.delete(e.code); });
+    addEventListener('keyup', (e) => {
+      const n = this.codeName.get(e.code) || this.tr(Input.name(e));
+      if (this.held.has(n) && this.handlers.release) this.handlers.release(n);
+      this.held.delete(n); this.codeName.delete(e.code);
+    });
     const releaseAll = () => { this.held.clear(); this.codeName.clear(); this.mouse = [false, false, false]; };
     addEventListener('blur', releaseAll);
     document.addEventListener('visibilitychange', releaseAll);
@@ -275,6 +334,7 @@ class Game {
     this.pad = new Pad();
     this.career = window.dogfightCareer || new Career();
     this.voice = new Voice();
+    this.radio = new Radio(this);
     this.touch = new TouchControls((act) => this.touchTap(act));
     this.touchMode = 'auto'; this.missileCam = false; this.killCam = null; this.wingman = null;
     this.threats = new Set(); this.hitBy = new Set(); this.rumbleT = 0;
@@ -285,11 +345,13 @@ class Game {
     this.player = null; this.pilot = null; this.helpVisible = false; this.locked = false; this.inMenu = false;
     this.stick = { x: 0, y: 0, idle: 0 };
     this.input.handlers.press = (k) => this.onKey(k);
+    // the radio key: tap = list / type, hold = talk
+    this.input.handlers.release = (k) => { if (k === 'i' && !this.inMenu && this.radioDown) { this.radioDown = false; this.radio.keyUp(); } };
     this.input.handlers.wheel = (s) => this.cycleWeapon(s);
     this.input.handlers.mousedown = (e) => {
       if (this.state.paused && !this.helpVisible) this.resume();
       else if (e.button === 1) this.cam.zoom = (this.cam.zoom + 1) % 3;     // middle button: zoom steps
-      else if (this.touchOn() && this.player && (!this.player.alive || (this.race && this.race.finished))) this.respawn();   // touch: a tap respawns
+      else if (this.touchOn() && this.player && (!this.player.alive || this.player.ejected || (this.race && this.race.finished))) this.respawn();   // touch: a tap respawns
     };
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
@@ -323,7 +385,7 @@ class Game {
       const w = await buildWorld({ lat: place.lat, lon: place.lon, name: place.name, res, texSize, onProgress });
       this.terrain.load(w.data);
       this.carrier.moveTo(w.info.carrier);
-      this.view.rebuildWorld(w.canvas);
+      this.view.rebuildWorld(w.canvas, w.far);
       this.place = place; this.worldInfo = w.info;
       if (this.view.setGeo) this.view.setGeo(w.info);
     }
@@ -361,7 +423,14 @@ class Game {
   // the optional guided flight (main menu -> Oktatás); no enemy waves while it runs
   startTutorial() {
     $('tutorial').hidden = true;
-    this.tutorial = this.opts.tutorial ? new Tutorial(this) : null;
+    // the radio: everything open in free play; the career gives only the calls taught so far
+    this.radio.unlocked = this.opts.radioUnlocked || null;
+    this.radio.callsign = this.opts.callsign || 'VIPER 1-1';
+    this.radio.cleared = { taxi: false, takeoff: false, land: false };
+    this.nav.zone = { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }; this.state.missionLine = '';
+    if (this.player) this.player.autopilot = null;
+    // a career activity (career mode: back seat, school, mission) takes the tutorial's place: no free waves
+    this.tutorial = this.opts.activity ? this.opts.activity(this) : this.opts.tutorial ? new Tutorial(this) : null;
     this.setupBench();
   }
   // performance test (settings -> Teljesítményteszt): 8 s of a real fight - the player's jet flown by an AI
@@ -533,6 +602,8 @@ class Game {
     if (k === 'p') { if (this.state.paused) this.resume(); else this.pause(); return; }
     if (k === 'Enter' || k === 'NumpadEnter') { if (this.tutorial) this.tutorial.enter(); else this.respawn(); return; }
     if (k === 'm') { this.hud.markers = !this.hud.markers; return; }
+    if (k === 'i' && !this.state.paused) { this.radioDown = true; this.radio.keyDown(); return; }
+    if (k === 'eject' && !this.state.paused) { this.ejectHandle(); return; }
     if (k === 'o' && this.canAct()) {
       if (!this.hangar.modOn('bullettime')) this.hud.message('Bullet time: a Hangárban vehető meg (mod)', 'info', 2, 'bt');
       else if (this.bt.active > 0) this.bt.active = 0;
@@ -739,7 +810,36 @@ class Game {
     const next = list[((i < 0 ? 0 : i + (dir > 0 ? 1 : -1)) % list.length + list.length) % list.length];
     if (next !== p.selected && p.select(next)) this.hud.message(`${next}  (${p.missileCount(next)})`, 'info', 1);
   }
+  // Ctrl+E twice (like the real handle: a deliberate pull): the seat fires, the pilot comes down under the
+  // parachute and lives; the jet flies on with nobody at the controls and is lost
+  ejectHandle() {
+    const p = this.player, now = performance.now();
+    if (!p || !p.alive || p.ejected) return;
+    if (p.onGround && p.speed < 30) { this.hud.message('A földön állva nem katapultálunk – szállj ki rendesen', 'info', 2, 'eject'); return; }
+    if (!this.ejectArm || now - this.ejectArm > 2500) { this.ejectArm = now; this.hud.message('KATAPULTÁLÁS: Ctrl+E még egyszer!', 'warn', 1.5, 'eject'); return; }
+    this.ejectArm = 0;
+    p.ejected = true;
+    p.pilot = { think() {}, fly() { p.controls.pitch = 0.05; p.controls.roll = 0; p.controls.yaw = 0; } };
+    p.trigger = false;
+    if (this.chute) this.chute.dispose();
+    this.chute = new Parachute(this.view.scene, p.pos, p.vel, p.fm.up);
+    const st = this.state;
+    st.banner = 'KATAPULTÁLTÁL!';
+    st.subBanner = `A pilóta életben van – a ${p.spec.short} elveszett  ·  ${this.touchOn() ? 'Koppints' : 'Enter'}: új gép`;
+    this.sounds.play && this.sounds.play('eject');
+    this.radio.say('you', `${this.radio.callsign}, EJECTING, EJECTING!`);
+    this.radio.say('awacs', `${this.radio.callsign}, Magic copies, good chute. Rescue is on the way.`, 4500);
+    this.career.data.ejections = (this.career.data.ejections || 0) + 1;
+    if (this.onEject) this.onEject(p);
+  }
   respawn() {
+    if (this.player && this.player.ejected) {
+      const st = this.state;
+      st.banner = st.subBanner = '';
+      if (this.chute) { this.chute.dispose(); this.chute = null; }
+      this.spawnPlayer();
+      return;
+    }
     if (this.race && this.race.finished) { this.state.banner = this.state.subBanner = ''; this.spawnPlayer(); return; }
     if (this.state.over) { this.career.data.matches++; this.newMatch(this.opts); this.resume(); return; }   // survival: a new game
     if (this.player && !this.player.alive) {
@@ -758,10 +858,10 @@ class Game {
     if (this.pad.poll()) {
       if (!this.inMenu && this.pad.pressed(PAD.START)) { if (st.paused) this.resume(); else this.pause(); }
       if (!this.inMenu && this.pad.pressed(PAD.BACK)) this.toggleHelp();
-      if (!this.player.alive && this.pad.pressed(PAD.A)) this.respawn();
+      if ((!this.player.alive || this.player.ejected) && this.pad.pressed(PAD.A)) this.respawn();
     }
     if (!st.paused) {
-      if (this.player.alive) this.applyInput(dt);
+      if (this.player.alive && !this.player.ejected && !this.player.autopilot) this.applyInput(dt);
       else this.input.takeDelta();
       // bullet time (hangar mod): the world runs slower while it is on; it recharges in 20 s
       const bt = this.bt;
@@ -769,7 +869,8 @@ class Game {
       const wdt = bt.active > 0 ? dt * 0.35 : dt;
       this.world.update(wdt);
       if (this.race && this.player.alive) this.raceStep(wdt);
-      if (this.player.alive && this.carrier.active !== false) this.carrierStep(dt);
+      if (this.chute) this.chute.update(wdt, this.terrain);
+      if (this.player.alive && !this.player.ejected && this.carrier.active !== false) this.carrierStep(dt);
       this.carrier.update(dt);
       if (this.player.alive && !this.player.onGround) this.career.tick(dt);
       for (const { missile } of this.player.rwr.incoming) this.threats.add(missile);
@@ -814,8 +915,14 @@ class Game {
     if (this.bench) this.benchStep(now);
   }
   onEvent(kind, d) {
+    // the wingman's own radio calls
+    if (this.wingman) {
+      if (kind === 'launch' && d.missile && d.missile.shooter === this.wingman) this.radio.event('wing_fox');
+      if (kind === 'kill' && d.killer === this.wingman) this.radio.event('wing_splash');
+    }
     if (kind !== 'kill') return;
     const st = this.state, p = this.player, scen = this.scenario;
+    if (d.victim === p && p.ejected) { this.hud.message('Az elhagyott gép lezuhant – a pilóta életben van', 'info', 3, 'eject'); return; }
     if (d.victim === p) {
       st.deaths++; st.streak = 0;
       if (!this.tutorial) this.career.data.deaths++;
@@ -995,6 +1102,12 @@ class Game {
     const p = this.player, cam = this.cam, now = performance.now();
     cam.follow = null; cam.followLabel = '';
     if (!p) return;
+    if (p.ejected && this.chute) {                      // the camera stays with the parachute
+      const c = this.chute;
+      cam.follow = { pos: c.pos, dir: norm(V(c.vel.x, c.vel.y, -0.3), V(0, 1, -0.3)), dist: 22, height: 5 };
+      cam.followLabel = c.landed ? 'A PILÓTA LEÉRT – ÉLETBEN VAN' : 'EJTŐERNYŐ';
+      return;
+    }
     if (!p.alive) {
       const k = this.killCam;
       if (k && k.t > 0 && k.killer && !k.killer.crashed) {
@@ -1155,7 +1268,7 @@ function loadTexture(url, onDone) {
 }
 
 // the aircraft built in Blender (tools/blender): assets/<model>.glb
-const GLB_MODELS = ['f16', 'fa18', 'f22', 'f15', 'su35', 'su57', 'mig29', 'mig31', 'gripen', 'typhoon', 'rafale', 'j20', 't38', 't45', 't6'];
+const GLB_MODELS = ['f16', 'fa18', 'f22', 'f15', 'f35', 'su35', 'su57', 'mig29', 'mig31', 'gripen', 'typhoon', 'rafale', 'j20', 't38', 't45', 't6'];
 
 async function boot() {
   const status = $('status'), bar = $('bar');
@@ -1363,9 +1476,20 @@ async function boot() {
     if (game && placeKey(game.place) === placeKey(place)) game.newMatch(opts);
     else if (game) { goPlace(game, opts); return; }
     else {
-      try { game = new Game(assets, opts); }
-      catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
-      window.game = game;
+      game = makeGame(opts);
+      if (!game) return;
+    }
+    applySettings();
+    if (fresh && placeKey(place) !== 'island') { goPlace(game, opts); return; }
+    game.resume();
+  };
+  // the one game object: made on the first start, then reused (new matches on the same scene)
+  function makeGame(opts) {
+    let game;
+    try { game = new Game(assets, opts); }
+    catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return null; }
+    window.game = game;
+    {
       game.onTutorialEnd = () => { showMenu(); $('current').textContent = 'Az oktatás véget ért. Folytatás = szabad repülés hullámokkal, vagy indíts új játékot.'; };
       // performance test done: pick the quality from the measured frame rate (console-tester)
       game.onBenchmark = (r) => {
@@ -1381,10 +1505,40 @@ async function boot() {
         $('bench-msg').textContent = `Átlag ${Math.round(r.fps)} FPS, a leglassabb 10%: ${Math.round(r.low)} FPS (${names[was]}) → ${q === was ? 'a mostani beállítás jó' : 'beállítva: ' + names[q]}.`;
       };
     }
+    return game;
+  }
+  // career mode (careermode.js): one flight with its own activity (back seat, school, mission), at a place of
+  // the world ({lat, lon, name}) or on the island (null).  Resolves with the game once it flies.
+  const launch = async (o, where) => {
+    const spec = ALL[o.aircraft] || ALL.f16;
+    let loadout = 'default';
+    try {
+      const l = Object.values(spec.loadouts.default);
+      loadout = buildLoadout(spec, l.filter((k) => k === 'AIM-9M').length, l.filter((k) => k === 'AIM-120A').length).layout;
+    } catch (e) { /* the spec's own default */ }
+    const opts = { airStart: false, carrierStart: false, difficulty: 'normal', enemies: 0, mode: 'realistic', enemyTypes: ['su35'], loadout,
+      tutorial: false, scenario: 'waves', wingman: 0, ...o, aircraft: spec.id in ALL ? spec.id : o.aircraft };
+    $('menu').hidden = true;
+    let game = window.game;
+    if (!game) { game = makeGame({ ...opts, activity: null }); if (!game) return null; }
+    if (placeKey(game.place) !== placeKey(where)) {
+      $('worldload').hidden = false; $('wl-name').textContent = where ? where.name : 'Sziget'; $('wl-bar').style.width = '0%';
+      try { await game.loadPlace(where, (msg, f) => { $('wl-status').textContent = msg; $('wl-bar').style.width = `${Math.round(f * 100)}%`; }); }
+      catch (e) {
+        console.error(e);
+        $('wl-status').textContent = `Nem sikerült letölteni (${e.message}) – a szigeten repülsz.`;
+        await new Promise((r) => setTimeout(r, 2000));
+        await game.loadPlace(null);
+      }
+      $('worldload').hidden = true;
+    }
     applySettings();
-    if (fresh && placeKey(place) !== 'island') { goPlace(game, opts); return; }
+    game.newMatch(opts);
     game.resume();
+    return game;
   };
+  const careerMode = new CareerMode(launch);
+  $('open-career').addEventListener('click', () => { const g = window.game; if (g) { g.inMenu = true; g.pause(); g.showOverlay(null); } careerMode.open(); });
   // a match somewhere else: download and build the place (progress screen), then start
   const goPlace = async (game, opts) => {
     $('worldload').hidden = false; $('wl-name').textContent = place.name; $('wl-bar').style.width = '0%';

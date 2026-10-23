@@ -82,7 +82,9 @@ def main():
         page = f.read()
     with open(os.path.join(WEB, "js", "three.min.js"), encoding="utf-8") as f:
         three = f.read()
-    assets = sorted(n for n in os.listdir(os.path.join(WEB, "assets")) if os.path.splitext(n)[1] in MIME)
+    root = os.path.join(WEB, "assets")
+    assets = sorted(os.path.relpath(os.path.join(d, n), root).replace(os.sep, "/") for d, _s, files in os.walk(root)
+                    for n in files if os.path.splitext(n)[1] in MIME)
     table = ",\n".join('"%s": "%s"' % (n, data_uri(n)) for n in assets)
     with open(os.path.join(WEB, "js", "tiles.min.js"), "rb") as f:     # Google 3D tiles: loaded on demand
         table += ',\n"tiles.min.js": "data:text/javascript;base64,%s"' % base64.b64encode(f.read()).decode("ascii")

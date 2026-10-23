@@ -609,7 +609,7 @@ export class HUD {
   }
   overlay(game) {
     const u = this.u, fs = 12 * u + 3;
-    this.text(`HULLÁM ${game.wave}   LELŐVE ${game.kills}   HALÁL ${game.deaths}`, 20 * u, 22 * u, WHITE, fs);
+    this.text(`${game.missionLine || `HULLÁM ${game.wave}`}   LELŐVE ${game.kills}   HALÁL ${game.deaths}`, 20 * u, 22 * u, WHITE, fs);
     const hint = this.cockpit ? 'H = súgó   Esc = menü   N = kijelzők nézése   J / K / L = lapozás' : 'H = súgó   Esc = menü   V = kabin   N = kijelzők';
     this.text(hint, 20 * u, 42 * u, DIM, 11 * u + 2);
     // F-16: where the extreme mode is (it has no menu entry, only the key)

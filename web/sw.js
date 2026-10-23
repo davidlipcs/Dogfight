@@ -1,6 +1,6 @@
 // Offline cache for the installed app (console-anywhere): everything the game loads is kept after the first
 // visit, so it starts without internet.  Same-origin files: cache first, then refreshed in the background.
-const CACHE = 'dogfight-plus-v1';
+const CACHE = 'dogfight-plus-v3';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'js/three.min.js', 'js/game.js',
   'js/util.js', 'js/specs.js', 'js/terrain.js', 'js/sim.js', 'js/ai.js', 'js/render.js', 'js/glb.js', 'js/hud.js', 'js/mfd.js',
   'js/tutorial.js', 'js/audio.js', 'js/flight.js', 'js/weapons.js', 'js/career.js', 'js/voice.js', 'js/touch.js', 'js/hangar.js',

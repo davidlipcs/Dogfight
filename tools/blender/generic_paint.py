@@ -31,6 +31,8 @@ SCHEMES = {
                 mark=(0.30, 0.32, 0.34), split=0.0),
     "rafale": dict(upper=(0.42, 0.45, 0.48), lower=(0.55, 0.58, 0.61), camo=None, radome=(0.30, 0.32, 0.34),
                    mark=(0.16, 0.17, 0.18), split=0.1),
+    "f35": dict(upper=(0.35, 0.37, 0.40), lower=(0.38, 0.40, 0.43), camo=None, radome=(0.40, 0.42, 0.45),
+                mark=(0.24, 0.26, 0.29), split=0.0),
     "j20": dict(upper=(0.30, 0.33, 0.36), lower=(0.36, 0.39, 0.42), camo=None, radome=(0.48, 0.51, 0.54),
                 mark=(0.14, 0.15, 0.16), split=0.0),
     "trainer": dict(upper=(0.84, 0.85, 0.86), lower=(0.84, 0.85, 0.86), camo=None, radome=(0.84, 0.85, 0.86),

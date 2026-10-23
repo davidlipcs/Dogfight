@@ -140,7 +140,10 @@ const MOVING = ['lef_L', 'lef_R', 'flap_L', 'flap_R', 'ail_L', 'ail_R', 'stab_L'
 const ROT = new THREE.Quaternion(), V3 = new THREE.Vector3();
 const VAPOR_STEP = { f16: [0.27, -1.0, -0.03], fa18: [0.45, -1.4, -0.05] };   // second LEX / strake vapour point
 const LEGACY_SCREENS = ['mfd_l', 'mfd_r', 'ded', 'rwr'];                   // the quads of f16.json's screens, in order
-const MISSILE_MODELS = { 'AIM-9M': 'aim9m', 'AIM-120A': 'aim120c', 'R-73': 'aim9m', 'R-77': 'aim120c' };
+const MISSILE_MODELS = { 'AIM-9M': 'aim9m', 'AIM-120A': 'aim120c', 'R-73': 'aim9m', 'R-77': 'aim120c', 'IRIS-T': 'aim9m', 'ASRAAM': 'aim9m',
+  'MICA IR': 'aim9m', 'PL-10': 'aim9m', 'Meteor': 'aim120c', 'MICA EM': 'aim120c', 'PL-15': 'aim120c' };
+// any other name: a short-range (heat) missile looks like the AIM-9, a long-range one like the AMRAAM
+const missileModel = (key) => MISSILE_MODELS[key] || (/9|73|IR|10|ASRAAM/i.test(key || '') ? 'aim9m' : 'aim120c');
 const FOLD = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0);
 const COCKPIT_STATIONS = {      // where the missiles hang on the cockpit view model
   1: [-4.88, -0.55, 0.10], 2: [-3.75, -0.95, -0.38], 3: [-2.60, -0.55, -0.45],
@@ -343,9 +346,9 @@ export class Models {
       if (!g.door) g.o.visible = gearPos > 0.001;
     }
   }
-  missile(key) { const g = new THREE.Group(); g.add(this.instance(MISSILE_MODELS[key])); return g; }
+  missile(key) { const g = new THREE.Group(); g.add(this.instance(missileModel(key))); return g; }
   // a missile for the glTF frame of a model (inside a weapons bay): no axis swap
-  bayMissile(key) { const m = this.instance(MISSILE_MODELS[key]); m.rotation.x = 0; return m; }
+  bayMissile(key) { const m = this.instance(missileModel(key)); m.rotation.x = 0; return m; }
   // F-22: doors open as far as the jet says, launchers out, the missiles riding on them
   setBays(root, ac) {
     const b = root.userData.bays, model = root.userData.model;
@@ -684,11 +687,12 @@ export class SceneView {
   }
   // another map (world.js): the terrain mesh, the air base and the clouds are built again, with the new
   // ground texture (a canvas)
-  rebuildWorld(groundCanvas) {
-    for (const k of ['terrainGroup', 'airfieldGroup', 'clouds']) if (this[k]) { this.scene.remove(this[k]); this[k].traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+  rebuildWorld(groundCanvas, far = null) {
+    for (const k of ['terrainGroup', 'airfieldGroup', 'clouds', 'farMesh']) if (this[k]) { this.scene.remove(this[k]); this[k].traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
     if (this.groundTex && this.groundTex !== this.models.tex.terrain) this.groundTex.dispose();
     this.groundTex = groundCanvas ? new THREE.CanvasTexture(groundCanvas) : this.models.tex.terrain;
     this.buildTerrain(); this.buildClouds(); this.buildAirfield();
+    this.farMesh = far ? this.buildFar(far) : null;
     if (!groundCanvas) this.setGeo(null);
     this.setQuality(this.quality);
     if (this.timeOfDay) this.setTimeOfDay(this.timeOfDay);
@@ -767,6 +771,29 @@ export class SceneView {
       this.terrainGroup.add(lod);
     }
     this.scene.add(this.terrainGroup);
+  }
+  // the real world beyond the playing area, out to the horizon (coarse, only to look at): under the playing
+  // area it is pushed down out of sight
+  buildFar(f) {
+    const n = f.res + 1, cell = f.size / f.res, half = f.size / 2, pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const k = j * n + i, x = -half + i * cell, y = -half + j * cell;
+      const inside = Math.abs(x) < f.inner - cell && Math.abs(y) < f.inner - cell;
+      pos[k * 3] = x; pos[k * 3 + 1] = y; const h = f.grid[k];
+      pos[k * 3 + 2] = (h > 0.5 ? h - 2 : Math.min(-8, Math.max(h, -60))) - (inside ? 400 : 0);
+      uv[k * 2] = i / (n - 1); uv[k * 2 + 1] = j / (n - 1);
+    }
+    const idx = [];
+    for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i; idx.push(a, a + 1, a + n + 1, a, a + n + 1, a + n); }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const tex = new THREE.CanvasTexture(f.canvas);
+    tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex }));
+    this.scene.add(m);
+    return m;
   }
   buildClouds() {
     const tex = this.puffTex || (this.puffTex = puffTexture()), r = rng(5), lim = this.terrain.half * 0.95;

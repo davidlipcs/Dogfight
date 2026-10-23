@@ -52,6 +52,14 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 - **Grafika**: árnyékok, hullámzó, tükröződő tenger, részletes talaj közelről, több felhő, új **Ultra** fokozat (1,5× felbontás, 4K árnyék, 8K műholdkép, 2× sűrűbb terep).
 - **Ellenfélválasztás**: több típust is ki lehet jelölni. Az MI a nehézségtől függően ki is tud térni a rakéták elől.
 
+## Plus 4 – karrier, rádió, 3. világháború
+
+- **Karrier (főmenü → 🎖 Karrier)**: toborzóiroda → felszerelés és centrifuga (7 G) → rádióórák → hátsó ülés a T-6-ban (az oktató repül, te beszélsz a toronnyal) → T-6A alapképzés toronyengedélyekkel → Air Force vagy Navy → T-38C / T-45C (hordozós leszállással) → légiharc-vizsga → szárnyavatás → légtérrendészet a Baltikumban kísérőként, majd vezérként → 3. világháború. Választható **valódi halál**: ha lelőnek és nem katapultálsz, vége a karriernek.
+- **Rádió (I gomb)**: röviden megnyomva lista (szám = hívás) vagy beírás, nyomva tartva hangfelismerés (angolul, mint a valóságban: REQUEST TAXI, TALLY, FOX THREE, SPLASH ONE, BINGO…). A torony, az AWACS („Magic”), a vezér és a kísérő válaszol. A karrierben csak a már megtanult hívások élnek.
+- **3. világháború**: valódi helyszínek (Baltikum, Szuvalki-folyosó, Fekete-tenger, Tajvani-szoros…), mindenki mindenki ellen – csak Európa harcol együtt; a bizalmat ki kell érdemelni. Minden nagyhatalomnak valós gépszáma és gyártása van; a sajátodat pontosan látod, a többiekét csak becsülöd. Az veszít, akinek elfogy a légiereje. Nagy csaták (akár 10 a 10 ellen) segítséggel, előléptetés, kitüntetések; őrnagytól te választod a frontot, alezredestől a több száz pilóta közül (arckép és képességek alapján) te küldöd ki a köteléket, ezredestől politikai döntések.
+- **Katapultálás**: Ctrl+E kétszer. A pilóta ejtőernyővel túléli, a gép elveszik (a háborúban a gépszámból is).
+- **F-35A Lightning II** a gépek között.
+
 ## Oktatás (nem kötelező)
 
 A főmenü **Oktatás** gombja egy vezetett repülést indít a kiválasztott géppel. 11 lecke, mindegyik elmagyarázza,

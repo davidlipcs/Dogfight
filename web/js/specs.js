@@ -247,6 +247,26 @@ export const F15A = {
   loadouts: { default: { 2: 'AIM-9M', 11: 'AIM-9M', 3: 'AIM-9M', 10: 'AIM-9M', 4: 'AIM-120A', 9: 'AIM-120A' } },
 };
 
+// F-35A Lightning II: one F135 (125 / 191 kN), 9 G, stealthy, weapons inside (4 AIM-120 in the bays, two
+// AIM-9X on the bay doors' outer stations), the GAU-22/A 25 mm gun in the left shoulder (182 rounds).
+// Numbers: USAF fact sheet, Lockheed Martin.
+export const F35A = {
+  ...F15EX, id: 'f35', model: 'f35', name: 'F-35A Lightning II', short: 'F-35A', callsign: 'Lightning', nation: 'us', internal: true,
+  mfdLayout: 'fa18', bays: undefined, tvc: undefined,
+  emptyMass: 13290, internalFuel: 8278, wingArea: 42.7, wingSpan: 10.7, length: 15.67,
+  engines: 1, thrustDry: 125000, thrustAb: 191000, fuelFlowDry: 2.5, fuelFlowAb: 10.5,
+  clAlpha: 3.6, clMax: 1.7, alphaStall: 32, alphaLimit: 28, cd0: 0.021, kInduced: 0.12, pylonCd: 0,
+  gMax: 9, gMin: -3, rollRate: 220, hp: 110, rcsFront: 0.1, rcsSide: 1, gearHeight: 2.05, tailStrike: 12, rotateIas: 66,
+  hitboxes: [[[0, 0, 0], [1.4, 7.8, 0.85]], [[0, -1.5, 0.1], [5.35, 2.4, 0.3]], [[0, -5.5, 1.0], [3.3, 1.4, 1.3]]],
+  gun: { ...M61A1, name: 'GAU-22/A', rateRpm: 3300, ammo: 182, muzzle: 1040, damage: 15 }, gunPos: [-0.85, 0.6, 0.95],
+  radar: { ...APG77, name: 'AN/APG-81', rwrSymbol: 'LT' },
+  stations: { 1: [-0.8, 0.5, -0.6], 2: [0.8, 0.5, -0.6], 3: [-0.8, -1.5, -0.6], 4: [0.8, -1.5, -0.6], 5: [-1.6, 0.0, -0.4], 6: [1.6, 0.0, -0.4] },
+  pylons: { 5: ['AIM-9M'], 6: ['AIM-9M'], 1: ['AIM-120A'], 2: ['AIM-120A'], 3: ['AIM-120A'], 4: ['AIM-120A'] },
+  prefer: { 'AIM-120A': [1, 2, 3, 4], 'AIM-9M': [5, 6] },
+  loadouts: { default: { 5: 'AIM-9M', 6: 'AIM-9M', 1: 'AIM-120A', 2: 'AIM-120A', 3: 'AIM-120A', 4: 'AIM-120A' } },
+  firingOrder: [5, 6, 1, 2, 3, 4],
+};
+
 // ---------------------------------------------------------------- built in code (proc.js)
 // Trainers of the career.  Sources: USAF and US Navy fact sheets (T-6A: PT6A-68, 1,100 shp, 320 mph, +7/-3.5 G;
 // T-38C: 2 x J85-GE-5, 2,050 / 2,900 lbf, Mach 1.08, +7.33 G; T-45C: F405-RR-401, 5,527 lbf, ~M0.85, carrier
@@ -410,11 +430,11 @@ export function missilesFor(spec, enemy) {
 export const RU_MISSILES = named(BANDIT_MISSILES, NAMES.ru);
 export const RU_PLAYER_MISSILES = named(PLAYER_MISSILES, NAMES.ru);
 
-export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A, f15: F15EX, f15a: F15A, su35: SU35, su57: SU57,
+export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A, f15: F15EX, f15a: F15A, f35: F35A, su35: SU35, su57: SU57,
   mig29: MIG29, mig31: MIG31, gripen: GRIPEN, typhoon: TYPHOON, rafale: RAFALE, j20: J20 };
 // the menu's picker: groups of jets
 export const PLANE_GROUPS = [
-  ['USA', ['f16', 'fa18', 'f15', 'f22', 'f15a']], ['Oroszország', ['su35', 'su57', 'mig29', 'mig31']],
+  ['USA', ['f16', 'fa18', 'f15', 'f22', 'f35', 'f15a']], ['Oroszország', ['su35', 'su57', 'mig29', 'mig31']],
   ['Európa', ['gripen', 'typhoon', 'rafale']], ['Kína', ['j20']], ['Gyakorlógépek', ['t6', 't38', 't45']],
 ];
 export const TRAINERS = { t6: T6A, t38: T38C, t45: T45C };
@@ -433,6 +453,7 @@ export const BANDITS = {
   typhoon: { ...TYPHOON, gMax: 7.4, rollRate: 210, alphaLimit: 24 },
   rafale: { ...RAFALE, gMax: 7.4, rollRate: 210, alphaLimit: 24 },
   j20: { ...J20, gMax: 7, rollRate: 180, alphaLimit: 22 },
+  f35: { ...F35A, name: 'F-35A (ellenfél)', gMax: 7.2, rollRate: 190, alphaLimit: 24 },
 };
 export const F16C_BANDIT = BANDITS.f16;
 

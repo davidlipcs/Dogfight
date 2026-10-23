@@ -83,11 +83,47 @@ const COURSES = {
   },
 };
 
+// career (radio: true): before the take-off the tower has to clear you, and before the landing too
+const clearance = {
+  title: 'Engedély a toronytól',
+  text: `<p>Mielőtt egy métert is gurulnál, a toronnyal beszélsz. Nyomd meg röviden az ${k('I')}-t (lista, beírás – vagy a szám),
+    vagy tartsd nyomva, és mondd ki angolul:</p><ol><li><b>REQUEST TAXI</b> – gurulási engedély</li><li><b>READY FOR TAKEOFF</b> – a pálya elején, felszállási engedély</li></ol>
+    <p>A torony válaszát a bal felső sarokban olvasod és hallod. Engedély nélkül felszállni szabálysértés!</p>`,
+  task: 'Kérj gurulást, majd felszállási engedélyt',
+  check: (s) => s.rf.taxi && s.rf.takeoff,
+  status: (s) => `gurulás ${s.rf.taxi ? '✓' : '·'} · felszállás ${s.rf.takeoff ? '✓' : '·'}`,
+};
+const landRadio = {
+  ...land,
+  text: `${land.text}<p><b>Rádió:</b> a bázis felé jövet <b>INBOUND FOR LANDING</b>, a végső egyenesen futóművel <b>GEAR DOWN</b>
+    (a torony így ad leszállási engedélyt), a földön megállva <b>CLEAR OF RUNWAY</b>.</p>`,
+  task: 'Kérj leszállást, szállj le, állj meg, és jelentsd: CLEAR OF RUNWAY',
+  check: (s) => land.check(s) && s.rf.clear,
+  status: (s) => `INBOUND ${s.rf.inbound ? '✓' : '·'} · GEAR DOWN ${s.rf.land ? '✓' : '·'} · CLEAR ${s.rf.clear ? '✓' : '·'}`,
+};
+
 export class School {
-  constructor(game, course, onDone) {
-    this.g = game; this.course = COURSES[course]; this.key = course; this.onDone = onDone;
+  constructor(game, course, onDone, { radio = false } = {}) {
+    this.g = game; this.key = course; this.onDone = onDone;
+    const c = COURSES[course];
+    // the radio course: the tower clearance first, the landing with the calls; the jets start on the runway
+    this.course = radio ? { ...c, steps: [clearance, ...c.steps.map((st) => (st === land ? landRadio : st))] } : c;
+    this.takeoffIdx = radio ? 1 : 0;
+    this.rf = { taxi: false, takeoff: false, inbound: false, land: false, clear: false, made: 0, bad: 0 };
+    if (radio) {
+      this.off = game.radio.onCall((call) => {
+        const p = this.p;
+        if (call.id === 'request_taxi') this.rf.taxi = true;
+        else if (call.id === 'ready_takeoff') { if (this.rf.taxi) this.rf.takeoff = true; else { this.rf.bad++; return; } }
+        else if (call.id === 'inbound') this.rf.inbound = true;
+        else if (call.id === 'gear_down' && p.fm.gearPos > 0.9) this.rf.land = true;
+        else if (call.id === 'clear_runway' && p.onGround && p.speed < 8) this.rf.clear = true;
+        else return;
+        this.rf.made++;
+      });
+    }
     this.panel = $('tutorial'); this.panel.hidden = false;
-    this.race = null; this.flags = {};
+    this.race = null; this.flags = {}; this.deadTime = 0;
     game.onTrap = () => { this.flags.trap = true; };
     game.onCatapult = () => { this.flags.cat = true; };
     this.start(0);
@@ -99,7 +135,7 @@ export class School {
     this.i = i; this.done = false; this.doneTime = 0; this.flags = {};
     if (this.race) { this.race.dispose(); this.race = null; }
     // after the take-off lesson every restart is in the air near the base
-    if (i > 0) this.g.opts.airStart = true;
+    if (i > this.takeoffIdx) this.g.opts.airStart = true;
     if (this.step.setup) this.step.setup(this);
     this.render();
   }
@@ -132,7 +168,16 @@ export class School {
   }
   update(dt) {
     const s = this.step;
-    if (!this.p.alive) return;
+    if (!this.p.alive) {                       // crashed: a few seconds, then this lesson again
+      this.deadTime += dt;
+      if (this.deadTime > 3) { this.deadTime = 0; this.respawn(); }
+      return;
+    }
+    // taking off without clearance: the tower is not amused
+    if (this.rf && this.off && !this.rf.takeoff && !this.p.onGround && !this.rf.warned) {
+      this.rf.warned = true; this.rf.bad++;
+      this.g.radio.say('tower', `${this.g.radio.callsign}, you departed without a clearance! Call me next time.`, 300);
+    }
     if (this.race) this.raceStep(dt);
     if (!this.done && s.check && s.check(this, dt)) {
       this.done = true; this.g.sounds.play('splash', 0.6); this.g.hud.message('FELADAT TELJESÍTVE', 'good', 2.5, 'school');
@@ -162,10 +207,14 @@ export class School {
   }
   enter() {}                                 // Enter does not skip: these are exams
   finish() {
+    if (this.finished) return;
+    this.finished = true;
     if (this.race) { this.race.dispose(); this.race = null; }
+    if (this.off) this.off();
     this.panel.hidden = true;
-    this.g.school = null; this.g.onTrap = null; this.g.onCatapult = null;
-    if (this.onDone) this.onDone(this.key);
+    this.g.school = null; this.g.tutorial = null; this.g.onTrap = null; this.g.onCatapult = null;
+    const radio = this.off ? Math.round(100 * this.rf.made / Math.max(1, this.rf.made + this.rf.bad + (this.rf.inbound ? 0 : 1))) : undefined;
+    if (this.onDone) this.onDone(this.key, { radio });
   }
   render() {
     const s = this.step, n = this.course.steps.length;
@@ -186,21 +235,17 @@ const KIT = [
   ['helmet', 'Sisak (HMD)', 'Védi a fejed, a sisakkijelzőn pedig ott vannak a célpontok – oda nézel, oda céloz a rakéta.'],
   ['mask', 'Oxigénmaszk', 'Nagy magasságban és nagy G-nél ezen át lélegzel; a G-ruhával együtt a nyomásos légzést is segíti.'],
 ];
-export function gearUp(onDone, onMedal) {
+export function gearUp(onDone, onMedal, { portrait = null, fitter = null } = {}) {
   const box = $('gearup');
   const on = { suit: true };
-  const figure = () => `
-    <svg viewBox="0 0 200 320" class="pilot" aria-label="A pilóta felszerelése">
-      <rect x="62" y="108" width="76" height="110" rx="18" fill="#556b4a"/>
-      <rect x="66" y="210" width="28" height="96" rx="10" fill="#556b4a"/><rect x="106" y="210" width="28" height="96" rx="10" fill="#556b4a"/>
-      <rect x="36" y="112" width="24" height="88" rx="10" fill="#556b4a"/><rect x="140" y="112" width="24" height="88" rx="10" fill="#556b4a"/>
-      <circle cx="100" cy="72" r="30" fill="#e2b48e"/>
-      ${on.gsuit ? `<g fill="#2f3d2a" opacity=".95"><rect x="64" y="176" width="72" height="34" rx="8"/><rect x="63" y="212" width="34" height="84" rx="10"/><rect x="103" y="212" width="34" height="84" rx="10"/>
-        <path d="M68 230h26M68 255h26M68 280h26M108 230h26M108 255h26M108 280h26" stroke="#c9b25a" stroke-width="3"/></g>` : ''}
-      ${on.harness ? `<g stroke="#d9b13a" stroke-width="7" fill="none"><path d="M76 110 L76 200 L124 200 L124 110"/><path d="M76 150 L124 150"/><path d="M76 200 L70 236 M124 200 L130 236"/></g>` : ''}
-      ${on.helmet ? `<path d="M66 70 a34 36 0 0 1 68 0 v10 h-68z" fill="#e8ecef"/><rect x="72" y="62" width="56" height="16" rx="6" fill="#2a3540" opacity=".85"/>` : ''}
-      ${on.mask ? `<path d="M84 80 q16 26 32 0 v14 q-16 16 -32 0z" fill="#3a4148"/><path d="M100 98 q-4 30 -22 34" stroke="#3a4148" stroke-width="6" fill="none"/>` : ''}
-    </svg>`;
+  // the picture: the life support technician hands out the kit; dressed, it is you in full gear
+  const figure = () => {
+    const all = KIT.every(([id]) => on[id]);
+    const n = KIT.filter(([id]) => on[id]).length;
+    const src = all || !fitter ? portrait : fitter;
+    return src ? `<img class="pilot-img" src="${src}" alt="" style="filter:${all ? 'none' : `saturate(${0.4 + n * 0.12})`}">
+      <p class="hint">${all ? 'Kész: így ülsz be a gépbe.' : 'A repülő-felszerelés szakember sorban adja a holmit.'}</p>` : '';
+  };
   const render = () => {
     const all = KIT.every(([id]) => on[id]);
     box.innerHTML = `<div class="card wide"><div class="eyebrow">Karrier · 1. lépés · Felszerelés</div><h1 style="font-size:38px">Öltözz be!</h1>
@@ -208,7 +253,7 @@ export function gearUp(onDone, onMedal) {
         ${on[id] ? '<em>✓ rajtad</em>' : `<button type="button" class="small primary" data-kit="${id}">Felveszem</button>`}</div>`).join('')}</div></div>
       <div class="buttons"><button type="button" class="primary" id="to-fuge" ${all ? '' : 'disabled'}>Irány a centrifuga ▶</button><button type="button" id="gear-back">Vissza</button></div></div>`;
     for (const b of box.querySelectorAll('[data-kit]')) b.onclick = () => { on[b.dataset.kit] = true; render(); };
-    $('to-fuge').onclick = () => centrifuge(box, () => { onMedal('gsuit'); onDone(true); }, render);
+    $('to-fuge').onclick = () => centrifuge(box, () => { box.hidden = true; if (onMedal) onMedal('gsuit'); onDone(true); }, render);
     $('gear-back').onclick = () => { box.hidden = true; onDone(false); };
   };
   box.hidden = false;
