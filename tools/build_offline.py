@@ -88,6 +88,8 @@ def main():
     for tag in tags:
         if tag not in page:
             sys.exit("index.html changed: missing %s" % tag)
+    # the installable-app links only work on a web server; the one-file copy runs from disk
+    page = re.sub(r'<link rel="(manifest|icon|apple-touch-icon)"[^>]*>\n?', '', page)
     page = page.replace(tags[0], inline_script(three))
     page = page.replace(tags[1], inline_script("window.DOGFIGHT_ASSETS = {\n%s\n};" % table) + "\n"
                         + inline_script(bundle()))

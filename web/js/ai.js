@@ -107,6 +107,10 @@ const SKILLS = {
   easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5, maxIr: 3500, maxArh: 0 },
   normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7, maxIr: 4500, maxArh: 8000 },
   hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 10000 },
+  // added: the full airframe, sharp eyes, quick to shoot again - still inside what the player can answer
+  ace: { g: 1.0, precision: 1.0, missileCd: 11, cm: 1.0, aware: 0.95, gunCone: 1.8, arh: true, zone: 0.88, maxIr: 6500, maxArh: 13000 },
+  // the player's wingman
+  wing: { g: 0.95, precision: 0.95, missileCd: 14, cm: 0.9, aware: 0.8, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 11000 },
 };
 const MIN_AGL = 450;
 
@@ -232,5 +236,30 @@ export class AIPilot {
     if (len(V(to.x, to.y, 0)) < 3000) this.waypoint = this.patrolPoint();
     const climb = clamp((this.patrolAlt - ac.pos.z) / 3000, -0.3, 0.3);
     return [norm(add(norm(V(to.x, to.y, 0)), V(0, 0, climb))), 0.95];
+  }
+}
+
+// The player's wingman: flies in formation (behind and to the right) until an enemy comes within reach of the
+// lead, then fights it like any AI pilot, and comes back to the formation when the sky is clear.
+const WING_REACH = 26000;
+export class WingmanPilot extends AIPilot {
+  constructor(ac, lead) { super(ac, 'wing', null); this.lead = lead; }
+  fair(t) {
+    const l = this.lead;
+    if (!l || !l.alive) return true;
+    return len(sub(t.pos, l.pos)) < WING_REACH;
+  }
+  patrol() {
+    const l = this.lead, ac = this.ac;
+    if (!l || !l.alive || l.onGround) return super.patrol();
+    const fwd = norm(V(l.forward.x, l.forward.y, 0), V(0, 1, 0)), right = V(fwd.y, -fwd.x, 0);
+    const slot = add(add(l.pos, mul(fwd, -140)), mul(right, 110));
+    slot.z += 15;
+    const to = sub(add(slot, mul(l.vel, 1.2)), ac.pos), d = len(to);
+    const desired = d > 60 ? norm(add(to, mul(l.vel, 1.5))) : norm(l.vel);
+    const along = dot(sub(slot, ac.pos), norm(l.vel));
+    let throttle = clamp(Math.min(1, l.controls.throttle) + along * 0.004 + (l.speed - ac.speed) * 0.02, 0.25, 1.1);
+    if (d > 3000) throttle = 1.1;
+    return [desired, throttle];
   }
 }

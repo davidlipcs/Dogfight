@@ -1,0 +1,16 @@
+{
+  "name": "Dogfight Plus",
+  "short_name": "Dogfight",
+  "description": "F-16, F/A-18, F-15 és F-22 légiharc a böngészőben",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b1016",
+  "theme_color": "#0b1016",
+  "lang": "hu",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -12,7 +12,11 @@ export class HUD {
   constructor(canvas) {
     this.canvas = canvas; this.g = canvas.getContext('2d');
     this.messages = []; this.killfeed = []; this.markers = true; this.hitmarker = 0; this.time = 0; this.dlz = null; this.dlzTimer = 0;
+    this.popups = []; this.damage = 0; this.medal = null;
   }
+  // score popup under the centre ("+150 ÁGYÚ"), rises and fades
+  popup(text, color = GREEN) { this.popups.push({ text, color, t: 1.8 }); this.popups = this.popups.slice(-4); }
+  showMedal(a) { this.medal = { a, t: 4.5 }; }
   message(text, level = 'info', duration = 2.5, key = null) {
     key = key || text;
     const m = this.messages.find((x) => x.key === key);
@@ -28,6 +32,7 @@ export class HUD {
       this.killfeed = this.killfeed.slice(-5);
       if (d.killer === player && d.victim !== player) this.message('CÉLPONT MEGSEMMISÍTVE', 'good', 3);
     } else if (kind === 'hit' && d.shooter === player && d.target !== player) this.hitmarker = 0.25;
+    else if (kind === 'hit' && d.target === player) this.damage = Math.min(0.8, this.damage + 0.45);
     else if (kind === 'pitbull' && d.missile.shooter === player) this.message('PITBULL - AIM-120 aktív', 'good');
   }
 
@@ -68,33 +73,92 @@ export class HUD {
     g.clearRect(0, 0, w, h);
     this.w = w; this.h = h; this.u = Math.min(w, h) / 900;       // scale unit
     g.lineWidth = Math.max(1.2, 1.6 * this.u);
-    this.time += dt; this.hitmarker = Math.max(0, this.hitmarker - dt);
-    for (const l of [this.messages, this.killfeed]) for (const m of l) m.t -= dt;
+    this.time += dt; this.dt = dt; this.hitmarker = Math.max(0, this.hitmarker - dt);
+    for (const l of [this.messages, this.killfeed, this.popups]) for (const m of l) m.t -= dt;
     this.messages = this.messages.filter((m) => m.t > 0); this.killfeed = this.killfeed.filter((m) => m.t > 0);
+    this.popups = this.popups.filter((m) => m.t > 0);
     this.gEffects(player, dt);
+    this.damageFlash(dt);
     if (player && player.alive && camCtl.cockpit && camCtl.panelLook) {
       // looking down at the displays: only the warnings and messages stay over them
       this.cockpit = true;
       this.warnings(player, world);
     } else if (player && player.alive) {
       this.incomingMissiles(player, cam);
-      this.flightSymbols(player, cam, camCtl);
+      if (!camCtl.follow) this.flightSymbols(player, cam, camCtl);
       this.targets(player, world, cam);
       this.navMarks(player, cam);
+      if (game.raceTarget) this.raceMark(player, cam, game.raceTarget);
       this.weaponSymbols(player, world, cam, dt);
-      this.panels(player, world);
+      if (!camCtl.follow) this.panels(player, world);
       this.radarScope(player);
       this.rwrScope(player);
       this.warnings(player, world);
       this.missileList(player, world);
     }
     this.overlay(game);
+    this.extras(game, camCtl);
+  }
+  // ring race: the next ring - a ring marker with the distance, or an arrow at the edge
+  raceMark(ac, cam, c) {
+    const u = this.u, p = this.project(cam, c), d = len(sub(c, ac.pos));
+    if (!p) { this.edgeArrow(cam, c, AMBER); return; }
+    this.circle(p[0], p[1], 16 * u, AMBER); this.circle(p[0], p[1], 3 * u, AMBER);
+    this.text(`GYŰRŰ ${(d / 1000).toFixed(1)} km`, p[0], p[1] - 26 * u, AMBER, 12 * u + 2, 'center');
+  }
+  // red flash at the screen edges when the player is hit
+  damageFlash(dt) {
+    if (this.damage <= 0.01) { this.damage = 0; return; }
+    const g = this.g, w = this.w, h = this.h, R = Math.hypot(w, h) / 2;
+    const grd = g.createRadialGradient(w / 2, h / 2, R * 0.45, w / 2, h / 2, R);
+    grd.addColorStop(0, 'rgba(255,30,20,0)'); grd.addColorStop(1, `rgba(255,30,20,${this.damage * 0.75})`);
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    this.damage = Math.max(0, this.damage - dt * 1.4);
+  }
+  // added layer: score, game mode line, popups, medal banner, camera label
+  extras(game, camCtl) {
+    const u = this.u, fs = 12 * u + 3;
+    if (game.score !== undefined && !this.tutorial) {
+      const streak = game.streak > 1 ? `   SOROZAT ${game.streak}` : '';
+      this.text(`PONT ${game.score}${streak}   KREDIT ${game.credits}`, 20 * u, 82 * u, AMBER, fs);
+    }
+    if (game.bt) {                                         // bullet time (hangar mod): charge bar
+      const x = 20 * u, y = 122 * u, w = 120 * u, b = game.bt, on = b.active > 0;
+      this.g.strokeStyle = DIM; this.g.strokeRect(x, y - 5 * u, w, 10 * u);
+      this.g.fillStyle = on ? AMBER : b.charge >= 1 ? GREEN : DIM;
+      this.g.fillRect(x, y - 5 * u, w * (on ? b.active / 4 : b.charge), 10 * u);
+      this.text(on ? 'BULLET TIME' : b.charge >= 1 ? 'O = bullet time' : 'bullet time töltődik', x + w + 8 * u, y, on ? AMBER : DIM, 10 * u + 2);
+    }
+    if (game.modeLine) this.text(game.modeLine, 20 * u, 102 * u, WHITE, 11 * u + 2);
+    let y = this.h / 2 + 70 * u;
+    for (const p of this.popups) {
+      const k = Math.min(1, p.t / 0.5), rise = (1.8 - p.t) * 26 * u;
+      this.g.globalAlpha = k;
+      this.text(p.text, this.w / 2, y - rise, p.color, 22 * u + 4, 'center', 'Oswald, Impact, sans-serif');
+      this.g.globalAlpha = 1;
+      y += 30 * u;
+    }
+    if (this.medal) {
+      const m = this.medal; m.t -= this.dt || 1 / 60;
+      if (m.t <= 0) this.medal = null;
+      else {
+        const k = Math.min(1, m.t / 0.6), g = this.g, bw = 360 * u, bh = 64 * u, x = this.w / 2 - bw / 2, top = 120 * u;
+        g.globalAlpha = k;
+        g.fillStyle = 'rgba(20,27,34,0.88)'; g.fillRect(x, top, bw, bh);
+        g.strokeStyle = AMBER; g.lineWidth = 2; g.strokeRect(x, top, bw, bh);
+        this.text('★ ÚJ KITÜNTETÉS', this.w / 2, top + 18 * u, AMBER, 11 * u + 2, 'center');
+        this.text(m.a.name, this.w / 2, top + 36 * u, WHITE, 18 * u + 3, 'center', 'Oswald, Impact, sans-serif');
+        this.text(m.a.desc, this.w / 2, top + 54 * u, DIM, 10 * u + 2, 'center');
+        g.globalAlpha = 1;
+      }
+    }
+    if (camCtl && camCtl.followLabel) this.text(camCtl.followLabel, this.w / 2, 70 * u, CYAN, 15 * u + 3, 'center', 'Oswald, Impact, sans-serif');
   }
 
   flightSymbols(ac, cam, camCtl) {
     const u = this.u;
     const aim = this.project(cam, add(camCtl.position, mul(camCtl.aimDirection(), 3000)));
-    if (camCtl.stick) this.stickGauge(camCtl.stick);
+    if (camCtl.stick && !this.touchLayout) this.stickGauge(camCtl.stick);
     else if (aim && !(camCtl.freeLook && !camCtl.cockpit)) this.circle(aim[0], aim[1], 14 * u, WHITE);
     else if (!aim && camCtl.cockpit) this.edgeArrow(cam, add(camCtl.position, mul(camCtl.aimDirection(), 3000)), WHITE);
     const nose = this.project(cam, add(ac.pos, mul(ac.forward, 800)));
@@ -150,6 +214,14 @@ export class HUD {
     this.nearestEnemy = world.aircraft.filter((t) => t.alive && t.team !== ac.team)
       .reduce((b, t) => (!b || len(sub(t.pos, ac.pos)) < len(sub(b.pos, ac.pos)) ? t : b), null);
     for (const t of world.aircraft) {
+      if (t !== ac && t.alive && t.team === ac.team) {           // wingman: cyan ring with the distance
+        const p = this.project(cam, t.pos), d = len(sub(t.pos, ac.pos));
+        if (p && d < 40000) {
+          this.circle(p[0], p[1], 9 * u, CYAN);
+          this.text(`KÍSÉRŐ ${(d / 1000).toFixed(1)}`, p[0], p[1] - 18 * u, CYAN, 10 * u + 2, 'center');
+        }
+        continue;
+      }
       if (t === ac || !t.alive || t.team === ac.team) continue;
       const d = len(sub(t.pos, ac.pos));
       if (d > 80000) continue;
@@ -407,7 +479,8 @@ export class HUD {
   }
   radarScope(ac) {
     const r = ac.radar, sp = r.spec, u = this.u, size = 200 * u, hw = size / 2;
-    const cx = this.w - hw - 24 * u, cy = this.h - hw - 24 * u, left = cx - hw, top = cy - hw, bottom = cy + hw;
+    // touch layout: the buttons own the bottom corners, the scope goes up under the top buttons
+    const cx = this.w - hw - 24 * u, cy = this.touchLayout ? 175 * u + hw : this.h - hw - 24 * u, left = cx - hw, top = cy - hw, bottom = cy + hw;
     const g = this.g;
     g.fillStyle = 'rgba(4,16,8,0.45)'; g.fillRect(left, top, size, size);
     this.rect(cx, cy, hw, hw, DIM);
@@ -442,7 +515,7 @@ export class HUD {
     }
   }
   rwrScope(ac) {
-    const u = this.u, R = 90 * u, cx = R + 26 * u, cy = this.h - R - 26 * u, g = this.g;
+    const u = this.u, R = 90 * u, cx = R + 26 * u, cy = this.touchLayout ? 125 * u + R : this.h - R - 26 * u, g = this.g;
     g.fillStyle = 'rgba(4,16,8,0.45)'; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
     this.circle(cx, cy, R, DIM); this.circle(cx, cy, R * 0.5, 'rgba(107,255,133,0.25)');
     for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6; this.line(cx + Math.sin(a) * R, cy - Math.cos(a) * R, cx + Math.sin(a) * R * 0.92, cy - Math.cos(a) * R * 0.92, DIM); }

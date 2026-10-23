@@ -390,7 +390,7 @@ export class Missile {
         const rel = sub(ac.pos, this.pos);
         if (len(rel) > 400) continue;
         const [d, t] = closestApproach(rel, sub(ac.vel, avg), dt);
-        if (d <= sp.fuseRadius) { this.pos.addScaledVector(avg, t); world.detonate(this, this.pos); return; }
+        if (d <= sp.fuseRadius * ((this.shooter && this.shooter.blastMult) || 1)) { this.pos.addScaledVector(avg, t); world.detonate(this, this.pos); return; }
       }
     }
     this.vel = newVel;
@@ -414,6 +414,7 @@ export class Missile {
     if (this.rnd() < (t.isPlayer ? 0.9 : 0.6)) {
       this.defeated = true;
       world.emit('message', { to: t, text: 'COBRA - A RAKÉTA ELVESZTETT!', level: 'good' });
+      world.emit('cobra', { target: t, missile: this });
     }
   }
   proNav(aimPos, aimVel) {
@@ -598,7 +599,7 @@ export function updateBullets(world, dt) {
     b.age += dt;
     const step = len(sub(b.pos, old));
     for (const ac of targets) {
-      if (ac === b.owner) continue;
+      if (ac === b.owner || (b.owner && ac.team === b.owner.team)) continue;     // no friendly fire with the gun
       const relEnd = sub(b.pos, ac.pos);
       if (len(relEnd) > step + 12) continue;
       const relStart = sub(old, sub(ac.pos, mul(ac.vel, dt)));

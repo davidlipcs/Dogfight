@@ -29,6 +29,7 @@ export class Aircraft {
     this.hp = spec.hp; this.alive = true; this.burning = false; this.crashed = false; this.deathTime = null;
     this.kills = 0; this.lastAttacker = null; this.lastHitTime = -1e9; this.pilot = null;
     this.lockAssist = !!opts.lockAssist; this.irAutoHold = 0;
+    this.skin = opts.skin || null; this.blastMult = opts.blastMult || 1; this.tracerColor = opts.tracerColor || null;   // hangar
     this.fm.extreme = !!spec.tvcAlways;              // the F-22's thrust vectoring is always on
     this.rearm();
   }
@@ -288,16 +289,18 @@ export class World {
   detonate(m, pos, ground = false, selfDestruct = false) {
     if (!m.alive) return;
     m.alive = false;
-    const sp = m.spec;
+    const sp = m.spec, k = (m.shooter && m.shooter.blastMult) || 1;          // hangar mod: bigger blast
+    const rLethal = sp.lethalRadius * k, rDamage = sp.damageRadius * k;
     for (const ac of this.aircraft) {
       if (!ac.alive) continue;
       const d = len(sub(ac.pos, pos));
-      if (d >= sp.damageRadius) continue;
-      const dmg = d <= sp.lethalRadius ? sp.damage : sp.damage * (1 - (d - sp.lethalRadius) / (sp.damageRadius - sp.lethalRadius));
-      this.emit('hit', { target: ac, pos: copy(ac.pos), shooter: m.shooter });
+      if (d >= rDamage) continue;
+      const dmg = d <= rLethal ? sp.damage : sp.damage * (1 - (d - rLethal) / (rDamage - rLethal));
+      this.emit('hit', { target: ac, pos: copy(ac.pos), shooter: m.shooter, missile: m });
       ac.takeDamage(dmg, m.shooter, sp.name, this);
     }
-    this.emit('explosion', { pos: copy(pos), size: selfDestruct ? 0.8 : (sp.damage >= 150 ? 1.6 : 1.2), ground });
+    this.emit('explosion', { pos: copy(pos), size: (selfDestruct ? 0.8 : (sp.damage >= 150 ? 1.6 : 1.2)) * (k > 1 ? 1.5 : 1), ground });
+    this.emit('missile_end', { missile: m });
   }
 }
 
