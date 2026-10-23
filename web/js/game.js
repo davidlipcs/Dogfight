@@ -1574,7 +1574,7 @@ async function boot() {
   };
   const careerMode = new CareerMode(launch);
   careerMode.onClose = () => goLobby();
-  window.dogfightCareer = careerMode;
+  window.dogfightCareerMode = careerMode;
   $('open-career').addEventListener('click', () => { const g = window.game; if (g) { g.inMenu = true; g.pause(); g.showOverlay(null); } careerMode.open(); });
   // a match somewhere else: download and build the place (progress screen), then start
   const goPlace = async (game, opts) => {
