@@ -111,15 +111,17 @@ export class Base {
       const model = ({ ...AIRCRAFT, ...TRAINERS }[key] || {}).model || key;
       const m = this.g.models.aircraft(model);
       m.position.set(x, y, this.g.models.types[model].gearHeight); m.rotation.z = Math.PI / 2;
-      m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      const meshes = [];
+      m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; meshes.push(o); } });
+      this.lineup[this.lineup.length - 1].meshes = meshes; this.lineup[this.lineup.length - 1].sh = false;
       g.add(m);
     }
     this.g.view.scene.add(g);
     // the original parked jets of the airfield would stand in the same places
-    if (this.g.view.parkedDecor) for (const d of this.g.view.parkedDecor) d.visible = false;
+    if (this.g.view.parkedDecor) for (const d of this.g.view.parkedDecor) { d.userData.hide = true; d.visible = false; }
     return this.lineup;
   }
-  showDecor(on) { if (this.g.view.parkedDecor) for (const d of this.g.view.parkedDecor) d.visible = on; }
+  showDecor(on) { if (this.g.view.parkedDecor) for (const d of this.g.view.parkedDecor) { d.userData.hide = !on; d.visible = on; } }
   // park an aircraft (the player's) at a spot, brakes on, engine off, or hot
   park(ac, rel, headingDeg, hot = false) {
     const f = this.field, x = f.x + rel[0], y = f.y + rel[1], z = this.g.terrain.height(x, y);
@@ -155,6 +157,12 @@ export class Base {
         if (d < p.r && d < best) { best = d; this.near = p; }
       }
     }
+    // the line-up's shadows (every jet is 70-120 thousand triangles, twice with a shadow): only the ones near you
+    if (this.lineup && w.active) for (const e of this.lineup) {
+      if (!e.meshes) continue;
+      const want = Math.hypot(w.pos.x - (this.field.x + e.x), w.pos.y - (this.field.y + e.y)) < 45;
+      if (want !== e.sh) { e.sh = want; for (const o of e.meshes) o.castShadow = want; }
+    }
     this.drawHud();
   }
   drawHud() {
@@ -166,7 +174,8 @@ export class Base {
     const near = this.near;
     const pr = el.querySelector('.wk-prompt');
     pr.hidden = !near;
-    if (near) pr.innerHTML = `<kbd>E</kbd> ${typeof near.label === 'function' ? near.label() : near.label}`;
+    const prHtml = near ? `<kbd>E</kbd> ${typeof near.label === 'function' ? near.label() : near.label}` : '';
+    if (prHtml !== this._pr) { pr.innerHTML = prHtml; this._pr = prHtml; }
     // labels over the objective beacons (or an arrow at the edge when they are behind you)
     const cam = this.g.view.camera, box = el.querySelector('.wk-marks');
     let html = '';
@@ -180,9 +189,9 @@ export class Base {
       sx = clamp(sx, 6, 94); sy = clamp(sy, 8, 88);
       html += `<div class="wk-mark" style="left:${sx}%;top:${sy}%"><b>${p.name || p.label}</b><span>${d} m${behind ? (v.x < 0 ? ' ▶' : ' ◀') : ''}</span></div>`;
     }
-    box.innerHTML = html;
-    const info = el.querySelector('.wk-info');
-    info.innerHTML = w.info ? w.info() : '';
+    if (html !== this._html) { box.innerHTML = html; this._html = html; }
+    const infoHtml = w.info ? w.info() : '';
+    if (infoHtml !== this._info) { el.querySelector('.wk-info').innerHTML = infoHtml; this._info = infoHtml; }
   }
   // is a point of the ground blocked? (the walker keeps out of these)
   push(x, y, r = 0.45) {

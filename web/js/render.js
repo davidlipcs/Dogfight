@@ -601,7 +601,6 @@ export class SceneView {
     if (sh) { const c = sun.shadow.camera; c.left = -sh[1]; c.right = sh[1]; c.top = sh[1]; c.bottom = -sh[1]; c.updateProjectionMatrix(); }
     this.shadowBox = sh ? sh[1] : 0;
     if (this.seaMat) { this.seaMat.normalMap = q === 'low' ? null : this.waterTex; this.seaMat.needsUpdate = true; }
-    if (this.carrierParked) this.carrierParked.visible = q !== 'low';
   }
   setTimeOfDay(name) {
     const t = TIMES[name] || TIMES.day;
@@ -798,19 +797,35 @@ export class SceneView {
   buildClouds() {
     const tex = this.puffTex || (this.puffTex = puffTexture()), r = rng(5), lim = this.terrain.half * 0.95;
     const count = this.cloudCount = CLOUDS[this.quality] || 70;
-    const mats = this.cloudMats = [0.75, 0.85, 0.95].map((o) => new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: o, depthWrite: false }));
-    this.clouds = new THREE.Group();
+    // every puff is one instance of a camera-facing quad: three draw calls (one per opacity) for all the clouds
+    const opac = [0.75, 0.85, 0.95];
+    const mats = this.cloudMats = opac.map((o) => {
+      const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: o, depthWrite: false });
+      m.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>',
+          `vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+           mvPosition.xy += position.xy * length(vec3(instanceMatrix[0]));
+           gl_Position = projectionMatrix * mvPosition;`);
+      };
+      return m;
+    });
+    const puffs = [[], [], []];
     for (let k = 0; k < count; k++) {
       const cx = r.uniform(-lim, lim), cy = r.uniform(-lim, lim), cz = r.uniform(2600, 3600), size = r.uniform(500, 1100);
-      const puffs = 4 + Math.floor(r() * 5);
-      for (let p = 0; p < puffs; p++) {
-        const s = new THREE.Sprite(mats[Math.floor(r() * 3)]);
-        s.position.set(cx + r.uniform(-1, 1) * size * 0.8, cy + r.uniform(-1, 1) * size * 0.8, cz + r.uniform(-0.15, 0.25) * size);
-        const sc = size * r.uniform(0.8, 1.4);
-        s.scale.set(sc, sc, 1);
-        this.clouds.add(s);
+      const n = 4 + Math.floor(r() * 5);
+      for (let p = 0; p < n; p++) {
+        const g = Math.floor(r() * 3), sc = size * r.uniform(0.8, 1.4);
+        puffs[g].push([cx + r.uniform(-1, 1) * size * 0.8, cy + r.uniform(-1, 1) * size * 0.8, cz + r.uniform(-0.15, 0.25) * size, sc]);
       }
     }
+    this.clouds = new THREE.Group();
+    const geo = new THREE.PlaneGeometry(1, 1), mtx = new THREE.Matrix4();
+    puffs.forEach((list, g) => {
+      const im = new THREE.InstancedMesh(geo, mats[g], Math.max(1, list.length));
+      list.forEach((p, i) => { mtx.makeScale(p[3], p[3], p[3]); mtx.setPosition(p[0], p[1], p[2]); im.setMatrixAt(i, mtx); });
+      im.count = list.length; im.frustumCulled = false; im.renderOrder = 1;
+      this.clouds.add(im);
+    });
     this.scene.add(this.clouds);
   }
   buildAirfield() {
@@ -1001,8 +1016,22 @@ export class SceneView {
     v.root.add(inside);
     v.inside = inside;
   }
+  // the parked jets (the base, the carrier deck) are drawn only when you are near them
+  cullStatics() {
+    const cp = this.camera.position, a = this.terrain.airfield;
+    if (this.parkedDecor) {
+      const near = Math.hypot(cp.x - a.x, cp.y - a.y) < 3200;
+      for (const d of this.parkedDecor) d.visible = near && !d.userData.hide;
+    }
+    if (this.carrierParked) {
+      if (!this._cvPos) this._cvPos = new THREE.Vector3();
+      this.carrierParked.getWorldPosition(this._cvPos);
+      this.carrierParked.visible = this.quality !== 'low' && Math.hypot(cp.x - this._cvPos.x, cp.y - this._cvPos.y) < 4500;
+    }
+  }
   update(dt, player) {
     this.time += dt;
+    this.cullStatics();
     const w = this.world, present = new Set();
     for (const ac of w.aircraft) {
       present.add(ac);
@@ -1010,6 +1039,8 @@ export class SceneView {
       const visible = !ac.crashed;
       v.root.visible = visible;
       if (!visible) continue;
+      // beyond ~14 km a jet is one or two pixels: its 70-120 thousand triangles are not worth drawing
+      if (ac !== player && Math.hypot(ac.pos.x - this.camera.position.x, ac.pos.y - this.camera.position.y, ac.pos.z - this.camera.position.z) > 14000) { v.root.visible = false; continue; }
       if (ac === player && !v.screens) this.addInside(ac, v);
       const inside = this.cockpitView && ac === player;
       const layer = inside ? 1 : 0;
