@@ -131,6 +131,22 @@
   #career-reset { margin-top: 10px; }
   /* hangar / shop */
   #hangar .card { width: min(900px, 100%); }
+  #gcredit { position: fixed; left: 8px; bottom: 6px; z-index: 5; font: 11px system-ui, sans-serif; color: #fff; text-shadow: 0 0 3px #000; pointer-events: none; }
+  .mp-card { width: min(1200px, 100%); display: grid; gap: 10px; }
+  .mp-head { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: end; }
+  #mp-search { display: flex; gap: 6px; } #mp-q { min-width: 240px; }
+  .mp-body { display: grid; grid-template-columns: 1fr 260px; gap: 10px; height: min(62vh, 640px); }
+  @media (max-width: 760px) { .mp-body { grid-template-columns: 1fr; height: auto; } .mp-mapwrap { height: 50vh; } }
+  .mp-mapwrap { position: relative; border: 1px solid var(--panel-edge); border-radius: 6px; overflow: hidden; min-height: 240px; }
+  #mp-map { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+  .mp-zoom { position: absolute; right: 8px; top: 8px; display: grid; gap: 4px; }
+  .mp-zoom button { width: 34px; height: 34px; padding: 0; font-size: 20px; }
+  .mp-side { overflow: auto; display: grid; align-content: start; gap: 5px; }
+  .mp-side button { text-align: left; width: 100%; }
+  .mp-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+  #mp-sel { font-weight: 600; color: var(--caution); }
+  #worldload .bar { margin: 14px 0 8px; }
+  #wl-bar { height: 100%; width: 0; background: var(--hud); }
   .hangar-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   #hangar-credits { font: 600 22px var(--display); color: var(--caution); }
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -163,6 +179,16 @@
   .keyrow kbd { font: 600 12px var(--mono); color: var(--caution); }
   .keyrow.wait { border-color: var(--caution); }
   .shopbtn { border-color: var(--caution); color: var(--caution); }
+  /* plane picker and the enemy chips */
+  .pick { display: grid; gap: 6px; flex: 1 1 100%; }
+  .pick .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+  .pick .grp > span { font: 600 10px var(--mono); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; min-width: 92px; }
+  .pick input { position: absolute; opacity: 0; pointer-events: none; }
+  .pick label { padding: 5px 10px; border: 1px solid var(--panel-edge); border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--muted); }
+  .pick input:checked + label { background: var(--panel-edge); color: var(--text); border-color: var(--hud); }
+  .pick input:focus-visible + label { outline: 2px solid var(--hud); outline-offset: 1px; }
+  .chips input:checked + label { background: rgba(255,77,64,.18); border-color: #ff4d40; color: var(--text); }
+  .chips input:checked + label::before { content: '✓ '; color: #ff4d40; }
   @media (prefers-reduced-motion: reduce) { #bar { transition: none; } }
 </style>
 <style>[hidden]{display:none!important} body{margin:0}</style>
@@ -204,14 +230,14 @@
         <span class="hint" id="scen-hint"></span>
       </div>
       <div class="row">
+        <span class="label">Helyszín</span>
+        <button type="button" class="small primary" id="place-open">🌍 Világtérkép…</button>
+        <b id="place-name">Az eredeti sziget</b>
+        <span class="hint" id="place-hint">a Föld bármelyik pontja: valódi domborzat és műholdkép (internet kell)</span>
+      </div>
+      <div class="row">
         <span class="label">Saját gép</span>
-        <div class="seg" role="radiogroup" aria-label="Saját gép">
-          <input type="radio" name="plane" id="p-f16" value="f16" checked><label for="p-f16">F-16C Viper</label>
-          <input type="radio" name="plane" id="p-fa18" value="fa18"><label for="p-fa18">F/A-18E Super Hornet</label>
-          <input type="radio" name="plane" id="p-f15" value="f15"><label for="p-f15">F-15EX Eagle II</label>
-          <input type="radio" name="plane" id="p-f22" value="f22"><label for="p-f22">F-22A Raptor</label>
-          <input type="radio" name="plane" id="p-f15a" value="f15a"><label for="p-f15a" id="l-f15a">F-15 ACTIVE</label>
-        </div>
+        <div id="plane-pick" class="pick" role="radiogroup" aria-label="Saját gép"></div>
         <span class="hint" id="plane-hint"></span>
       </div>
       <div class="row">
@@ -227,13 +253,8 @@
       </div>
       <div class="row">
         <span class="label">Ellenfél</span>
-        <div class="seg" role="radiogroup" aria-label="Ellenfél típusa">
-          <input type="radio" name="foe" id="f-f16" value="f16" checked><label for="f-f16">F-16C</label>
-          <input type="radio" name="foe" id="f-fa18" value="fa18"><label for="f-fa18">F/A-18E</label>
-          <input type="radio" name="foe" id="f-f15" value="f15"><label for="f-f15">F-15EX</label>
-          <input type="radio" name="foe" id="f-f22" value="f22"><label for="f-f22">F-22A</label>
-          <input type="radio" name="foe" id="f-mixed" value="mixed"><label for="f-mixed">Vegyes</label>
-        </div>
+        <div id="foe-pick" class="pick chips" aria-label="Ellenfelek (több is választható)"></div>
+        <span class="hint" id="foe-hint"></span>
       </div>
       <div class="row">
         <span class="label">Játékmód</span>
@@ -297,8 +318,14 @@
               <input type="radio" name="quality" id="q-low" value="low" data-key="quality"><label for="q-low">Gyors</label>
               <input type="radio" name="quality" id="q-med" value="medium" data-key="quality"><label for="q-med">Közepes</label>
               <input type="radio" name="quality" id="q-high" value="high" data-key="quality" checked><label for="q-high">Szép</label>
+              <input type="radio" name="quality" id="q-ultra" value="ultra" data-key="quality"><label for="q-ultra">Ultra</label>
             </div>
-            <span class="hint">gyenge gépen: Gyors</span>
+            <span class="hint">gyenge gépen: Gyors · Ultra: árnyékok, részletes víz és táj, 8K műholdkép – erős videókártya kell</span>
+          </div>
+          <div class="row">
+            <label class="label" for="gkey">Google 3D</label>
+            <input type="text" id="gkey" data-key="googleKey" placeholder="Google Maps API-kulcs (Map Tiles API)" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px">
+            <span class="hint">ha megadod, a valódi helyszíneken a Google fotórealisztikus 3D városai és tájai jelennek meg (mint a Flight Simulatorben). Kulcs: console.cloud.google.com → Map Tiles API</span>
           </div>
           <div class="row">
             <label class="label" for="fov">Látószög</label>
@@ -366,6 +393,7 @@
       <button class="primary" id="continue" hidden>Folytatás</button>
       <button class="primary" id="start-ground">Felszállás a kifutóról</button>
       <button id="start-air">Indulás a levegőben</button>
+      <button id="start-carrier">Indulás a hordozóról</button>
     </div>
     <div id="menuerr"></div>
     <a id="download" class="hint" href="dogfight-offline.html" download="Dogfight-F16.html" hidden>⤓ Letöltés egy fájlban (internet nélkül is megy, dupla kattintással indul)</a>
@@ -373,6 +401,29 @@
   </div>
 </div>
 
+<div id="gcredit" hidden></div>
+<div id="mappick" class="screen dim" hidden>
+  <div class="card mp-card">
+    <div class="mp-head">
+      <div><div class="eyebrow">Világtérkép</div><h1 style="font-size:34px;margin:0">Hol akarsz harcolni?</h1></div>
+      <form id="mp-search"><input id="mp-q" type="search" placeholder="Keresés: város, hegy, sziget…"><button type="submit" class="small">Keresés</button></form>
+    </div>
+    <div class="mp-body">
+      <div class="mp-mapwrap"><canvas id="mp-map"></canvas><div class="mp-zoom"><button type="button" id="mp-zin">+</button><button type="button" id="mp-zout">−</button></div></div>
+      <div class="mp-side"><div id="mp-results"></div><div class="eyebrow" style="margin-top:6px">Helyszínek</div><div id="mp-places"></div></div>
+    </div>
+    <div class="mp-foot"><span id="mp-sel"></span><span class="buttons"><button type="button" id="mp-cancel">Mégse</button><button type="button" class="primary" id="mp-ok">Itt harcolok ▶</button></span></div>
+    <div class="hint" id="mp-attr"></div>
+  </div>
+</div>
+<div id="worldload" class="screen dim" hidden>
+  <div class="card">
+    <div class="eyebrow">Valódi világ</div>
+    <h1 id="wl-name" style="font-size:36px">Betöltés</h1>
+    <div class="bar"><div id="wl-bar"></div></div>
+    <div id="wl-status">Domborzat letöltése…</div>
+  </div>
+</div>
 <div id="hangar" class="screen dim" hidden>
   <div class="card">
     <div class="hangar-head"><div><div class="eyebrow">Hangár · Shop</div><h1 style="font-size:40px">Hangár</h1></div><div id="hangar-credits"></div></div>

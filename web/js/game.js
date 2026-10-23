@@ -1,7 +1,7 @@
 // Browser entry point: asset loading, camera, input, game flow and the main loop (port of dogfight/game.py,
 // camera.py and controls.py).
 import { THREE, V, add, sub, mul, dot, cross, len, norm, clamp, DEG, qaxis, qmul, qlook, fwdOf, upOf, xform, rng, copy } from './util.js';
-import { AIRCRAFT, BANDITS, PLAYER_MISSILES, BANDIT_MISSILES, IR, buildLoadout, loadoutLimits } from './specs.js';
+import { AIRCRAFT, BANDITS, TRAINERS, PLAYER_MISSILES, BANDIT_MISSILES, IR, buildLoadout, loadoutLimits, PLANE_GROUPS, missilesFor, WEAPON_CLASS } from './specs.js';
 import { Terrain } from './terrain.js';
 import { Aircraft, World } from './sim.js';
 import { PlayerPilot, AIPilot, WingmanPilot } from './ai.js';
@@ -19,12 +19,16 @@ import { HangarUI } from './shopui.js';
 import { Music } from './music.js';
 import { keyEditor, buildMap } from './keys.js';
 import { Race, fmtTime, RACE_RINGS } from './race.js';
+import { Carrier, DECK_Z } from './carrier.js';
+import { buildWorld, PLACES } from './world.js';
+import { MapPicker } from './mappick.js';
 
 // The fight happens on the far side of the map: the enemies live in the combat zone and never attack anyone
 // near the home base (safe area), so taking off and landing is quiet.  An air start puts the player on the
 // way there, just outside the zone.
 const ZONE = { x: -14000, y: 16000, r: 16000 }, ENGAGE_MARGIN = 12000, SAFE_RADIUS = 14000;
 const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret (vagy S)  ·  G = futómű';
+const CAT_HINT = 'KATAPULT: adj teljes gázt (Shift tartva, 100%), és a katapult kilő az orr felé  ·  utána húzd az orrot (S), G = futómű';
 const SPLASH = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, RELOAD_TIME = 10, MAX_ENEMIES = 6, THROTTLE_RATE = 0.4, MAX_AB = 1.1;
 const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5;
@@ -253,11 +257,17 @@ class Game {
     this.renderer.outputEncoding = THREE.sRGBEncoding;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.terrain = new Terrain(assets.terrain);
+    this.islandData = assets.terrain; this.place = null;
+    this.carrier = new Carrier(this.terrain);                 // CVN-80, 15 km south of the base (its deck is ground)
     this.world = new World(this.terrain, Math.floor(Math.random() * 1e9));
     this.rnd = this.world.rnd;
-    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex, cockpit: assets.cockpitTex }, assets.glb, AIRCRAFT);
+    this.models = new Models(assets.f16, { viper: assets.viper, aggressor: assets.aggressor, terrain: assets.terrainTex, cockpit: assets.cockpitTex }, assets.glb, { ...AIRCRAFT, ...TRAINERS, ...BANDITS });
     this.view = new SceneView(this.renderer, this.models, this.terrain, this.world);
+    this.view.scene.add(this.carrier.build(this.models));
+    this.view.carrierParked = this.carrier.parked;
     this.cam = new FlightCamera(this.view.camera, this.terrain);
     this.hud = new HUD($('hud'));
     this.sounds = new Sounds(0.7);
@@ -287,7 +297,8 @@ class Game {
     });
     document.addEventListener('pointerlockerror', () => { this.locked = false; this.lockWanted = false; });
     const field = this.terrain.airfield;
-    this.nav = { zone: { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }, base: { x: field.x, y: field.y, r: SAFE_RADIUS }, wave: 0, enemies: 0 };
+    this.nav = { zone: { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }, base: { x: field.x, y: field.y, r: SAFE_RADIUS }, wave: 0, enemies: 0,
+      carrier: { x: this.carrier.x, y: this.carrier.y } };
     this.spawnPlayer();
     this.startTutorial();
     this.resize();
@@ -295,6 +306,30 @@ class Game {
     this.last = performance.now();
     this.fpsAcc = 0; this.fpsN = 0;
     requestAnimationFrame((t) => this.frame(t));
+  }
+
+  // the map: the original island (place without lat) or a 102 km piece of the real world (world.js).  The
+  // terrain object, the carrier and the scene stay the same objects, their contents are replaced.
+  async loadPlace(place, onProgress) {
+    if (!place || place.lat === null || place.lat === undefined) {
+      this.terrain.load(this.islandData);
+      this.carrier.moveTo({ x: 21000, y: -42000 });
+      this.view.rebuildWorld(null);
+      this.place = null; this.worldInfo = null;
+    } else {
+      const q = this.settings ? this.settings.quality : 'high', maxTex = this.renderer.capabilities.maxTextureSize;
+      const texSize = Math.min(maxTex, { low: 2048, medium: 4096, high: 4096, ultra: 8192 }[q] || 4096);
+      const res = q === 'ultra' ? 2048 : 1024;
+      const w = await buildWorld({ lat: place.lat, lon: place.lon, name: place.name, res, texSize, onProgress });
+      this.terrain.load(w.data);
+      this.carrier.moveTo(w.info.carrier);
+      this.view.rebuildWorld(w.canvas);
+      this.place = place; this.worldInfo = w.info;
+      if (this.view.setGeo) this.view.setGeo(w.info);
+    }
+    const f = this.terrain.airfield;
+    this.nav.base.x = f.x; this.nav.base.y = f.y;
+    this.nav.carrier = this.carrier.active === false ? null : { x: this.carrier.x, y: this.carrier.y };
   }
 
   static freshState() {
@@ -386,15 +421,18 @@ class Game {
       pos = V(field.x + (ZONE.x - field.x) * k, field.y + (ZONE.y - field.y) * k, 4500);
       pos.z = Math.max(pos.z, this.terrain.height(pos.x, pos.y) + 1500); speed = 250;
       heading = Math.atan2(ZONE.x - pos.x, ZONE.y - pos.y) / DEG;
+    } else if (this.opts.carrierStart && this.carrier.active !== false) {
+      const [x, y, hdg] = this.carrier.catapult(0);          // on catapult 1, facing the bow
+      pos = V(x, y, 0); heading = hdg;
     } else {
       const [x, y, hdg] = field.startPosition();
       pos = V(x, y, 0); heading = hdg;
     }
     // the hangar: engine-room upgrades, the paint scheme and the mods ride on the player's jet
-    const hg = this.hangar, base = AIRCRAFT[this.opts.aircraft] || AIRCRAFT.f16;
+    const hg = this.hangar, base = AIRCRAFT[this.opts.aircraft] || TRAINERS[this.opts.aircraft] || AIRCRAFT.f16;
     const spec = this.opts.benchmark ? base : hg.upgraded(base);
     const ac = new Aircraft(spec, `Te (${spec.callsign} 1)`, 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', lockAssist: true,
-      missiles: PLAYER_MISSILES, loadout: this.opts.loadout || 'default', rnd: rng(Math.floor(this.rnd() * 1e9)),
+      missiles: missilesFor(spec, false), loadout: spec.trainer ? 'default' : this.opts.loadout || 'default', rnd: rng(Math.floor(this.rnd() * 1e9)),
       skin: hg.skin, blastMult: hg.modOn('bigboom') ? 1.6 : 1, tracerColor: hg.modOn('tracer') ? [0.85, 0.4, 1, 0.45, 0.1, 0.7] : null });
     this.cam.eye = this.models.types[spec.model].eye.clone();
     this.cam.panel = this.models.types[spec.model].panel.clone();
@@ -403,7 +441,7 @@ class Game {
     else {
       ac.fm.placeOnGround(pos.x, pos.y, this.terrain.height(pos.x, pos.y), heading);
       ac.controls.throttle = 0;
-      this.state.subBanner = TAKEOFF_HINT;
+      this.state.subBanner = this.opts.carrierStart && this.carrier.active !== false ? CAT_HINT : TAKEOFF_HINT;
     }
     w.addAircraft(ac);
     this.player = ac; this.pilot = new PlayerPilot(ac);
@@ -422,7 +460,7 @@ class Game {
     pos.z = Math.max(p.pos.z + 20, this.terrain.height(pos.x, pos.y) + 300);
     const loadout = spec.id === 'f16' ? 'default' : buildLoadout(spec, 2, 4).layout;
     const ac = new Aircraft(spec, `${spec.callsign} 2 (kísérő)`, 'blue', pos, Math.atan2(fwd.x, fwd.y) / DEG, Math.max(200, p.speed),
-      { livery: 'viper', missiles: BANDIT_MISSILES, loadout, rnd: rng(Math.floor(this.rnd() * 1e9)) });
+      { livery: 'viper', missiles: missilesFor(spec, true), loadout, rnd: rng(Math.floor(this.rnd() * 1e9)) });
     new WingmanPilot(ac, p);
     this.world.addAircraft(ac);
     this.wingman = ac;
@@ -447,10 +485,10 @@ class Game {
       const pos = add(center, mul(side, (i - (count - 1) / 2) * 3500 + r.uniform(-800, 800)));
       pos.z = Math.max(r.uniform(3000, 7500), this.terrain.height(pos.x, pos.y) + 1500);
       const heading = Math.atan2(-from.x, -from.y) / DEG + r.uniform(-20, 20);
-      const type = this.opts.enemyType === 'mixed' ? ['f16', 'fa18', 'f22', 'f15'][Math.floor(r() * 4)] : (this.opts.enemyType || 'f16');
+      const type = this.enemyType(r);
       const spec = BANDITS[type];
-      const loadout = type === 'f16' ? 'default' : buildLoadout(spec, 2, 4).layout;
-      const ac = new Aircraft(spec, `Bandita ${i + 1} (${spec.short})`, 'red', pos, heading, 240, { livery: 'viper', missiles: BANDIT_MISSILES, loadout, rnd: rng(Math.floor(r() * 1e9)) });
+      const loadout = type === 'f16' || spec.proc ? 'default' : buildLoadout(spec, 2, 4).layout;
+      const ac = new Aircraft(spec, `Bandita ${i + 1} (${spec.short})`, 'red', pos, heading, 240, { livery: 'viper', missiles: missilesFor(spec, true), loadout, rnd: rng(Math.floor(r() * 1e9)) });
       new AIPilot(ac, this.opts.difficulty, area);
       this.world.addAircraft(ac);
     }
@@ -468,16 +506,21 @@ class Game {
     const pos = add(p.pos, mul(fwd, 9000));
     pos.x = clamp(pos.x, -38000, 38000); pos.y = clamp(pos.y, -38000, 38000);
     pos.z = clamp(p.pos.z + r.uniform(-400, 400), this.terrain.height(pos.x, pos.y) + 1500, 9000);
-    const type = this.opts.enemyType === 'mixed' ? ['f16', 'fa18', 'f22', 'f15'][Math.floor(r() * 4)] : (this.opts.enemyType || 'f16');
+    const type = this.enemyType(r);
     const spec = BANDITS[type];
-    const loadout = type === 'f16' ? 'default' : buildLoadout(spec, 2, 4).layout;
+    const loadout = type === 'f16' || spec.proc ? 'default' : buildLoadout(spec, 2, 4).layout;
     const ac = new Aircraft(spec, `Ellenfél (${spec.short})`, 'red', pos, Math.atan2(p.pos.x - pos.x, p.pos.y - pos.y) / DEG, 240,
-      { livery: 'viper', missiles: BANDIT_MISSILES, loadout, rnd: rng(Math.floor(r() * 1e9)) });
+      { livery: 'viper', missiles: missilesFor(spec, true), loadout, rnd: rng(Math.floor(r() * 1e9)) });
     new AIPilot(ac, this.opts.difficulty, null);
     this.world.addAircraft(ac);
     st.waveActive = true;
     this.hud.message(`${st.wave}. PÁRBAJ - ${spec.short} szemből, 9 km`, 'warn', 4);
     this.voice.say('duel', 'Bandit, nose, five miles. Fight\'s on.', 3);
+  }
+  // the menu's enemy choice: any number of types, one is picked at random for every enemy
+  enemyType(r) {
+    const list = (this.opts.enemyTypes || [this.opts.enemyType || 'f16']).filter((k) => BANDITS[k]);
+    return list.length ? list[Math.floor(r() * list.length)] : 'f16';
   }
   enemiesAlive() { return this.world.aircraft.filter((a) => a.team !== 'blue' && a.alive); }
 
@@ -726,6 +769,8 @@ class Game {
       const wdt = bt.active > 0 ? dt * 0.35 : dt;
       this.world.update(wdt);
       if (this.race && this.player.alive) this.raceStep(wdt);
+      if (this.player.alive && this.carrier.active !== false) this.carrierStep(dt);
+      this.carrier.update(dt);
       if (this.player.alive && !this.player.onGround) this.career.tick(dt);
       for (const { missile } of this.player.rwr.incoming) this.threats.add(missile);
       if (this.tutorial) this.tutorial.update(dt);
@@ -754,6 +799,7 @@ class Game {
     this.view.render();
     st.modeLine = this.modeLine();
     st.credits = this.hangar.data.credits;
+    st.meatball = this.meatball();
     st.bt = this.hangar.modOn('bullettime') ? this.bt : null;
     st.raceTarget = this.race && this.race.target ? this.race.target.c : null;
     this.hud.touchLayout = this.touchOn() && !this.inMenu;
@@ -788,6 +834,7 @@ class Game {
       this.career.save();
     } else if (d.killer === p) {
       st.kills++;
+      d = { ...d, weapon: WEAPON_CLASS[d.weapon] || d.weapon };          // IRIS-T, R-73... count as AIM-9M etc.
       if (this.tutorial || this.opts.benchmark) return;
       st.streak++;
       const pts = killPoints(d.weapon, this.opts.difficulty, st.streak);
@@ -836,6 +883,67 @@ class Game {
       }
       this.threats.delete(m); this.hitBy.delete(m);
     } else if (kind === 'cobra' && d.target === p && !this.tutorial) this.medal('cobra');
+  }
+  // carrier: arresting wires on touchdown, bolters, the catapult; the deck counts as paved for rearming
+  carrierStep(dt) {
+    const p = this.player, fm = p.fm, cv = this.carrier, st = this.state;
+    const on = p.onGround && cv.onDeck(p.pos.x, p.pos.y);
+    if (on && !this.wasOnDeck && p.speed > 22) {
+      if (fm.gearDown && cv.inWires(p.pos.x, p.pos.y)) {
+        fm.arrest = 30; this.catState = null; this.trapped = true;
+        const n = cv.wireNumber(p.pos.x, p.pos.y);
+        this.hud.message(`BEAKADT - ${n}. fékezőkötél${n === 3 ? ' (tökéletes!)' : ''}`, 'good', 4, 'trap');
+        this.voice.say('trap', n === 3 ? 'Three wire. Nice.' : `${['One', 'Two', 'Three', 'Four'][n - 1]} wire.`, 3);
+        this.pad.rumble(1, 0.8, 500); this.cam.kick = 0.6;
+        if (!this.tutorial && !this.opts.benchmark) this.medal('trap');
+        if (this.onTrap) this.onTrap(n);
+      } else {
+        this.hud.message('BOLTER! Teljes gáz, és emelkedj újra', 'warn', 3, 'trap');
+        this.voice.say('bolter', 'Bolter, bolter.', 3, true);
+      }
+    }
+    this.wasOnDeck = on;
+    if (this.trapped && p.speed < 3) {                   // the wire stopped the jet: throttle back, brakes on
+      this.trapped = false; p.controls.throttle = 0; fm.parkBrake = true; this.towTimer = 2.5;
+      this.hud.message('ELKAPVA! A fedélzeti személyzet a katapulthoz vontat...', 'good', 3, 'trap');
+    }
+    if (this.towTimer > 0 && on) {
+      this.towTimer -= dt;
+      if (this.towTimer <= 0) {                          // towed to catapult 1 (rearmed and refuelled by the deck crew)
+        const [x, y, h] = cv.catapult(0);
+        fm.placeOnGround(x, y, DECK_Z, h); p.controls.throttle = 0; this.cam.reset(p);
+        p.rearm(); p.hp = p.spec.hp; p.burning = false; fm.fuel = p.spec.internalFuel;
+        this.hud.message('A KATAPULTON - teljes gáz = kilövés', 'info', 4, 'trap');
+      }
+    }
+    if (fm.parkBrake && (!on || p.controls.throttle >= 0.99)) fm.parkBrake = false;
+    // catapult: stopped on the track at full throttle -> 1 s run-up, then the shuttle fires
+    const cat = this.catState;
+    if (on && cv.onCatapult(p.pos.x, p.pos.y) && fm.gearDown && p.speed < 3 && p.controls.throttle >= 0.99 && !cat) {
+      this.catState = { t: 0, fired: false };
+      this.hud.message('KATAPULT ÉLESÍTVE...', 'warn', 1.5, 'cat');
+    }
+    if (cat) {
+      cat.t += dt;
+      if (!cat.fired && cat.t > 1.0) { cat.fired = true; fm.catapultAcc = 30; this.hud.message('KATAPULT!', 'good', 2, 'cat'); this.voice.say('cat', 'Shooter. Launch.', 3); this.pad.rumble(1, 1, 600); this.cam.kick = 0.8; }
+      if (cat.fired && (!p.onGround || p.speed > 88)) {
+        fm.catapultAcc = 0; this.catState = null;
+        // off the bow: the aim point goes 12 degrees up so the jet climbs away from the sea
+        const f = norm(V(p.forward.x, p.forward.y, 0), V(0, 1, 0));
+        this.cam.aim = qlook(norm(V(f.x, f.y, 0.21)));
+        if (this.onCatapult) this.onCatapult();
+      }
+      if (!cat.fired && (p.controls.throttle < 0.99 || !on)) this.catState = null;
+    }
+    if (st.subBanner === CAT_HINT && !p.onGround) st.subBanner = '';
+  }
+  // optical landing system: shown while flying an approach to the carrier (behind it, gear down, within 4 km)
+  meatball() {
+    const p = this.player;
+    if (!p || !p.alive || p.onGround || !p.fm.gearDown) return null;
+    const g = this.carrier.glide(p.pos.x, p.pos.y, p.pos.z);
+    if (!g.behind || g.dist > 4500 || Math.abs(g.off) > 700) return null;
+    return g;
   }
   addScore(n) {
     this.state.score += n;
@@ -945,8 +1053,11 @@ class Game {
     this.touchMode = s.touch;
     this.input.map = buildMap(s.keys || {});
     this.input.shiftRemapped = Object.values(this.input.map).includes('shift') || this.input.map.shift === '__none';
-    const pr = { low: 0.75, medium: 1, high: 2 }[s.quality] || 2;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, pr));
+    this.settings = s;
+    this.view.setGoogleKey(s.googleKey || '');
+    const pr = { low: 0.75, medium: 1, high: 2 }[s.quality] || 2, dpr = window.devicePixelRatio || 1;
+    // Ultra: rendered at 1.5x the screen's pixels (supersampling) - for strong graphics cards
+    this.renderer.setPixelRatio(s.quality === 'ultra' ? Math.min(3, dpr * 1.5) : Math.min(dpr, pr));
     this.view.setQuality(s.quality);
     if (this.view.timeOfDay !== s.tod) this.view.setTimeOfDay(s.tod);
     this.resize();
@@ -1043,20 +1154,26 @@ function loadTexture(url, onDone) {
   return new Promise((res, rej) => new THREE.TextureLoader().load(url, (t) => { onDone(); res(t); }, undefined, () => rej(new Error(url))));
 }
 
+// the aircraft built in Blender (tools/blender): assets/<model>.glb
+const GLB_MODELS = ['f16', 'fa18', 'f22', 'f15', 'su35', 'su57', 'mig29', 'mig31', 'gripen', 'typhoon', 'rafale', 'j20', 't38', 't45', 't6'];
+
 async function boot() {
   const status = $('status'), bar = $('bar');
   if (!THREE) { status.textContent = 'A three.js nem töltődött be - ellenőrizd az internetkapcsolatot.'; return; }
   let done = 0;
-  const tick = () => { done++; bar.style.width = `${done / 12 * 100}%`; };
+  const total = 10 + GLB_MODELS.length;
+  const tick = () => { done++; bar.style.width = `${done / total * 100}%`; };
   let assets;
   try {
-    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex, glbF16, glbFa18, glbF22, glbF15, glbAim9, glbAim120] = await Promise.all([
+    const [f16, terrain, viper, aggressor, terrainTex, cockpitTex, glbAim9, glbAim120, ...jets] = await Promise.all([
       fetchJSON(assetUrl('f16.json'), tick), fetchJSON(assetUrl('terrain.json'), tick),
       loadTexture(assetUrl('livery_viper.jpg'), tick), loadTexture(assetUrl('livery_aggressor.jpg'), tick),
       loadTexture(assetUrl('terrain_color.jpg'), tick), loadTexture(assetUrl('cockpit.png'), tick),
-      fetchGLB(assetUrl('f16.glb'), tick), fetchGLB(assetUrl('fa18.glb'), tick), fetchGLB(assetUrl('f22.glb'), tick), fetchGLB(assetUrl('f15.glb'), tick),
-      fetchGLB(assetUrl('aim9m.glb'), tick), fetchGLB(assetUrl('aim120c.glb'), tick)]);
-    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex, glb: { f16: glbF16, fa18: glbFa18, f22: glbF22, f15: glbF15, aim9m: glbAim9, aim120c: glbAim120 } };
+      fetchGLB(assetUrl('aim9m.glb'), tick), fetchGLB(assetUrl('aim120c.glb'), tick),
+      ...GLB_MODELS.map((k) => fetchGLB(assetUrl(`${k}.glb`), tick))]);
+    const glb = { aim9m: glbAim9, aim120c: glbAim120 };
+    GLB_MODELS.forEach((k, i) => { glb[k] = jets[i]; });
+    assets = { f16, terrain, viper, aggressor, terrainTex, cockpitTex, glb };
   } catch (e) {
     status.textContent = 'Betöltési hiba: ' + e.message; console.error(e); return;
   }
@@ -1068,7 +1185,7 @@ async function boot() {
   // Settings: mouse (aim and cockpit stick sensitivity 5..200 %, inverted Y), sound, voice, graphics quality,
   // field of view, time of day, touch controls and rumble.  Every control carries data-key; the main menu and
   // the pause screen show the same values; all of it is remembered in this browser.
-  const settings = { aim: 60, stick: 60, invert: false, volume: 70, voice: true, quality: 'high', fov: 70, tod: 'day', touch: 'auto', rumble: true,
+  const settings = { googleKey: '', aim: 60, stick: 60, invert: false, volume: 70, voice: true, quality: 'high', fov: 70, tod: 'day', touch: 'auto', rumble: true,
     music: 'off', musicVol: 50, keys: {} };
   // music (console-sound): starts on the first click (browsers keep audio silent until the player acts)
   const music = window.dogfightMusic = new Music();
@@ -1106,6 +1223,7 @@ async function boot() {
       if (el.type === 'range') settings[key] = Number(el.value);
       else if (el.type === 'checkbox') settings[key] = el.checked;
       else if (el.type === 'radio' && el.checked) settings[key] = el.value;
+      else if (el.type === 'text') settings[key] = el.value.trim();
       applySettings();
     });
     el.addEventListener('click', (e) => e.stopPropagation());
@@ -1135,11 +1253,29 @@ async function boot() {
   try { menuSaved = JSON.parse(localStorage.getItem(MENU_KEY) || '{}'); } catch (e) { /* private mode */ }
   const pick = (name) => document.querySelector(`input[name=${name}]:checked`).value;
   const setPick = (name, v) => { const el = document.querySelector(`input[name=${name}][value="${v}"]`); if (el) el.checked = true; };
-  for (const name of ['plane', 'foe', 'mode', 'diff', 'scen', 'wing']) if (menuSaved[name] !== undefined) setPick(name, menuSaved[name]);
+  // the plane picker (every jet, in groups) and the enemy chips (any number of them)
+  const ALL = { ...AIRCRAFT, ...TRAINERS };
+  $('plane-pick').innerHTML = PLANE_GROUPS.map(([g, keys]) => `<div class="grp"><span>${g}</span>${keys.map((k) =>
+    `<input type="radio" name="plane" id="p-${k}" value="${k}"${k === 'f16' ? ' checked' : ''}><label for="p-${k}">${ALL[k].short}</label>`).join('')}</div>`).join('');
+  $('foe-pick').innerHTML = PLANE_GROUPS.filter(([g]) => g !== 'Gyakorlógépek').map(([g, keys]) => `<div class="grp"><span>${g}</span>${keys.filter((k) => BANDITS[k]).map((k) =>
+    `<input type="checkbox" name="foe" id="f-${k}" value="${k}"><label for="f-${k}">${ALL[k].short}</label>`).join('')}</div>`).join('');
+  const foes = () => [...document.querySelectorAll('input[name=foe]:checked')].map((e) => e.value);
+  for (const k of menuSaved.foes && menuSaved.foes.length ? menuSaved.foes : [menuSaved.foe && menuSaved.foe !== 'mixed' ? menuSaved.foe : 'f16']) { const el = $('f-' + k); if (el) el.checked = true; }
+  const foeHint = () => { const n = foes().length; $('foe-hint').textContent = n ? `${n} típus · kattints újra a kivételhez` : 'jelölj ki legalább egyet (különben F-16C jön)'; };
+  for (const name of ['plane', 'mode', 'diff', 'scen', 'wing']) if (menuSaved[name] !== undefined) setPick(name, menuSaved[name]);
+  if (!document.querySelector('input[name=plane]:checked')) $('p-f16').checked = true;
   if (menuSaved.enemies) $('enemies').value = menuSaved.enemies;
+  // the place (world map): saved with the menu, built when a match starts there
+  let place = menuSaved.place || PLACES[0];
+  const showPlace = () => { $('place-name').textContent = place.name; };
+  showPlace();
+  const picker = new MapPicker();
+  $('place-open').addEventListener('click', () => picker.open(place, (p) => { place = p; showPlace(); saveMenu(); }));
+  const placeKey = (p) => (p && p.lat !== null && p.lat !== undefined ? `${p.lat.toFixed(4)},${p.lon.toFixed(4)}` : 'island');
   const saveMenu = () => {
-    const m = { arms: menuSaved.arms || {} };
-    for (const name of ['plane', 'foe', 'mode', 'diff', 'scen', 'wing']) m[name] = pick(name);
+    const m = { arms: menuSaved.arms || {}, place };
+    for (const name of ['plane', 'mode', 'diff', 'scen', 'wing']) m[name] = pick(name);
+    m.foes = foes();
     m.enemies = $('enemies').value;
     menuSaved = m;
     try { localStorage.setItem(MENU_KEY, JSON.stringify(m)); } catch (e) { /* private mode */ }
@@ -1149,26 +1285,22 @@ async function boot() {
   const DIFF_HINT = { easy: 'pont ×0,6', normal: 'pont ×1', hard: 'pont ×1,5', ace: 'teljes erejű ellenfél · pont ×2' };
   const showHints = () => { $('scen-hint').textContent = SCEN_HINT[pick('scen')]; $('diff-hint').textContent = DIFF_HINT[pick('diff')]; };
   for (const el of document.querySelectorAll('input[name=scen], input[name=diff], input[name=foe], input[name=wing], #enemies')) {
-    el.addEventListener('change', () => { showHints(); saveMenu(); });
+    el.addEventListener('change', () => { showHints(); foeHint(); saveMenu(); });
   }
+  foeHint();
   showHints();
   // Loadout editor: how many AIM-9M and AIM-120A; the stations are filled like the real jet would carry them
   // (specs.js buildLoadout), the row of chips shows where each one hangs.
   const arms = { 'AIM-9M': 0, 'AIM-120A': 0 };
-  // hangar (shop): credits, the locked jet in the plane row
+  // hangar (shop): credits and paint
   const hangarUI = new HangarUI(hangar, career, () => refreshShop());
   const refreshShop = () => {
     $('menu-credits').textContent = `${hangar.data.credits.toLocaleString('hu-HU')} kredit · festés: ${hangar.skin.name}`;
-    const own = hangar.ownsPlane('f15a'), r = $('p-f15a');
-    r.disabled = !own;
-    $('l-f15a').textContent = own ? 'F-15 ACTIVE' : '🔒 F-15 ACTIVE (3000 kr)';
-    if (!own && r.checked) { $('p-f16').checked = true; r.dispatchEvent(new Event('change')); }
   };
-  $('l-f15a').addEventListener('click', (e) => { if (!hangar.ownsPlane('f15a')) { e.preventDefault(); hangarUI.open('planes'); } });
   $('open-hangar').addEventListener('click', () => hangarUI.open());
   hangar.onChange(refreshShop);
   refreshShop();
-  const plane = () => AIRCRAFT[document.querySelector('input[name=plane]:checked').value];
+  const plane = () => ALL[document.querySelector('input[name=plane]:checked').value];
   const defaults = (spec) => {
     const l = Object.values(spec.loadouts.default);
     arms['AIM-9M'] = l.filter((k) => k === 'AIM-9M').length; arms['AIM-120A'] = l.filter((k) => k === 'AIM-120A').length;
@@ -1200,7 +1332,8 @@ async function boot() {
       f22: '2 × F119 · 312 kN · lopakodó, belső fegyvertér, APG-77, max 8 G',
       f15: '2 × F110 · 263 kN · 9 G, nagy tolóerő, akár 12 rakéta, APG-82',
       f15a: '2 × F100-229 · 258 kN · TVC (Tab), kacsaszárny, Cobra',
-    }[spec.id] || '1 × F110 · 132 kN · 9 G, jobb tolóerő/tömeg';
+      f16: '1 × F110 · 132 kN · 9 G, jobb tolóerő/tömeg',
+    }[spec.id] || `${spec.name} · ${spec.engines} hajtómű, ${Math.round(spec.thrustAb / 1000)} kN · ${spec.gMax} G${spec.trainer ? ' · gyakorlógép, fegyver nélkül' : ''}`;
   };
   const restoreArms = (spec) => { const a = menuSaved.arms && menuSaved.arms[spec.id]; if (a) Object.assign(arms, a); else defaults(spec); };
   for (const el of document.querySelectorAll('input[name=plane]')) el.addEventListener('change', () => { restoreArms(plane()); showLoadout(); saveMenu(); });
@@ -1216,17 +1349,19 @@ async function boot() {
     const enemies = Number($('enemies').value);
     const mode = document.querySelector('input[name=mode]:checked').value;
     const aircraft = document.querySelector('input[name=plane]:checked').value;
-    const enemyType = document.querySelector('input[name=foe]:checked').value;
-    const loadout = buildLoadout(AIRCRAFT[aircraft], arms['AIM-9M'], arms['AIM-120A']).layout;
+    const enemyTypes = foes().length ? foes() : ['f16'];
+    const loadout = buildLoadout(ALL[aircraft], arms['AIM-9M'], arms['AIM-120A']).layout;
     const scenario = tutorial ? 'waves' : pick('scen'), wingman = tutorial ? 0 : Number(pick('wing'));
     const opts = benchmark
-      ? { airStart: true, difficulty: 'normal', enemies: 4, mode: 'arcade', aircraft, enemyType: 'mixed', loadout, tutorial: false, scenario: 'waves', wingman: 0, benchmark: true }
-      : { airStart: airStart || tutorial, difficulty, enemies, mode: tutorial ? 'arcade' : mode, aircraft, enemyType, loadout, tutorial, scenario, wingman };
+      ? { airStart: true, difficulty: 'normal', enemies: 4, mode: 'arcade', aircraft, enemyTypes: ['f16', 'fa18', 'su35', 'typhoon'], loadout, tutorial: false, scenario: 'waves', wingman: 0, benchmark: true }
+      : { airStart: (airStart === true) || tutorial, carrierStart: airStart === 'carrier' && !tutorial, difficulty, enemies, mode: tutorial ? 'arcade' : mode, aircraft, enemyTypes, loadout, tutorial, scenario, wingman };
     saveMenu();
     if (!tutorial && !benchmark) { career.data.matches++; career.save(); }
     $('menu').hidden = true;
     let game = window.game;
-    if (game) game.newMatch(opts);
+    const fresh = !game;
+    if (game && placeKey(game.place) === placeKey(place)) game.newMatch(opts);
+    else if (game) { goPlace(game, opts); return; }
     else {
       try { game = new Game(assets, opts); }
       catch (e) { console.error(e); $('menu').hidden = false; $('menuerr').textContent = 'Hiba: ' + e.message + ' (WebGL szükséges)'; return; }
@@ -1246,6 +1381,24 @@ async function boot() {
         $('bench-msg').textContent = `Átlag ${Math.round(r.fps)} FPS, a leglassabb 10%: ${Math.round(r.low)} FPS (${names[was]}) → ${q === was ? 'a mostani beállítás jó' : 'beállítva: ' + names[q]}.`;
       };
     }
+    applySettings();
+    if (fresh && placeKey(place) !== 'island') { goPlace(game, opts); return; }
+    game.resume();
+  };
+  // a match somewhere else: download and build the place (progress screen), then start
+  const goPlace = async (game, opts) => {
+    $('worldload').hidden = false; $('wl-name').textContent = place.name; $('wl-bar').style.width = '0%';
+    try {
+      await game.loadPlace(place, (msg, f) => { $('wl-status').textContent = msg; $('wl-bar').style.width = `${Math.round(f * 100)}%`; });
+    } catch (e) {
+      console.error(e);
+      $('wl-status').textContent = `Nem sikerült (${e.message}) – az eredeti szigeten indul.`;
+      await new Promise((r) => setTimeout(r, 2500));
+      place = PLACES[0]; showPlace(); saveMenu();
+      await game.loadPlace(null);
+    }
+    game.newMatch(opts);
+    $('worldload').hidden = true;
     applySettings();
     game.resume();
   };
@@ -1289,6 +1442,7 @@ async function boot() {
   };
   requestAnimationFrame(menuPoll);
   $('start-air').addEventListener('click', () => start(true));
+  $('start-carrier').addEventListener('click', () => start('carrier'));
   $('start-tutorial').addEventListener('click', () => start(true, true));
   $('bench').addEventListener('click', (e) => { e.stopPropagation(); $('bench-msg').textContent = 'Fut…'; start(true, false, true); });
   // installable app (console-anywhere): offered where the browser allows it (served over https / localhost)

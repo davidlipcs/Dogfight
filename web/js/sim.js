@@ -46,7 +46,7 @@ export class Aircraft {
   rearm() {
     // a loadout is a name from spec.loadouts or a {station: weapon} table (the menu's loadout editor)
     const layout = typeof this.loadout === 'object' ? this.loadout : this.spec.loadouts[this.loadout] || this.spec.loadouts.default;
-    this.stations = Object.keys(layout).map(Number).sort((a, b) => a - b)
+    this.stations = Object.keys(layout).map(Number).filter((n) => this.spec.stations[n] && (!this.spec.pylons[n] || this.spec.pylons[n].includes(layout[n]))).sort((a, b) => a - b)
       .map((n) => ({ number: n, key: layout[n], spec: this.missileSpec(layout[n]), mount: V(...this.spec.stations[n]), loaded: true, launch: null }));
     this.gun.reload();
     this.flares = this.spec.cm.flares; this.chaff = this.spec.cm.chaff;

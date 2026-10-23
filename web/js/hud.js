@@ -99,6 +99,21 @@ export class HUD {
     this.overlay(game);
     this.extras(game, camCtl);
   }
+  // the carrier's optical landing system: the amber ball against the green datum lights (above = high,
+  // below = low), the line-up error and the distance to the wires
+  meatballBox(m) {
+    const u = this.u, g = this.g, cx = this.w - 70 * u, cy = this.h / 2 - 40 * u, hh = 70 * u;
+    g.fillStyle = 'rgba(4,10,14,0.55)'; g.fillRect(cx - 34 * u, cy - hh - 26 * u, 68 * u, 2 * hh + 70 * u);
+    this.line(cx - 28 * u, cy, cx - 10 * u, cy, GREEN); this.line(cx + 10 * u, cy, cx + 28 * u, cy, GREEN);
+    this.rect(cx, cy, 6 * u, hh, DIM);
+    const k = clamp(m.high / 12, -1, 1), by = cy - k * hh, col = Math.abs(k) < 0.25 ? AMBER : Math.abs(k) < 0.7 ? AMBER : RED;
+    g.fillStyle = k < -0.7 ? RED : col; g.beginPath(); g.arc(cx, by, 7 * u, 0, Math.PI * 2); g.fill();
+    this.text('MEATBALL', cx, cy - hh - 14 * u, CYAN, 10 * u + 2, 'center');
+    const lu = Math.abs(m.off) < 8 ? ['VONALBAN', GREEN] : m.off > 0 ? ['◀ BALRA', AMBER] : ['JOBBRA ▶', AMBER];
+    this.text(lu[0], cx, cy + hh + 14 * u, lu[1], 10 * u + 2, 'center');
+    this.text(k > 0.25 ? 'MAGAS' : k < -0.25 ? 'ALACSONY' : 'JÓ', cx, cy + hh + 28 * u, k < -0.7 ? RED : WHITE, 10 * u + 2, 'center');
+    this.text(`${Math.round(m.dist)} m`, cx, cy + hh + 42 * u, DIM, 10 * u + 2, 'center');
+  }
   // ring race: the next ring - a ring marker with the distance, or an arrow at the edge
   raceMark(ac, cam, c) {
     const u = this.u, p = this.project(cam, c), d = len(sub(c, ac.pos));
@@ -152,6 +167,7 @@ export class HUD {
         g.globalAlpha = 1;
       }
     }
+    if (game.meatball) this.meatballBox(game.meatball);
     if (camCtl && camCtl.followLabel) this.text(camCtl.followLabel, this.w / 2, 70 * u, CYAN, 15 * u + 3, 'center', 'Oswald, Impact, sans-serif');
   }
 
@@ -255,6 +271,15 @@ export class HUD {
         this.poly([[p[0], p[1] - k], [p[0] + k, p[1]], [p[0], p[1] + k], [p[0] - k, p[1]]], AMBER);
         this.text(`HARCI ZÓNA ${((dz - n.zone.r) / 1000).toFixed(0)} km`, p[0], p[1] - 22 * u, AMBER, 12 * u + 2, 'center');
       } else this.edgeArrow(cam, pos, AMBER);
+    }
+    if (n.carrier) {                                   // the carrier: cyan ship mark with the distance
+      const dc = Math.hypot(n.carrier.x - ac.pos.x, n.carrier.y - ac.pos.y);
+      const p = dc > 900 ? this.project(cam, V(n.carrier.x, n.carrier.y, 40)) : null;
+      if (p) {
+        const k = 9 * u;
+        this.poly([[p[0] - k, p[1]], [p[0] - k * 0.6, p[1] + k * 0.6], [p[0] + k * 0.6, p[1] + k * 0.6], [p[0] + k, p[1]]], CYAN);
+        this.text(`HORDOZÓ ${(dc / 1000).toFixed(dc < 10000 ? 1 : 0)} km`, p[0], p[1] + 20 * u, CYAN, 11 * u + 2, 'center');
+      }
     }
     if (db > 3000) {
       const p = this.project(cam, V(n.base.x, n.base.y, 300));

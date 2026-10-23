@@ -1,6 +1,6 @@
 // The hangar screen: jets, paint, engine-room upgrades, mods, intel on the enemy types and the save file.
 import { SKINS, UPGRADES, MODS, PLANES, exportSave, importSave } from './hangar.js';
-import { AIRCRAFT, BANDITS } from './specs.js';
+import { AIRCRAFT, BANDITS, TRAINERS, PLANE_GROUPS } from './specs.js';
 
 const $ = (id) => document.getElementById(id);
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
@@ -12,6 +12,15 @@ const TIPS = {
   fa18: 'Nagy állásszögben veszélyes, lassan jól fordul. Tartsd gyorsan a harcot: hamar elveszti az energiáját.',
   f15: 'Nagy tolóerő, sok rakéta, messzire lát. A nagy radarjele miatt messziről lockolható – lőj elsőként.',
   f22: 'Lopakodó: a radar csak közelről látja. Hőkövetővel és gépágyúval kapd el; fegyvertér-nyitáskor jól látszik.',
+  su35: 'Tolóerő-vektoros, nagy állásszögű vadász, sok rakétával. Ne fordulj vele lassan: tartsd az energiádat, és lőj messziről.',
+  su57: 'Lopakodó, belső fegyvertérrel – a radar csak közelről látja. Hőkövetővel és ágyúval vadászd.',
+  mig29: 'Fürge közelharcos, de kevés üzemanyaggal és rövid radar-hatótávval. Messziről lőj AIM-120-szal.',
+  mig31: 'Nagyon gyors elfogó (Mach 2,8), de csak 5 G-t bír: fordulóharcban könnyű préda.',
+  gripen: 'Kicsi, könnyű és fürge, kicsi a radarjele. Közelről, hőkövetővel a legjobb.',
+  typhoon: 'Erős hajtóművek, kiváló gyorsulás és fordulás – az egyik legveszélyesebb ellenfél.',
+  rafale: 'Sokoldalú kacsaszárnyas delta, jól fordul alacsony sebességen is. Tartsd a távolságot.',
+  j20: 'Nagy, lopakodó elfogó, hosszú hatótávú rakétákkal. Közelről, hőkövetővel kapd el.',
+  generic: (s) => `${s.short}: ${s.gMax} G, ${s.rollRate}°/s orsózás.`,
 };
 
 export class HangarUI {
@@ -54,13 +63,10 @@ export class HangarUI {
   }
   price(n, owned) { return owned ? '<span class="owned">megvan</span>' : `<span class="price">${n.toLocaleString('hu-HU')} kr</span>`; }
   planes() {
-    const free = ['f16', 'fa18', 'f15', 'f22'].map((k) => `<div class="item"><b>${AIRCRAFT[k].name}</b><span>alapgép</span>${this.price(0, true)}</div>`).join('');
-    const paid = PLANES.map((p) => {
-      const own = this.h.ownsPlane(p.id);
-      return `<div class="item big"><b>${p.name}</b><span>${p.desc}</span>${this.price(p.price, own)}` +
-        (own ? '<em>A főmenüben kiválaszthatod (Saját gép)</em>' : `<button type="button" class="small primary" data-act="buy-plane" data-id="${p.id}">Megveszem</button>`) + '</div>';
-    }).join('');
-    return `<div class="grid">${paid}${free}</div>`;
+    const all = { ...AIRCRAFT, ...TRAINERS };
+    return '<p class="hint">Minden gép ingyenes – a főmenüben, a „Saját gép” sorban választod ki. Itt az adataik.</p><div class="grid">' +
+      PLANE_GROUPS.map(([g, keys]) => keys.map((k) => { const s = all[k];
+        return `<div class="item"><b>${s.name}</b><span>${g} · ${s.engines} hajtómű, ${Math.round(s.thrustAb / 1000)} kN · ${s.gMax} G · ${Math.round(s.emptyMass).toLocaleString('hu-HU')} kg</span>${this.price(0, true)}</div>`; }).join('')).join('') + '</div>';
   }
   skins() {
     const d = this.h.data;
@@ -91,7 +97,7 @@ export class HangarUI {
   intel() {
     const v = this.career.data.victims || {};
     return '<p class="hint">Minden ellenségtípus adatlapja az első lelövéskor nyílik meg (a roncsból fejtjük vissza).</p><div class="grid">' +
-      ['f16', 'fa18', 'f15', 'f22'].map((k) => {
+      Object.keys(BANDITS).map((k) => {
         const s = BANDITS[k], n = v[k] || 0;
         if (!n) return `<div class="item locked"><b>??? – ${s.short}</b><span>Lőj le egyet, hogy megfejtsd az adatait.</span></div>`;
         const mass = s.emptyMass + s.internalFuel * 0.5 + 700, tw = s.thrustAb / (mass * 9.81);
@@ -99,7 +105,7 @@ export class HangarUI {
           ['Tolóerő/tömeg', tw.toFixed(2)], ['Max terhelés', `${s.gMax} G`], ['Orsózás', `${s.rollRate}°/s`], ['Max állásszög', `${s.alphaLimit}°`],
           ['Radar keresés / lock', `${Math.round(s.radar.searchRange / 1000)} / ${Math.round(s.radar.lockRange / 1000)} km`],
           ['Radarjel szemből', `${s.rcsFront} m²`], ['Gépágyú', `${s.gun.name}, ${s.gun.ammo} lőszer`], ['Lelőtted', `${n}×`]];
-        return `<div class="item big"><b>${s.short} – adatlap</b><dl>${rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl><span class="tipp">${TIPS[k]}</span></div>`;
+        return `<div class="item big"><b>${s.short} – adatlap</b><dl>${rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl><span class="tipp">${TIPS[k] || TIPS.generic(s)}</span></div>`;
       }).join('') + '</div>';
   }
   save() {

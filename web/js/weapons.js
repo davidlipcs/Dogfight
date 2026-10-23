@@ -370,6 +370,7 @@ export class Missile {
     if (this.thrust > 0) this.mass -= sp.propellant / sp.burnTime * dt;
     let acmd = V();
     if (!this.defeated) this.checkCobra(world);
+    if (!this.defeated) this.checkEvade(world);
     if (this.age >= Math.max(sp.guidanceDelay, sp.railTime) && !this.defeated) {
       const aim = this.guidance(dt, world);
       if (aim) { acmd = this.proNav(aim[0], aim[1]); acmd.z += G; }
@@ -415,6 +416,21 @@ export class Missile {
       this.defeated = true;
       world.emit('message', { to: t, text: 'COBRA - A RAKÉTA ELVESZTETT!', level: 'good' });
       world.emit('cobra', { target: t, missile: this });
+    }
+  }
+  // An AI pilot sees the missile at the last moment and breaks hard with flares: once per missile, a chance
+  // set by its skill (the difficulty) that the missile overshoots.  Players dodge for themselves.
+  checkEvade(world) {
+    const t = this.guidedTarget || this.intended;
+    if (this.evadeJudged || !t || !t.fm || !t.alive || t.isPlayer || !t.pilot || !t.pilot.skill) return;
+    const rel = sub(t.pos, this.pos), d = len(rel), closing = -dot(sub(t.vel, this.vel), norm(rel));
+    if (d / Math.max(closing, 1) > 1.6) return;
+    this.evadeJudged = true;
+    if (this.rnd() < (t.pilot.skill.evade || 0)) {
+      this.defeated = true; this.status = 'MISSED';
+      t.dispense(world);
+      world.emit('evaded', { target: t, missile: this });
+      if (this.shooter) world.emit('message', { to: this.shooter, text: `${t.name}: KICSELEZTE A RAKÉTÁT!`, level: 'warn' });
     }
   }
   proNav(aimPos, aimVel) {

@@ -84,6 +84,8 @@ def main():
         three = f.read()
     assets = sorted(n for n in os.listdir(os.path.join(WEB, "assets")) if os.path.splitext(n)[1] in MIME)
     table = ",\n".join('"%s": "%s"' % (n, data_uri(n)) for n in assets)
+    with open(os.path.join(WEB, "js", "tiles.min.js"), "rb") as f:     # Google 3D tiles: loaded on demand
+        table += ',\n"tiles.min.js": "data:text/javascript;base64,%s"' % base64.b64encode(f.read()).decode("ascii")
     tags = ('<script src="js/three.min.js"></script>', '<script type="module" src="js/game.js"></script>')
     for tag in tags:
         if tag not in page:

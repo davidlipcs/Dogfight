@@ -50,7 +50,7 @@ const km = (m) => (m >= 10000 ? (m / 1000).toFixed(0) : (m / 1000).toFixed(1));
 export class CockpitDisplays {
   constructor(spec, screens) {
     this.spec = spec; this.list = []; this.turn = 0; this.time = 0; this.gHi = 1; this.gLo = 1; this.dlzCache = new Map();
-    const layout = LAYOUTS[spec.model] || LAYOUTS.f16;
+    const layout = LAYOUTS[spec.mfdLayout] || LAYOUTS[spec.model] || LAYOUTS.f16;
     for (const [name, lay] of Object.entries(layout)) {
       const meshes = screens[name];
       if (!meshes || !meshes.length) continue;

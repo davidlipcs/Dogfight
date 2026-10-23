@@ -19,6 +19,10 @@ export const ACHIEVEMENTS = [
   { id: 'veteran', name: 'Veterán', desc: 'Lelövés Nehéz vagy Ász fokozaton' },
   { id: 'team', name: 'Csapatjátékos', desc: 'A kísérőd lelő egy ellenséget' },
   { id: 'score5k', name: 'Ötezres', desc: 'Szerezz 5000 pontot egy játékban' },
+  { id: 'trap', name: 'Hordozós pilóta', desc: 'Szállj le a hordozóra fékezőkötéllel' },
+  { id: 'gsuit', name: 'Centrifuga', desc: 'Bírd ki a 7 G-t a centrifugában' },
+  { id: 'wings', name: 'Pilótaszárnyak', desc: 'Végezd el a pilótaképzést' },
+  { id: 'ww3', name: 'A szabad világ védője', desc: 'Nyerd meg a 3. világháborús hadjáratot' },
 ];
 
 const FRESH = () => ({

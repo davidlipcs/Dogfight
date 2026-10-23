@@ -7,8 +7,9 @@ import { THREE, V, add, sub, mul, dot, len, norm } from './util.js';
 const RINGS = 18, STEP = 1600, R = 55, KEY = 'dogfight-race';
 
 export class Race {
-  constructor(terrain, scene, start, heading) {
-    this.terrain = terrain; this.scene = scene;
+  // opts: rings (count), goal (where the course heads), record (false: no best time kept - training courses)
+  constructor(terrain, scene, start, heading, opts = {}) {
+    this.terrain = terrain; this.scene = scene; this.count = opts.rings || RINGS; this.goal = opts.goal || null; this.keep = opts.record !== false;
     this.rings = this.layout(start, heading);
     this.group = new THREE.Group();
     const geo = new THREE.TorusGeometry(R, 5, 10, 48);
@@ -20,7 +21,7 @@ export class Race {
       r.mesh = m; this.group.add(m);
     }
     scene.add(this.group);
-    try { this.best = JSON.parse(localStorage.getItem(KEY) || '{}').best || null; } catch (e) { this.best = null; }
+    try { this.best = this.keep ? JSON.parse(localStorage.getItem(KEY) || '{}').best || null : null; } catch (e) { this.best = null; }
     this.reset();
   }
   layout(start, heading) {
@@ -28,8 +29,8 @@ export class Race {
     let p = V(start.x, start.y, 0), h = heading;
     const ground = (x, y) => t.height(x, y);
     const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-    const goal = V(-12000, 9000, 0);                              // the wooded hills west of the middle
-    for (let i = 0; i < RINGS; i++) {
+    const goal = this.goal || V(-12000, 9000, 0);                 // the wooded hills west of the middle
+    for (let i = 0; i < this.count; i++) {
       let best = null;
       const want = 28 * Math.sin(i * 0.9) * Math.PI / 180;       // weave left and right
       const toGoal = Math.atan2(goal.x - p.x, goal.y - p.y);
@@ -72,7 +73,7 @@ export class Race {
         this.next++; this.running = true;
         if (this.next >= this.rings.length) {
           this.finished = true; this.record = !this.best || this.time < this.best;
-          if (this.record) { this.best = this.time; try { localStorage.setItem(KEY, JSON.stringify({ best: this.time })); } catch (e) { /* private */ } }
+          if (this.record && this.keep) { this.best = this.time; try { localStorage.setItem(KEY, JSON.stringify({ best: this.time })); } catch (e) { /* private */ } }
           this.paint(); return 'finish';
         }
         this.paint(); return 'ring';

@@ -44,6 +44,14 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 * **Grafika:** minőségi szint, látószög, kondenzcsík, párakúp; **teljesítményteszt**, ami beállítja a grafikát.
 * **Telepíthető app** (GitHub Pages-ről), offline gyorsítótárral.
 
+## Plus 3 – új gépek, világtérkép, grafika
+
+- **11 új gép Blenderben, az F-15 minőségében** (`tools/blender/build_generic.py` + `jets.py`): Su-35S, Su-57, MiG-29, MiG-31, JAS 39 Gripen, Eurofighter Typhoon, Rafale, J-20, valamint a T-6A, T-38C és T-45C gyakorlógép. Mindegyik saját festést, mozgó kormányfelületeket, behúzható futóművet és F-16 szintű kabint kapott (élő kijelzők, HUD, ülés, botkormány). A kabin minden része az üveg alatt marad.
+- **Világtérkép (Helyszín → 🌍 Világtérkép…)**: a Föld bármelyik pontján lehet harcolni. A domborzat valódi (AWS Terrain Tiles), a talaj műholdkép (Esri World Imagery), a repülőtér a legsimább helyre kerül, a hordozó a nyílt tengerre. Van keresés és kész helyszínlista (Budapest, Balaton, Alpok, Grand Canyon, Fuji stb.). Internet kell hozzá.
+- **Google fotórealisztikus 3D (Beállítások → Google 3D)**: a saját Google Maps API-kulcsoddal (Map Tiles API) a valódi helyszíneken a Google 3D városai és tájai jelennek meg, mint a Flight Simulatorben.
+- **Grafika**: árnyékok, hullámzó, tükröződő tenger, részletes talaj közelről, több felhő, új **Ultra** fokozat (1,5× felbontás, 4K árnyék, 8K műholdkép, 2× sűrűbb terep).
+- **Ellenfélválasztás**: több típust is ki lehet jelölni. Az MI a nehézségtől függően ki is tud térni a rakéták elől.
+
 ## Oktatás (nem kötelező)
 
 A főmenü **Oktatás** gombja egy vezetett repülést indít a kiválasztott géppel. 11 lecke, mindegyik elmagyarázza,

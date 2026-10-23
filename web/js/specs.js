@@ -247,7 +247,177 @@ export const F15A = {
   loadouts: { default: { 2: 'AIM-9M', 11: 'AIM-9M', 3: 'AIM-9M', 10: 'AIM-9M', 4: 'AIM-120A', 9: 'AIM-120A' } },
 };
 
-export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A, f15: F15EX, f15a: F15A };
+// ---------------------------------------------------------------- built in code (proc.js)
+// Trainers of the career.  Sources: USAF and US Navy fact sheets (T-6A: PT6A-68, 1,100 shp, 320 mph, +7/-3.5 G;
+// T-38C: 2 x J85-GE-5, 2,050 / 2,900 lbf, Mach 1.08, +7.33 G; T-45C: F405-RR-401, 5,527 lbf, ~M0.85, carrier
+// capable).  No weapons: gun without ammunition, no stations, no flares, a radar that sees nothing.
+const NO_RADAR = { ...APG68, name: '-', searchRange: 1, lockRange: 1, acmRange: 1, rwrSymbol: 'T' };
+const NO_STORES = { stations: {}, pylons: {}, prefer: { 'AIM-120A': [], 'AIM-9M': [] }, loadouts: { default: {} }, firingOrder: [] };
+const TRAINER = { gun: { ...M61A1, ammo: 0 }, radar: NO_RADAR, cm: { ...ALE47, flares: 0, chaff: 0 }, trainer: true, noAB: true, mfdLayout: 'fa18', ...NO_STORES };
+export const T6A = {
+  ...TRAINER, id: 't6', model: 't6', proc: true, name: 'T-6A Texan II', short: 'T-6A', callsign: 'Texan',
+  emptyMass: 2140, internalFuel: 500, wingArea: 16.3, wingSpan: 10.2, length: 10.2,
+  // turboprop: the jet model's thrust stands in for the propeller's (tuned for ~520 km/h at sea level)
+  engines: 1, thrustDry: 9800, thrustAb: 9800, fuelFlowDry: 0.09, fuelFlowAb: 0.09,
+  clAlpha: 4.8, clMax: 1.55, alphaStall: 18, alphaLimit: 16, cd0: 0.034, kInduced: 0.055, pylonCd: 0,
+  waveDrag: [[0, 0], [0.55, 0], [0.62, 0.012], [0.7, 0.05], [0.8, 0.12]],
+  gMax: 7, gMin: -3.5, rollRate: 170, yawBeta: 5, airbrakeCd: 0.04, hp: 60, rcsFront: 2, rcsSide: 4,
+  gearHeight: 1.62, tailStrike: 14, rotateIas: 42,
+  hitboxes: [[[0, 0, 0], [0.6, 5, 0.75]], [[0, 0.2, -0.35], [5.1, 1.0, 0.2]], [[0, -4.5, 0.6], [2.4, 0.6, 1.0]]],
+  gunPos: [0, 4, -0.3],
+};
+export const T38C = {
+  ...TRAINER, id: 't38', model: 't38', proc: true, name: 'T-38C Talon', short: 'T-38C', callsign: 'Talon', noAB: false,
+  emptyMass: 3270, internalFuel: 1760, wingArea: 15.8, wingSpan: 7.7, length: 14.1,
+  engines: 2, thrustDry: 23800, thrustAb: 34200, fuelFlowDry: 0.55, fuelFlowAb: 2.2,
+  clAlpha: 3.6, clMax: 1.25, alphaStall: 22, alphaLimit: 19, cd0: 0.0165, kInduced: 0.13, pylonCd: 0,
+  waveDrag: [[0, 0], [0.86, 0], [0.92, 0.008], [0.98, 0.03], [1.05, 0.045], [1.2, 0.046], [1.5, 0.04]],
+  gMax: 7.33, gMin: -2.9, rollRate: 420, yawBeta: 6, airbrakeCd: 0.05, hp: 70, rcsFront: 1, rcsSide: 3,
+  gearHeight: 1.49, tailStrike: 12, rotateIas: 70,
+  hitboxes: [[[0, 0, 0], [0.7, 7, 0.65]], [[0, -2, -0.25], [3.85, 1.6, 0.15]], [[0, -5.6, 1.2], [2.3, 1.0, 1.4]]],
+  gunPos: [0, 5, -0.2],
+};
+export const T45C = {
+  ...TRAINER, id: 't45', model: 't45', proc: true, name: 'T-45C Goshawk', short: 'T-45C', callsign: 'Goshawk', carrier: true,
+  emptyMass: 4460, internalFuel: 1310, wingArea: 17.7, wingSpan: 9.4, length: 12.0,
+  engines: 1, thrustDry: 24600, thrustAb: 24600, fuelFlowDry: 0.6, fuelFlowAb: 0.6,
+  clAlpha: 4.2, clMax: 1.5, alphaStall: 24, alphaLimit: 22, cd0: 0.0195, kInduced: 0.1, pylonCd: 0,
+  waveDrag: [[0, 0], [0.76, 0], [0.82, 0.008], [0.88, 0.035], [0.95, 0.08]],
+  gMax: 7.33, gMin: -3, rollRate: 220, yawBeta: 6, airbrakeCd: 0.06, hp: 75, rcsFront: 1.5, rcsSide: 4,
+  gearHeight: 1.8, tailStrike: 13, rotateIas: 56,
+  hitboxes: [[[0, 0, 0], [0.7, 6, 0.75]], [[0, -0.6, -0.35], [4.7, 1.6, 0.2]], [[0, -4.9, 1.2], [2.3, 0.9, 1.4]]],
+  gunPos: [0, 4, -0.4],
+};
+
+// The Sukhois (the enemy of the WW3 campaign, flyable in free play too).  Su-35S: 2 x AL-41F1S, 2 x 86.3 /
+// 2 x 142 kN, 3-D thrust vectoring, 9 G, Mach 2.25; Su-57: 2 x AL-41F1, 2 x 88 / 2 x 147 kN, stealthy shape,
+// weapons inside.  Missiles: R-73 (IR) and R-77 (active radar) - the game's AIM-9M / AIM-120A stations.
+const SU_GUN = { ...M61A1, name: 'GSh-30-1', rateRpm: 1650, ammo: 150, muzzle: 860, damage: 16, dispersionMrad: 2.0 };
+export const SU35 = {
+  ...F15EX, id: 'su35', model: 'su35', proc: true, name: 'Su-35S Flanker-E', short: 'Su-35', callsign: 'Flanker', mfdLayout: 'fa18',
+  emptyMass: 18400, internalFuel: 11500, wingArea: 62, wingSpan: 15.3, length: 21.9,
+  engines: 2, thrustDry: 172600, thrustAb: 284000, fuelFlowDry: 3.6, fuelFlowAb: 15.5,
+  clAlpha: 3.8, clMax: 1.9, alphaStall: 32, alphaLimit: 28, cd0: 0.022, kInduced: 0.12, pylonCd: 0.0012,
+  gMax: 9, gMin: -3, rollRate: 260, hp: 130, rcsFront: 10, rcsSide: 20, gearHeight: 2.95, tailStrike: 13, rotateIas: 72,
+  hitboxes: [[[0, 0, 0], [1.6, 10.5, 1.0]], [[0, -3.5, 0.1], [7.6, 2.4, 0.3]], [[0, -9, 1.6], [4.6, 1.2, 2.2]]],
+  gun: SU_GUN, gunPos: [1.0, 5.5, 0.3], radar: { ...APG82, name: 'N035 Irbis-E', rwrSymbol: '35' },
+  tvc: { vector: 15, alphaNormal: 32, alphaPostStall: 90, rollRate: 320, pitchRate: 2.5, thrustScale: 1.1, kScale: 0.8, clMax: 2.5, lowSpeedAuthority: 0.7 },
+  // the store_N points of the Blender model (assets/su35.glb)
+  stations: { 1: [-7.23, -3.80, -0.37], 2: [-5.30, -2.39, -0.68], 3: [-3.70, -1.47, -0.63], 4: [-1.25, -0.65, -1.41], 5: [1.25, -0.65, -1.41], 6: [3.70, -1.47, -0.63], 7: [5.30, -2.39, -0.68], 8: [7.23, -3.80, -0.37] },
+  pylons: { 1: ['AIM-9M'], 8: ['AIM-9M'], 2: ['AIM-9M', 'AIM-120A'], 7: ['AIM-9M', 'AIM-120A'], 3: ['AIM-9M', 'AIM-120A'], 6: ['AIM-9M', 'AIM-120A'], 4: ['AIM-120A'], 5: ['AIM-120A'] },
+  prefer: { 'AIM-120A': [4, 5, 3, 6, 2, 7], 'AIM-9M': [1, 8, 2, 7, 3, 6] },
+  loadouts: { default: { 1: 'AIM-9M', 8: 'AIM-9M', 2: 'AIM-9M', 7: 'AIM-9M', 3: 'AIM-120A', 6: 'AIM-120A', 4: 'AIM-120A', 5: 'AIM-120A' } },
+  firingOrder: [1, 8, 2, 7, 3, 6, 4, 5], bays: undefined,
+};
+export const SU57 = {
+  ...SU35, id: 'su57', model: 'su57', name: 'Su-57 Felon', short: 'Su-57', callsign: 'Felon', internal: true,
+  emptyMass: 18000, internalFuel: 10300, wingArea: 78.8, wingSpan: 14.1, length: 20.1,
+  thrustDry: 176000, thrustAb: 294000, cd0: 0.0205, rcsFront: 0.25, rcsSide: 1.5, hp: 125, gearHeight: 2.93,
+  radar: { ...APG77, name: 'N036 Byelka', rwrSymbol: '57' },
+  hitboxes: [[[0, 0, 0], [1.6, 9.8, 0.9]], [[0, -3.0, 0.1], [7.0, 2.6, 0.3]], [[0, -8.5, 0.8], [5.3, 1.2, 1.6]]],
+  stations: { 1: [-0.8, 1.0, -0.5], 2: [0.8, 1.0, -0.5], 3: [-0.8, -1.5, -0.5], 4: [0.8, -1.5, -0.5], 5: [-2.6, 1.8, -0.2], 6: [2.6, 1.8, -0.2] },
+  pylons: { 5: ['AIM-9M'], 6: ['AIM-9M'], 1: ['AIM-120A'], 2: ['AIM-120A'], 3: ['AIM-120A'], 4: ['AIM-120A'] },
+  prefer: { 'AIM-120A': [1, 2, 3, 4], 'AIM-9M': [5, 6] },
+  loadouts: { default: { 5: 'AIM-9M', 6: 'AIM-9M', 1: 'AIM-120A', 2: 'AIM-120A', 3: 'AIM-120A', 4: 'AIM-120A' } },
+  firingOrder: [5, 6, 1, 2, 3, 4],
+};
+// More jets built in code: two MiGs, the European canard deltas and the Chinese J-20.  Numbers from the makers'
+// and air forces' published data (empty mass, internal fuel, wing area, engines dry / with afterburner, G limit).
+// stations: wing tips (IR only), two under each wing (both), two under the fuselage (radar missiles)
+function std(tip, mid, inn, fus) {
+  const m = (p) => [-p[0], p[1], p[2]];
+  return {
+    stations: { 1: m(tip), 2: m(mid), 3: m(inn), 4: m(fus), 5: fus, 6: inn, 7: mid, 8: tip },
+    pylons: { 1: ['AIM-9M'], 8: ['AIM-9M'], 2: ['AIM-9M', 'AIM-120A'], 7: ['AIM-9M', 'AIM-120A'], 3: ['AIM-9M', 'AIM-120A'], 6: ['AIM-9M', 'AIM-120A'], 4: ['AIM-120A'], 5: ['AIM-120A'] },
+    prefer: { 'AIM-120A': [4, 5, 3, 6, 2, 7], 'AIM-9M': [1, 8, 2, 7, 3, 6] },
+    loadouts: { default: { 1: 'AIM-9M', 8: 'AIM-9M', 2: 'AIM-9M', 7: 'AIM-9M', 3: 'AIM-120A', 6: 'AIM-120A', 4: 'AIM-120A', 5: 'AIM-120A' } },
+    firingOrder: [1, 8, 2, 7, 3, 6, 4, 5],
+  };
+}
+const boxes = (L, span) => [[[0, 0, 0], [1.0, L / 2, 0.8]], [[0, -L * 0.15, 0], [span / 2, L * 0.15, 0.25]], [[0, -L * 0.42, 1.4], [span * 0.25, L * 0.08, 1.4]]];
+const jet = (base, o) => ({ ...base, proc: true, mfdLayout: 'fa18', bays: undefined, tvc: undefined, tvcAlways: undefined, ...o,
+  hitboxes: boxes(o.length, o.wingSpan) });
+const WAVE = [[0, 0], [0.8, 0], [0.88, 0.004], [0.95, 0.018], [1.0, 0.03], [1.05, 0.035], [1.2, 0.037], [1.6, 0.027], [2.2, 0.02]];
+export const MIG29 = jet(F16C, {
+  id: 'mig29', model: 'mig29', name: 'MiG-29 Fulcrum', short: 'MiG-29', callsign: 'Fulcrum', nation: 'ru',
+  emptyMass: 11000, internalFuel: 3400, wingArea: 38, wingSpan: 11.36, length: 17.32,
+  engines: 2, thrustDry: 98800, thrustAb: 162800, fuelFlowDry: 2.2, fuelFlowAb: 9.5,
+  clAlpha: 3.9, clMax: 1.8, alphaStall: 30, alphaLimit: 26, cd0: 0.021, kInduced: 0.12, waveDrag: WAVE,
+  gMax: 9, rollRate: 250, hp: 100, rcsFront: 5, rcsSide: 12, gearHeight: 2.72, tailStrike: 13, rotateIas: 65,
+  gun: SU_GUN, gunPos: [-1.0, 4.5, 0.2], radar: { ...APG68, name: 'N019', rwrSymbol: '29' },
+  ...std([4.65, -2.48, -0.63], [3.6, -1.91, -0.61], [2.55, -1.30, -0.59], [1.0, -0.85, -1.13]),
+});
+export const MIG31 = jet(F15EX, {
+  id: 'mig31', model: 'mig31', name: 'MiG-31 Foxhound', short: 'MiG-31', callsign: 'Foxhound', nation: 'ru',
+  emptyMass: 21820, internalFuel: 14000, wingArea: 61.6, wingSpan: 13.46, length: 22.69,
+  engines: 2, thrustDry: 186000, thrustAb: 304000, fuelFlowDry: 4.2, fuelFlowAb: 20,
+  clAlpha: 3.4, clMax: 1.3, alphaStall: 20, alphaLimit: 18, cd0: 0.024, kInduced: 0.14,
+  waveDrag: [[0, 0], [0.85, 0], [0.95, 0.02], [1.05, 0.03], [1.5, 0.025], [2.5, 0.018], [2.9, 0.02]],
+  gMax: 5, gMin: -2, rollRate: 150, hp: 140, rcsFront: 15, rcsSide: 25, gearHeight: 2.88, tailStrike: 12, rotateIas: 80,
+  gun: { ...SU_GUN, name: 'GSh-6-23', rateRpm: 8000, ammo: 260, damage: 10 }, gunPos: [1.2, 1.0, -0.5],
+  radar: { ...APG82, name: 'Zaslon-M', searchRange: 160000, lockRange: 110000, rwrSymbol: '31' },
+  ...std([5.6, -3.21, -0.01], [4.3, -2.58, 0.09], [3.1, -1.96, 0.18], [1.2, -3.05, -0.83]),
+});
+export const GRIPEN = jet(F16C, {
+  id: 'gripen', model: 'gripen', name: 'JAS 39 Gripen C', short: 'Gripen', callsign: 'Gripen', nation: 'se',
+  emptyMass: 6800, internalFuel: 2400, wingArea: 30, wingSpan: 8.4, length: 14.1,
+  engines: 1, thrustDry: 54000, thrustAb: 80500, fuelFlowDry: 1.2, fuelFlowAb: 5.5,
+  clAlpha: 3.6, clMax: 1.7, alphaStall: 28, alphaLimit: 26, cd0: 0.019, kInduced: 0.14, waveDrag: WAVE,
+  gMax: 9, rollRate: 280, hp: 85, rcsFront: 0.6, rcsSide: 4, gearHeight: 1.77, tailStrike: 13, rotateIas: 62,
+  gun: { ...M61A1, name: 'BK 27', rateRpm: 1700, ammo: 120, muzzle: 1025, damage: 15 }, gunPos: [-0.6, 1.0, -0.4],
+  radar: { ...APG68, name: 'PS-05/A', searchRange: 90000, lockRange: 65000, rwrSymbol: 'GR' },
+  ...std([4.08, -3.90, -0.21], [3.0, -2.92, -0.57], [1.9, -2.27, -0.57], [0.55, -1.55, -0.61]),
+});
+export const TYPHOON = jet(F15EX, {
+  id: 'typhoon', model: 'typhoon', name: 'Eurofighter Typhoon', short: 'Typhoon', callsign: 'Typhoon', nation: 'uk',
+  emptyMass: 11000, internalFuel: 5000, wingArea: 51.2, wingSpan: 10.95, length: 15.96,
+  engines: 2, thrustDry: 120000, thrustAb: 180000, fuelFlowDry: 2.4, fuelFlowAb: 9,
+  clAlpha: 3.7, clMax: 1.9, alphaStall: 32, alphaLimit: 28, cd0: 0.019, kInduced: 0.12, waveDrag: WAVE,
+  gMax: 9, rollRate: 280, hp: 100, rcsFront: 0.5, rcsSide: 4, gearHeight: 2.12, tailStrike: 13, rotateIas: 62,
+  gun: { ...M61A1, name: 'BK 27', rateRpm: 1700, ammo: 150, muzzle: 1025, damage: 15 }, gunPos: [0.8, 1.0, -0.3],
+  radar: { ...APG79, name: 'Captor-E', rwrSymbol: 'EF' },
+  ...std([5.48, -4.95, -0.2], [4.0, -3.54, -0.59], [2.6, -2.53, -0.61], [0.6, -0.55, -0.66]),
+});
+export const RAFALE = jet(F15EX, {
+  id: 'rafale', model: 'rafale', name: 'Dassault Rafale C', short: 'Rafale', callsign: 'Rafale', nation: 'fr',
+  emptyMass: 10300, internalFuel: 4700, wingArea: 45.7, wingSpan: 10.9, length: 15.27,
+  engines: 2, thrustDry: 100000, thrustAb: 150000, fuelFlowDry: 2.1, fuelFlowAb: 8,
+  clAlpha: 3.7, clMax: 1.9, alphaStall: 32, alphaLimit: 29, cd0: 0.019, kInduced: 0.12, waveDrag: WAVE,
+  gMax: 9, rollRate: 270, hp: 95, rcsFront: 1, rcsSide: 5, gearHeight: 2.02, tailStrike: 13, rotateIas: 60,
+  gun: { ...M61A1, name: 'GIAT 30', rateRpm: 2500, ammo: 125, muzzle: 1025, damage: 16 }, gunPos: [0.9, 0.8, -0.3],
+  radar: { ...APG79, name: 'RBE2 AA', rwrSymbol: 'RF' },
+  ...std([5.48, -4.68, -0.22], [3.9, -3.42, -0.56], [2.5, -2.62, -0.54], [0.75, -2.05, -0.55]),
+});
+export const J20 = jet(F15EX, {
+  id: 'j20', model: 'j20', name: 'Chengdu J-20', short: 'J-20', callsign: 'Mighty Dragon', nation: 'cn', internal: true,
+  emptyMass: 17000, internalFuel: 10000, wingArea: 73, wingSpan: 13.5, length: 20.4,
+  engines: 2, thrustDry: 178000, thrustAb: 284000, fuelFlowDry: 3.6, fuelFlowAb: 15,
+  clAlpha: 3.7, clMax: 1.8, alphaStall: 30, alphaLimit: 26, cd0: 0.020, kInduced: 0.12, waveDrag: WAVE,
+  gMax: 9, rollRate: 230, hp: 120, rcsFront: 0.2, rcsSide: 1.5, gearHeight: 2.5, tailStrike: 13, rotateIas: 72,
+  gun: SU_GUN, gunPos: [1.0, 4.0, 0.0], radar: { ...APG77, name: 'KLJ-5', rwrSymbol: '20' },
+  ...std([1.6, 1.5, -0.6], [1.0, 0.5, -0.6], [1.0, -1.5, -0.6], [0.5, -3.0, -0.6]),
+});
+
+// the missiles under their own names (the game's AIM-9M / AIM-120A stations: IR and active radar)
+const NAMES = { ru: ['R-73', 'R-77'], se: ['IRIS-T', 'Meteor'], uk: ['ASRAAM', 'Meteor'], fr: ['MICA IR', 'MICA EM'], cn: ['PL-10', 'PL-15'] };
+export const WEAPON_CLASS = {};
+for (const [ir, arh] of Object.values(NAMES)) { WEAPON_CLASS[ir] = 'AIM-9M'; WEAPON_CLASS[arh] = 'AIM-120A'; }
+const named = (set, n) => (n ? { 'AIM-9M': { ...set['AIM-9M'], name: n[0] }, 'AIM-120A': { ...set['AIM-120A'], name: n[1] } } : set);
+export function missilesFor(spec, enemy) {
+  const n = NAMES[spec.nation || (spec.id && spec.id.startsWith('su') ? 'ru' : '')];
+  return named(enemy ? BANDIT_MISSILES : PLAYER_MISSILES, n);
+}
+export const RU_MISSILES = named(BANDIT_MISSILES, NAMES.ru);
+export const RU_PLAYER_MISSILES = named(PLAYER_MISSILES, NAMES.ru);
+
+export const AIRCRAFT = { f16: F16C, fa18: FA18E, f22: F22A, f15: F15EX, f15a: F15A, su35: SU35, su57: SU57,
+  mig29: MIG29, mig31: MIG31, gripen: GRIPEN, typhoon: TYPHOON, rafale: RAFALE, j20: J20 };
+// the menu's picker: groups of jets
+export const PLANE_GROUPS = [
+  ['USA', ['f16', 'fa18', 'f15', 'f22', 'f15a']], ['Oroszország', ['su35', 'su57', 'mig29', 'mig31']],
+  ['Európa', ['gripen', 'typhoon', 'rafale']], ['Kína', ['j20']], ['Gyakorlógépek', ['t6', 't38', 't45']],
+];
+export const TRAINERS = { t6: T6A, t38: T38C, t45: T45C };
 
 // the enemies fly the same jets with a weaker airframe: less G, slower roll, lower angle of attack limit
 export const BANDITS = {
@@ -255,6 +425,14 @@ export const BANDITS = {
   fa18: { ...FA18E, name: 'F/A-18E (ellenfél)', gMax: 6.3, rollRate: 150, alphaLimit: 28 },
   f22: { ...F22A, name: 'F-22A (ellenfél)', gMax: 6.8, rollRate: 190, tvcAlways: false, tvc: undefined },
   f15: { ...F15EX, name: 'F-15EX (ellenfél)', gMax: 7, rollRate: 180, alphaLimit: 22 },
+  su35: { ...SU35, name: 'Su-35 (ellenség)', gMax: 7.5, rollRate: 200, alphaLimit: 24, tvc: undefined },
+  su57: { ...SU57, name: 'Su-57 (ellenség)', gMax: 7.2, rollRate: 200, alphaLimit: 24, tvc: undefined },
+  mig29: { ...MIG29, gMax: 7.2, rollRate: 190, alphaLimit: 22 },
+  mig31: { ...MIG31, gMax: 4.5, rollRate: 120 },
+  gripen: { ...GRIPEN, gMax: 7.2, rollRate: 210, alphaLimit: 22 },
+  typhoon: { ...TYPHOON, gMax: 7.4, rollRate: 210, alphaLimit: 24 },
+  rafale: { ...RAFALE, gMax: 7.4, rollRate: 210, alphaLimit: 24 },
+  j20: { ...J20, gMax: 7, rollRate: 180, alphaLimit: 22 },
 };
 export const F16C_BANDIT = BANDITS.f16;
 

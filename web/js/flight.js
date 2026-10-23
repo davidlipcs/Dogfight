@@ -59,6 +59,7 @@ export class FlightModel {
     this.pos = V(x, y, groundZ + this.gearHeight); this.vel = V();
     this.quat = qheading(headingDeg, 0); this.omega = V();
     this.gearDown = true; this.gearPos = 1; this.onGround = true; this.groundPitch = 0; this.engine = 0; this.nzCmd = 1;
+    this.groundZ = groundZ; this.arrest = 0; this.catapultAcc = 0;
   }
   setGear(down) {
     if (!down && this.onGround) return false;
@@ -202,6 +203,7 @@ export class FlightModel {
     else if (pitch < -3) reason = 'orral értél földet';
     else if (pitch > (s.tailStrike ?? 13) + 7) reason = 'farokkal értél földet';
     else if (terrain.slope(this.pos.x, this.pos.y) > 6 * DEG) reason = 'egyenetlen terep';
+    else if (terrain.isWater && terrain.isWater(this.pos.x, this.pos.y)) reason = 'a tengerbe csapódtál';
     if (reason) {
       this.contactEvent = 'crash'; this.crashReason = reason; this.pos.z = groundZ + 1; return false;
     }
@@ -209,7 +211,7 @@ export class FlightModel {
     this.contactEvent = pitch > (s.tailStrike ?? 13) + 2 ? 'tailstrike' : 'touchdown';
     this.groundPitch = Math.max(0, pitch) * DEG;
     this.omega = V(); this.nzCmd = 1;
-    this.pos.z = groundZ + this.gearHeight; this.vel.z = 0;
+    this.pos.z = groundZ + this.gearHeight; this.vel.z = 0; this.groundZ = groundZ;
     return true;
   }
 
@@ -221,7 +223,7 @@ export class FlightModel {
     let normal = 0;
     if (acc.z < 0) { normal = -acc.z; acc.z = 0; }
     const paved = terrain.airfield ? terrain.airfield.onPaved(this.pos.x, this.pos.y) : true;
-    const mu = (paved ? MU_PAVED : MU_GRASS) + (c.brakes ? MU_BRAKE : 0);
+    const mu = (paved ? MU_PAVED : MU_GRASS) + (c.brakes || this.parkBrake ? MU_BRAKE : 0);
     const u = dot(this.vel, hDir), w = dot(this.vel, hRight);
     if (Math.abs(u) > 1e-3) {
       const decel = Math.min(mu * normal, Math.abs(u) / dt);
@@ -229,6 +231,12 @@ export class FlightModel {
     } else if (normal > 0) {
       const along = dot(acc, hDir), hold = mu * normal;
       acc.addScaledVector(hDir, -(Math.abs(along) <= hold ? along : Math.sign(along) * hold));
+    }
+    // carrier: the catapult shuttle pulls forward, the arresting wire holds back (set by the game)
+    if (this.catapultAcc) acc.addScaledVector(hDir, this.catapultAcc);
+    if (this.arrest) {
+      if (u > 1.2) acc.addScaledVector(hDir, -Math.min(this.arrest, u / dt));
+      else this.arrest = 0;
     }
     const grip = 0.8 * normal;
     acc.addScaledVector(hRight, -clamp(w / Math.max(dt, 0.02), -grip, grip));
@@ -241,6 +249,7 @@ export class FlightModel {
     const stick = clamp(c.pitch, -1, 1);
     let pitchRate = stick > 0 ? stick * 7 * DEG * auth : 0;
     if (pitchRate <= 0) pitchRate = -3.5 * DEG;
+    if (this.catapultAcc && ias > (this.spec.rotateIas ?? 60) - 4) pitchRate = Math.max(pitchRate, 9 * DEG);   // catapult: hands-off rotation
     this.groundPitch = clamp(this.groundPitch + pitchRate * dt, 0, tailStrike * DEG);
 
     this.vel.addScaledVector(acc, dt);
@@ -249,8 +258,15 @@ export class FlightModel {
     this.quat = qheading(heading / DEG, this.groundPitch / DEG);
     this.omega = V(this.groundPitch > 0 ? pitchRate : 0, 0, 0);
     const ng = terrain.height(this.pos.x, this.pos.y);
+    if (this.groundZ !== undefined && this.groundZ - ng > 3) {
+      // rolled off an edge (the carrier's deck): from here it flies - or falls
+      this.onGround = false; this.groundZ = undefined; this.catapultAcc = 0;
+      this.alpha = t.alpha; this.mach = t.mach; this.rho = t.rho; this.qbar = t.qbar; this.ias = ias; this.accel = acc;
+      return;
+    }
+    this.groundZ = ng;
     if (normal === 0 && this.vel.z > 0) {
-      if (this.pos.z > ng + this.gearHeight + 0.3) this.onGround = false;
+      if (this.pos.z > ng + this.gearHeight + 0.3) { this.onGround = false; this.groundZ = undefined; }
     } else { this.pos.z = ng + this.gearHeight; this.vel.z = 0; }
     this.alpha = t.alpha; this.beta = 0; this.mach = t.mach; this.rho = t.rho; this.qbar = t.qbar;
     this.ias = ias; this.accel = acc;

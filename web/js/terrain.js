@@ -24,19 +24,27 @@ export class Airfield {
 }
 
 export class Terrain {
-  constructor(data) {
+  constructor(data) { this.load(data); }
+  // a new map in the same object (the carrier and the scene keep their references): data.heights is the
+  // packed Int16 grid of terrain.json, data.grid a ready Float32Array (the real world, world.js)
+  load(data) {
     this.size = data.size;
     this.res = data.res;
     this.n = data.res + 1;
     this.cell = this.size / this.res;
     this.half = this.size / 2;
-    const raw = b64ToArray(data.heights, Int16Array);
-    this.grid = new Float32Array(raw.length);
+    if (data.grid) this.grid = data.grid;
+    else {
+      const raw = b64ToArray(data.heights, Int16Array);
+      this.grid = new Float32Array(raw.length);
+      for (let i = 0; i < raw.length; i++) this.grid[i] = raw[i] * data.scale;
+    }
     let max = -1e9;
-    for (let i = 0; i < raw.length; i++) { this.grid[i] = raw[i] * data.scale; if (this.grid[i] > max) max = this.grid[i]; }
+    for (let i = 0; i < this.grid.length; i++) if (this.grid[i] > max) max = this.grid[i];
     this.maxHeight = max;
     const a = data.airfield;
-    this.airfield = new Airfield(a.x, a.y, a.elevation);
+    if (this.airfield) Object.assign(this.airfield, { x: a.x, y: a.y, elevation: a.elevation });
+    else this.airfield = new Airfield(a.x, a.y, a.elevation);
   }
   at(i, j) { return this.grid[j * this.n + i]; }
   rawHeight(x, y) {

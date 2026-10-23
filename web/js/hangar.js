@@ -35,9 +35,8 @@ export const MODS = [
 ];
 
 // jets that have to be bought (the four of the base game are free)
-export const PLANES = [
-  { id: 'f15a', name: 'F-15 ACTIVE (NASA)', price: 3000, desc: 'Kísérleti F-15: kacsaszárny és tolóerő-vektoros fúvócsövek. Tab = TVC: 9 G nagy állásszögben is, Cobra, 300°/s orsózás. Könnyebb, mint az F-15EX.' },
-];
+// every jet is free now (the F-15 ACTIVE used to cost 3000: who bought it gets the credits back)
+export const PLANES = [];
 
 const FRESH = () => ({ credits: START_CREDITS, earned: 0, skins: { factory: true }, skin: 'factory', upgrades: {}, mods: {}, modsOn: {}, planes: {} });
 
@@ -46,6 +45,7 @@ export class Hangar {
     this.data = FRESH();
     try { Object.assign(this.data, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* private mode */ }
     this.listeners = [];
+    if (this.data.planes && this.data.planes.f15a && !this.data.refunded) { this.data.credits += 3000; this.data.refunded = true; this.save(); }
   }
   save() {
     try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch (e) { /* private mode */ }

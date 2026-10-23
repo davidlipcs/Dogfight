@@ -1,6 +1,8 @@
 // Three.js scene: aircraft, terrain, sky, clouds, airfield, particles, tracers.
 import { THREE, V, add, mul, xform, b64ToArray, DEG, clamp, rng, copy } from './util.js';
 import { RUNWAY_LENGTH, RUNWAY_WIDTH, TAXIWAY_OFFSET, TAXIWAY_WIDTH, APRON } from './terrain.js';
+import { buildProc, procInfo, DESIGNS } from './proc.js';
+import { GoogleTiles } from './gtiles.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.55, 0.70).normalize();
 const HORIZON = new THREE.Color(0.72, 0.81, 0.90);
@@ -58,6 +60,60 @@ function softTexture(size = 64, power = 1.6) {
   return new THREE.CanvasTexture(c);
 }
 
+// tileable water normals: a sum of waves whose frequencies are whole numbers per tile
+function waterNormals(size = 256) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d'), img = g.createImageData(size, size), r = rng(21);
+  const waves = Array.from({ length: 14 }, () => ({ kx: Math.round(r.uniform(-9, 9)) || 1, ky: Math.round(r.uniform(-9, 9)), a: r.uniform(0.3, 1), p: r.uniform(0, 6.3) }));
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let dx = 0, dy = 0;
+    for (const w of waves) {
+      const ph = 2 * Math.PI * (w.kx * x + w.ky * y) / size + w.p, k = Math.cos(ph) * w.a / Math.hypot(w.kx, w.ky);
+      dx += k * w.kx; dy += k * w.ky;
+    }
+    const n = new THREE.Vector3(-dx * 0.08, -dy * 0.08, 1).normalize(), i = (y * size + x) * 4;
+    img.data[i] = (n.x * 0.5 + 0.5) * 255; img.data[i + 1] = (n.y * 0.5 + 0.5) * 255; img.data[i + 2] = (n.z * 0.5 + 0.5) * 255; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+// ground detail: grey noise around 1.0 multiplied into the terrain colour at two scales (world position based)
+function detailTexture(size = 256) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d'), img = g.createImageData(size, size), r = rng(33);
+  const lat = new Float32Array(size * size).map(() => r());
+  const at = (x, y) => lat[((y + size) % size) * size + ((x + size) % size)];
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let v = 0;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) v += at(x + ox, y + oy);
+    v = v / 9 * 0.6 + at(x, y) * 0.4;
+    const i = (y * size + x) * 4, k = 128 + (v - 0.5) * 120;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = k; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+function addGroundDetail(mat, tex) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.detailMap = { value: tex };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGround;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGround = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D detailMap;\nvarying vec3 vGround;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float dd = length(vGround - cameraPosition);
+        float d1 = texture2D(detailMap, vGround.xy / 37.0).r, d2 = texture2D(detailMap, vGround.xy / 410.0).r;
+        float fadeNear = 1.0 - smoothstep(1500.0, 6000.0, dd);
+        diffuseColor.rgb *= mix(1.0, (0.55 + 0.9 * d1), 0.55 * fadeNear) * (0.75 + 0.5 * d2);`);
+  };
+  mat.customProgramCacheKey = () => 'ground-detail';
+}
+
 function puffTexture(seed = 3) {
   const size = 128, r = rng(seed);
   const c = document.createElement('canvas');
@@ -84,7 +140,7 @@ const MOVING = ['lef_L', 'lef_R', 'flap_L', 'flap_R', 'ail_L', 'ail_R', 'stab_L'
 const ROT = new THREE.Quaternion(), V3 = new THREE.Vector3();
 const VAPOR_STEP = { f16: [0.27, -1.0, -0.03], fa18: [0.45, -1.4, -0.05] };   // second LEX / strake vapour point
 const LEGACY_SCREENS = ['mfd_l', 'mfd_r', 'ded', 'rwr'];                   // the quads of f16.json's screens, in order
-const MISSILE_MODELS = { 'AIM-9M': 'aim9m', 'AIM-120A': 'aim120c' };
+const MISSILE_MODELS = { 'AIM-9M': 'aim9m', 'AIM-120A': 'aim120c', 'R-73': 'aim9m', 'R-77': 'aim120c' };
 const FOLD = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0);
 const COCKPIT_STATIONS = {      // where the missiles hang on the cockpit view model
   1: [-4.88, -0.55, 0.10], 2: [-3.75, -0.95, -0.38], 3: [-2.60, -0.55, -0.45],
@@ -128,7 +184,7 @@ export class Models {
     this.glbMat = {};
     for (const [key, g] of Object.entries(glb)) this.glbMat[key] = g.materials.map((m) => this.material(m));
     this.types = {};
-    for (const spec of Object.values(specs)) if (!this.types[spec.model]) this.types[spec.model] = this.typeInfo(spec);   // first spec per model
+    for (const spec of Object.values(specs)) if (!this.types[spec.model]) this.types[spec.model] = this.glb[spec.model] ? this.typeInfo(spec) : procInfo(spec);   // first spec per model
     this.skinCache = {};
   }
   // Reference points of a Blender model in the aircraft frame (+Y forward, +Z up) and the effects hung on
@@ -156,7 +212,7 @@ export class Models {
       // the pilot's eye: the old F-16 cockpit model has its own; the Hornet's is a point of its model
       cockpit: legacy ? 'legacy' : 'self', eye: legacy ? V(...this.data.eye) : ref.ref_eye,
       // the middle of the displays (N) and the field of view that fits them
-      panel: legacy ? V(0, 3.28, 0.63) : { f22: V(0, 4.98, 0.82 + modelZ), f15: V(0, 5.42, 1.13 + modelZ) }[spec.model] || V(0, 5.37, 1.0 + modelZ),
+      panel: legacy ? V(0, 3.28, 0.63) : ref.ref_panel || { f22: V(0, 4.98, 0.82 + modelZ), f15: V(0, 5.42, 1.13 + modelZ) }[spec.model] || V(0, 5.37, 1.0 + modelZ),
       panelFov: legacy ? 30 : { f22: 42, f15: 38 }[spec.model] || 40,
     };
   }
@@ -217,6 +273,7 @@ export class Models {
         const surf = new THREE.Group();
         for (const p of n.prims) {
           const mesh = new THREE.Mesh(p.geometry, mats[p.material]);
+          if (!mats[p.material].transparent) { mesh.castShadow = true; mesh.receiveShadow = true; }
           if (mats[p.material].transparent) mesh.renderOrder = 2;
           surf.add(mesh);
         }
@@ -224,9 +281,12 @@ export class Models {
         if (parts && MOVING.includes(n.name)) parts[n.name] = { surf, sign: 1, angle: 0 };
       }
       for (const c of n.children) o.add(build(c));
+      if (n.name === 'prop') propNode = o;
       return o;
     };
+    let propNode = null;
     const model = build(this.glb[key].root);
+    if (propNode) { model.userData.prop = propNode; propNode.userData.glb = true; }
     model.rotation.x = Math.PI / 2;                     // glTF: +Y up, -Z forward; the game: +Z up, +Y forward
     return model;
   }
@@ -254,6 +314,12 @@ export class Models {
     if (this.envTex) this.envTex.needsUpdate = true;
   }
   aircraft(key = 'f16', skin = null) {
+    if (!this.glb[key] && DESIGNS[key]) {                 // built in code (proc.js)
+      const root = new THREE.Group(), { model, parts, gear } = buildProc(key, this.env, skin);
+      root.add(model);
+      Object.assign(root.userData, { model, parts, gear, gearPos: 1, bays: { doors: [], racks: {}, stores: {} } });
+      return root;
+    }
     const root = new THREE.Group(), parts = {}, gear = [], bays = { doors: [], racks: {}, stores: {} };
     const model = this.instance(key, parts, gear, bays, skin);
     root.userData.bays = bays;
@@ -408,6 +474,7 @@ export function animateSurfaces(parts, dt, c, alphaDeg, flaps, brake, onGround) 
     move('lef_R', lef); move('lef_L', lef);
     const toe = onGround && flaps > 0.5 && !parts.sb_dorsal ? 20 : 0, flare = parts.sb_dorsal ? 0 : brake * 25;
     move('rudder_L', c.yaw * 25 + toe - flare); move('rudder_R', c.yaw * 25 - toe + flare);
+    move('rudder', c.yaw * 25);
     for (const n of ['sb_up_R', 'sb_up_L']) move(n, brake * 55);
     return;
   }
@@ -478,6 +545,8 @@ class Particles {
   }
 }
 
+const CLOUDS = { low: 0, medium: 70, high: 120, ultra: 200 };   // cloud groups per quality
+
 // --------------------------------------------------------------------- scene
 export class SceneView {
   constructor(renderer, models, terrain, world) {
@@ -489,7 +558,11 @@ export class SceneView {
     this.camera.up.set(0, 0, 1);
     const sun = this.sunLight = new THREE.DirectionalLight(0xfff4e0, 2.2);
     sun.position.copy(SUN_DIR).multiplyScalar(1000);
-    scene.add(sun);
+    scene.add(sun); scene.add(sun.target);
+    // shadows of the aircraft (and the carrier's island) on the ground near the camera: the shadow box follows
+    // the view (render()); size and resolution from the quality setting
+    sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
+    sun.shadow.camera.near = 10; sun.shadow.camera.far = 4000;
     const hemi = this.hemi = new THREE.HemisphereLight(0xbcd2f0, 0x4a5236, 0.95);
     hemi.position.set(0, 0, 1);
     scene.add(hemi);
@@ -515,8 +588,17 @@ export class SceneView {
   }
   // graphics quality: low hides the clouds and the contrails (the pixel ratio is set by the game)
   setQuality(q) {
+    const was = this.quality;
     this.quality = q;
+    if (this.clouds && was !== q && this.cloudCount !== CLOUDS[q]) { this.scene.remove(this.clouds); this.buildClouds(); if (this.timeOfDay) for (const m of this.cloudMats) m.color.setHex((TIMES[this.timeOfDay] || TIMES.day).cloud); }
     if (this.clouds) this.clouds.visible = q !== 'low';
+    const sh = { high: [2048, 70], ultra: [4096, 130] }[q], sun = this.sunLight;
+    sun.castShadow = !!sh;
+    if (sh && sun.shadow.mapSize.x !== sh[0]) { sun.shadow.mapSize.set(sh[0], sh[0]); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+    if (sh) { const c = sun.shadow.camera; c.left = -sh[1]; c.right = sh[1]; c.top = sh[1]; c.bottom = -sh[1]; c.updateProjectionMatrix(); }
+    this.shadowBox = sh ? sh[1] : 0;
+    if (this.seaMat) { this.seaMat.normalMap = q === 'low' ? null : this.waterTex; this.seaMat.needsUpdate = true; }
+    if (this.carrierParked) this.carrierParked.visible = q !== 'low';
   }
   setTimeOfDay(name) {
     const t = TIMES[name] || TIMES.day;
@@ -538,7 +620,7 @@ export class SceneView {
     }
     this.stars.visible = t.stars;
     this.seaMat.color.setHex(t.sea);
-    this.seaMat.specular.setHex(t.stars ? 0x223344 : 0x8899aa);
+    this.seaMat.envMapIntensity = t.stars ? 0.25 : 1.0;
     for (const m of this.cloudMats) m.color.setHex(t.cloud);
     this.models.paintEnv(t.env, !!t.sprite && !t.stars);
     this.renderer.toneMappingExposure = t.exposure;
@@ -591,16 +673,34 @@ export class SceneView {
   }
   buildSea() {
     const g = new THREE.PlaneGeometry(320000, 320000, 32, 32);
-    this.seaMat = new THREE.MeshPhongMaterial({ color: 0x2b5674, specular: 0x8899aa, shininess: 60 });
-    const m = new THREE.Mesh(g, this.seaMat);
+    // the sea: glossy, with moving wave normals reflecting the sky (env map) and the sun
+    this.waterTex = waterNormals();
+    this.waterTex.repeat.set(320000 / 140, 320000 / 140);
+    this.seaMat = new THREE.MeshStandardMaterial({ color: 0x2b5674, roughness: 0.16, metalness: 0.05, normalMap: this.waterTex,
+      normalScale: new THREE.Vector2(0.55, 0.55), envMap: this.models.env, envMapIntensity: 1.0 });
+    const m = this.seaMesh = new THREE.Mesh(g, this.seaMat);
     m.position.z = -1.5;
     this.scene.add(m);
   }
+  // another map (world.js): the terrain mesh, the air base and the clouds are built again, with the new
+  // ground texture (a canvas)
+  rebuildWorld(groundCanvas) {
+    for (const k of ['terrainGroup', 'airfieldGroup', 'clouds']) if (this[k]) { this.scene.remove(this[k]); this[k].traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+    if (this.groundTex && this.groundTex !== this.models.tex.terrain) this.groundTex.dispose();
+    this.groundTex = groundCanvas ? new THREE.CanvasTexture(groundCanvas) : this.models.tex.terrain;
+    this.buildTerrain(); this.buildClouds(); this.buildAirfield();
+    if (!groundCanvas) this.setGeo(null);
+    this.setQuality(this.quality);
+    if (this.timeOfDay) this.setTimeOfDay(this.timeOfDay);
+  }
   buildTerrain() {
     const t = this.terrain, n = t.n, cell = t.cell, half = t.half, grid = t.grid;
-    const tex = this.models.tex.terrain;
-    tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding;
+    const tex = this.groundTex || this.models.tex.terrain;
+    tex.anisotropy = this.quality === "ultra" ? this.renderer.capabilities.getMaxAnisotropy() : 8; tex.encoding = THREE.sRGBEncoding;
+    tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter;
     const mat = new THREE.MeshLambertMaterial({ map: tex });
+    if (!this.detailTex) this.detailTex = detailTexture();
+    addGroundDetail(mat, this.detailTex);
     // normals
     const nrm = new Float32Array(n * n * 3);
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
@@ -660,17 +760,20 @@ export class SceneView {
         g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
         g.setIndex(idx);
         g.computeBoundingSphere();
-        lod.addLevel(new THREE.Mesh(g, mat), dist);
+        const tm = new THREE.Mesh(g, mat);
+        tm.receiveShadow = step === 1;
+        lod.addLevel(tm, dist);
       }
       this.terrainGroup.add(lod);
     }
     this.scene.add(this.terrainGroup);
   }
   buildClouds() {
-    const tex = puffTexture(), r = rng(5), lim = this.terrain.half * 0.95;
+    const tex = this.puffTex || (this.puffTex = puffTexture()), r = rng(5), lim = this.terrain.half * 0.95;
+    const count = this.cloudCount = CLOUDS[this.quality] || 70;
     const mats = this.cloudMats = [0.75, 0.85, 0.95].map((o) => new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: o, depthWrite: false }));
     this.clouds = new THREE.Group();
-    for (let k = 0; k < 70; k++) {
+    for (let k = 0; k < count; k++) {
       const cx = r.uniform(-lim, lim), cy = r.uniform(-lim, lim), cz = r.uniform(2600, 3600), size = r.uniform(500, 1100);
       const puffs = 4 + Math.floor(r() * 5);
       for (let p = 0; p < puffs; p++) {
@@ -779,6 +882,8 @@ export class SceneView {
     for (let y = -hl; y <= hl; y += 60) for (const s of [-1, 1]) lamp(s * (RUNWAY_WIDTH / 2 + 2), y, 0xfff2cc, 3);
     for (const s of [-1, 1]) for (let k = 0; k < 6; k++) { lamp(s * (3 + k * 3.5), -hl - 2, 0x4cff66, 3); lamp(s * (3 + k * 3.5), hl + 2, 0x4cff66, 3); }
     for (let d = 1; d <= 10; d++) for (let k = -3; k <= 3; k++) lamp(k * 3, -hl - d * 60, 0xffffe0, 2.5);
+    this.airfieldGroup = g;
+    g.traverse((o) => { if (o.isMesh) o.receiveShadow = true; });
     this.scene.add(g);
   }
 
@@ -817,7 +922,7 @@ export class SceneView {
         m.position.copy(bays.stores[st.number]); outside.userData.model.add(m);
         bays.missiles[st.number] = m; stores.set(st.number, m);
       }
-    } else {
+    } else if (!type.spec.internal) {
       for (const st of ac.stations) {
         const m = this.models.missile(st.key);
         m.position.copy(type.ref[`store_${st.number}`] || st.mount); outside.add(m); stores.set(st.number, m);
@@ -894,6 +999,11 @@ export class SceneView {
         for (const model of [v.outside, v.inside]) {
           if (model) animateSurfaces(model.userData.parts, dt, ac.controls, ac.fm.alpha / DEG, ac.fm.flaps, ac.controls.airbrake && !ac.onGround ? 1 : 0, ac.onGround);
         }
+        const prop = v.outside.userData.model && v.outside.userData.model.userData.prop;
+        if (prop) {                                                                       // T-6 propeller
+          const turn = dt * (12 + 45 * Math.min(1, ac.engineSetting));
+          if (prop.userData.glb) prop.rotateX(turn); else prop.rotation.y += turn;
+        }
         const ph = (this.time + v.phase) % 1.2;
         for (const s of v.strobes) s.visible = ph < 0.06 || (ph > 0.18 && ph < 0.24);
       } else for (const s of v.strobes) s.visible = false;
@@ -955,9 +1065,32 @@ export class SceneView {
     this.camera.layers.set(0);
     for (const o of shown) o.visible = false;
   }
+  // a real-world map (world.js info) - with a Google key, the photorealistic 3D tiles over it
+  setGeo(info) {
+    if (this.gtiles) { this.gtiles.dispose(); this.gtiles = null; }
+    this.geo = info;
+    if (info && this.googleKey) this.gtiles = new GoogleTiles(this, this.googleKey, info, this.quality);
+  }
+  setGoogleKey(key) {
+    if (key === this.googleKey) return;
+    this.googleKey = key;
+    if (this.geo) this.setGeo(this.geo);
+  }
   render() {
     if (this.warmup) { this.warmup = false; this.compileAll(); }
     const r = this.renderer, cam = this.camera;
+    const now = performance.now(), dt = Math.min(0.1, (now - (this.lastRender || now)) / 1000);
+    this.lastRender = now;
+    if (this.gtiles) this.gtiles.update(dt, cam, r);
+    this.time += 0;                                    // (the waves move with the wall clock)
+    if (this.waterTex) this.waterTex.offset.set((now * 0.0000035) % 1, (now * 0.0000021) % 1);
+    if (this.shadowBox) {                              // the shadow box: around the point 40 % of the way into it
+      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion).multiplyScalar(this.shadowBox * 0.4).add(cam.position);
+      const s = this.sunLight, step = this.shadowBox * 2 / s.shadow.mapSize.x;
+      f.set(Math.round(f.x / step) * step, Math.round(f.y / step) * step, Math.round(f.z / step) * step);
+      s.target.position.copy(f); s.position.copy(this.sunDir || SUN_DIR).multiplyScalar(1500).add(f);
+      s.target.updateMatrixWorld();
+    }
     r.autoClear = true;
     r.render(this.scene, cam);
     if (!this.cockpitView) return;
