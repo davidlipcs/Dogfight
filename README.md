@@ -69,6 +69,10 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 - **Rangok**: századostól te választod a kísérőidet (arckép és képességek alapján), őrnagytól a helyet, az időpontot és a gépet is. Alatta a vezért, kísérőt és feladatot kapod.
 - **Javítások**: a T-6 kabinja (a szemmagasság hibás volt), nincs utánégető a T-6 és a T-45 gépen, rendes betonburkolat az aprón.
 
+## Kanyonfutam (külön mód)
+
+A főmenüben a **Küldetés** sorban a **Kanyonfutam**: alacsony repülés egy szoros völgyben (a Grand Canyonban, ha nincs más világtérkép kiválasztva), kapuk a völgy fenekén, a végén egy célpont, utána meredek kihúzás a gerincen át. **2:15 alatt** kell teljesíteni. 350 m fölött a radar meglát: 4 másodpercenként +5 s büntetés. A pálya mindig ugyanaz az adott térképen (a domborzatból számolódik), így az idők összehasonlíthatók; a rekordot a böngésző őrzi. Szabad játékban, a karrier nélkül játszható.
+
 ## Oktatás (nem kötelező)
 
 A főmenü **Oktatás** gombja egy vezetett repülést indít a kiválasztott géppel. 11 lecke, mindegyik elmagyarázza,

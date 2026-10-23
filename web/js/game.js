@@ -18,7 +18,8 @@ import { Hangar } from './hangar.js';
 import { HangarUI } from './shopui.js';
 import { Music } from './music.js';
 import { keyEditor, buildMap } from './keys.js';
-import { Race, fmtTime, RACE_RINGS } from './race.js';
+import { Race, fmtTime } from './race.js';
+import { CanyonRun, LIMIT as CANYON_LIMIT } from './canyon.js';
 import { Carrier, DECK_Z } from './carrier.js';
 import { buildWorld, PLACES } from './world.js';
 import { Radio } from './radio.js';
@@ -486,16 +487,17 @@ class Game {
   spawnPlayer() {
     const w = this.world;
     if (this.player) w.aircraft = w.aircraft.filter((a) => a !== this.player);
-    const duel = this.scenario === 'duel', race = this.scenario === 'race', air = this.opts.airStart || duel || race, field = this.terrain.airfield;
+    const duel = this.scenario === 'duel', canyon = this.scenario === 'canyon', race = this.scenario === 'race' || canyon, air = this.opts.airStart || duel || race, field = this.terrain.airfield;
     let pos, heading = 0, speed = 0;
     if (race) {
       // ring race: 3 km north of the base, heading north, the first ring ahead
       const start = V(field.x, field.y + 3000, 0);
-      if (!this.race) this.race = new Race(this.terrain, this.view.scene, start, 0);
+      if (!this.race) this.race = canyon ? new CanyonRun(this.terrain, this.view.scene) : new Race(this.terrain, this.view.scene, start, 0);
       this.race.reset();
       const r0 = this.race.rings[0];
-      pos = add(r0.c, mul(r0.n, -1800)); pos.z = Math.max(r0.c.z + 60, this.terrain.height(pos.x, pos.y) + 250);
-      speed = 220; heading = Math.atan2(r0.n.x, r0.n.y) / DEG;
+      pos = add(r0.c, mul(r0.n, -1800));
+      pos.z = canyon ? Math.max(r0.c.z, this.terrain.height(pos.x, pos.y) + 90) : Math.max(r0.c.z + 60, this.terrain.height(pos.x, pos.y) + 250);
+      speed = canyon ? 270 : 220; heading = Math.atan2(r0.n.x, r0.n.y) / DEG;
       this.prevPos = null;
     } else if (duel) {
       // duel: in the combat zone, heading north; the opponent comes head-on (spawnDuel)
@@ -540,7 +542,7 @@ class Game {
     else if (air && this.wantWingman()) this.spawnWingman();
     if (this.scenario === 'survival' && this.state.wave === 0) this.state.waveTimer = air ? 12 : FIRST_WAVE_DELAY;
   }
-  wantWingman() { return !!this.opts.wingman && !this.opts.tutorial && this.scenario !== 'duel' && this.scenario !== 'race' && !this.opts.benchmark; }
+  wantWingman() { return !!this.opts.wingman && !this.opts.tutorial && this.scenario !== 'duel' && this.scenario !== 'race' && this.scenario !== 'canyon' && !this.opts.benchmark; }
   // the wingman joins behind and to the right of the player (same type, the weaker AI airframe and missiles)
   spawnWingman() {
     const p = this.player, spec = BANDITS[p.spec.id] || BANDITS[p.spec.model] || BANDITS.f16;
@@ -1096,9 +1098,21 @@ class Game {
     const prev = this.prevPos || copy(p.pos);
     this.prevPos = copy(p.pos);
     const ev = r.update(dt, p, prev);
-    if (ev === 'ring') { this.addScore(20); this.hud.popup(`GYŰRŰ ${r.next}/${RACE_RINGS}`, 'rgba(255,200,64,0.95)'); this.sounds.play('splash', 0.4); }
+    if (ev === 'ring') { this.addScore(20); this.hud.popup(`${this.scenario === 'canyon' ? 'KAPU' : 'GYŰRŰ'} ${r.next}/${r.rings.length}`, 'rgba(255,200,64,0.95)'); this.sounds.play('splash', 0.4); }
     else if (ev === 'miss') this.hud.message('MELLÉ! Fordulj vissza a gyűrűhöz', 'warn', 2, 'race');
-    else if (ev === 'finish') {
+    else if (ev === 'target') {
+      this.world.emit('explosion', { pos: r.targetPos, size: 3, ground: true });
+      this.addScore(150); this.hud.popup('CÉLPONT MEGSEMMISÍTVE', 'rgba(255,90,60,0.95)'); this.sounds.play('medal', 0.5);
+      this.hud.message('CÉLPONT TALÁLVA – most húzd fel meredeken a gerincen át!', 'good', 5, 'race');
+    } else if (ev === 'radar') this.hud.message('RADARKONTAKT! +5 s – repülj alacsonyabban (350 m alatt)', 'warn', 3, 'race');
+    else if (ev === 'finish' && this.scenario === 'canyon') {
+      const st = this.state, reward = r.success ? 500 + (r.record ? 250 : 0) : 100;
+      this.addScore(reward);
+      st.banner = r.success ? `KÜLDETÉS TELJESÍTVE  ${fmtTime(r.time)}` : `TÚL LASSÚ  ${fmtTime(r.time)}`;
+      st.subBanner = `${r.success ? (r.record ? 'ÚJ REKORD! · ' : `rekord: ${fmtTime(r.best)} · `) : `a határidő ${fmtTime(CANYON_LIMIT)} volt · `}+${reward} kredit  ·  ${this.touchOn() ? 'Koppints' : 'Enter'}: újra`;
+      this.sounds.play(r.success ? 'medal' : 'splash', 0.7);
+      this.career.save();
+    } else if (ev === 'finish') {
       const st = this.state, reward = 300 + (r.record ? 200 : 0);
       this.addScore(reward);
       st.banner = `CÉL!  ${fmtTime(r.time)}`;
@@ -1119,7 +1133,11 @@ class Game {
     if (this.tutorial) return '';
     if (this.scenario === 'race' && this.race) {
       const r = this.race;
-      return `GYŰRŰVERSENY · ${Math.min(r.next, RACE_RINGS)}/${RACE_RINGS} · ${fmtTime(r.time)} · rekord ${fmtTime(r.best)}`;
+      return `GYŰRŰVERSENY · ${Math.min(r.next, r.rings.length)}/${r.rings.length} · ${fmtTime(r.time)} · rekord ${fmtTime(r.best)}`;
+    }
+    if (this.scenario === 'canyon' && this.race) {
+      const r = this.race, t = r.time + r.penalty, left = CANYON_LIMIT - t;
+      return `KANYONFUTÁS · ${r.hit ? 'célpont találva · húzz fel!' : 'cél: a völgy végén'} · ${fmtTime(t)} / ${fmtTime(CANYON_LIMIT)}${left < 0 ? ' · LEJÁRT' : ''}${r.penalty ? ` · radar +${r.penalty} s` : ''} · rekord ${fmtTime(r.best)}`;
     }
     if (this.scenario === 'duel') return `PÁRBAJ · győzelem ${st.duelWins} · vereség ${st.duelLosses}${st.duelStreak > 1 ? ` · ${st.duelStreak} egymás után` : ''}`;
     if (this.scenario === 'survival') return `TÚLÉLÉS · egy életed van · rekord: ${this.career.data.bestSurvival || 0}. hullám`;
@@ -1218,7 +1236,7 @@ class Game {
       st.subBanner = '';
       this.hud.message('SIKERES FELSZÁLLÁS - húzd be a futóművet (G)', 'good', 4);
     }
-    if (this.scenario === 'race') return;
+    if (this.scenario === 'race' || this.scenario === 'canyon') return;
     if (!this.tutorial && st.waveActive && !this.enemiesAlive().length) {
       st.waveActive = false; st.waveTimer = WAVE_DELAY;
       const scen = this.scenario;
@@ -1427,7 +1445,7 @@ async function boot() {
     menuSaved = m;
     try { localStorage.setItem(MENU_KEY, JSON.stringify(m)); } catch (e) { /* private mode */ }
   };
-  const SCEN_HINT = { waves: 'egyre nagyobb hullámok, a bázison újratölthetsz', duel: '1 ellenfél szemből - minden kör tele géppel, a levegőben indul',
+  const SCEN_HINT = { waves: 'egyre nagyobb hullámok, a bázison újratölthetsz', canyon: 'alacsony repülés a völgyben, célpont a végén, meredek kihúzás a gerincen át – 2:15 alatt (Grand Canyon)', duel: '1 ellenfél szemből - minden kör tele géppel, a levegőben indul',
     survival: 'egy életed van, a hullámok gyorsan jönnek - meddig bírod?' };
   const DIFF_HINT = { easy: 'pont ×0,6', normal: 'pont ×1', hard: 'pont ×1,5', ace: 'teljes erejű ellenfél · pont ×2' };
   const showHints = () => { $('scen-hint').textContent = SCEN_HINT[pick('scen')]; $('diff-hint').textContent = DIFF_HINT[pick('diff')]; };
@@ -1502,6 +1520,8 @@ async function boot() {
     const opts = benchmark
       ? { airStart: true, difficulty: 'normal', enemies: 4, mode: 'arcade', aircraft, enemyTypes: ['f16', 'fa18', 'su35', 'typhoon'], loadout, tutorial: false, scenario: 'waves', wingman: 0, benchmark: true }
       : { airStart: (airStart === true) || tutorial, carrierStart: airStart === 'carrier' && !tutorial, difficulty, enemies, mode: tutorial ? 'arcade' : mode, aircraft, enemyTypes, loadout, tutorial, scenario, wingman };
+    // the canyon run needs a canyon: the Grand Canyon, unless a world place is chosen
+    if (opts.scenario === 'canyon' && placeKey(place) === 'island') { place = PLACES.find((q) => q.id === 'grandcanyon') || place; showPlace(); }
     saveMenu();
     if (!tutorial && !benchmark) { career.data.matches++; career.save(); }
     $('menu').hidden = true;

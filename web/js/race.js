@@ -10,9 +10,10 @@ export class Race {
   // opts: rings (count), goal (where the course heads), record (false: no best time kept - training courses)
   constructor(terrain, scene, start, heading, opts = {}) {
     this.terrain = terrain; this.scene = scene; this.count = opts.rings || RINGS; this.goal = opts.goal || null; this.keep = opts.record !== false;
+    this.R = opts.R || R; this.key = opts.key || KEY;
     this.rings = this.layout(start, heading);
     this.group = new THREE.Group();
-    const geo = new THREE.TorusGeometry(R, 5, 10, 48);
+    const geo = new THREE.TorusGeometry(this.R, 5, 10, 48);
     for (const r of this.rings) {
       const mat = new THREE.MeshBasicMaterial({ color: 0xffc840, transparent: true, opacity: 0.9, fog: false });
       const m = new THREE.Mesh(geo, mat);
@@ -21,7 +22,7 @@ export class Race {
       r.mesh = m; this.group.add(m);
     }
     scene.add(this.group);
-    try { this.best = this.keep ? JSON.parse(localStorage.getItem(KEY) || '{}').best || null : null; } catch (e) { this.best = null; }
+    try { this.best = this.keep ? JSON.parse(localStorage.getItem(this.key) || '{}').best || null : null; } catch (e) { this.best = null; }
     this.reset();
   }
   layout(start, heading) {
@@ -69,16 +70,16 @@ export class Race {
     const s0 = dot(sub(prev, r.c), r.n), s1 = dot(sub(ac.pos, r.c), r.n);
     if (s0 < 0 && s1 >= 0) {
       const hit = add(prev, mul(sub(ac.pos, prev), s0 / (s0 - s1))), off = len(sub(hit, r.c));
-      if (off <= R) {
+      if (off <= this.R) {
         this.next++; this.running = true;
         if (this.next >= this.rings.length) {
           this.finished = true; this.record = !this.best || this.time < this.best;
-          if (this.record && this.keep) { this.best = this.time; try { localStorage.setItem(KEY, JSON.stringify({ best: this.time })); } catch (e) { /* private */ } }
+          if (this.record && this.keep) { this.best = this.time; try { localStorage.setItem(this.key, JSON.stringify({ best: this.time })); } catch (e) { /* private */ } }
           this.paint(); return 'finish';
         }
         this.paint(); return 'ring';
       }
-      if (off < R * 2.5) return 'miss';
+      if (off < this.R * 2.5) return 'miss';
     }
     return null;
   }
