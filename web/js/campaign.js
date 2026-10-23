@@ -16,19 +16,23 @@ export const DAY_PER_MISSION = 2;
 export const QUALITY = { f22: 10, f35: 8.6, su57: 7.6, j20: 8.0, f15: 7.6, su35: 7.4, typhoon: 7.6, rafale: 7.5, gripen: 6.7,
   f16: 6.6, fa18: 6.6, mig31: 5.6, mig29: 5.4, f15a: 7.2 };
 
-// fighters by type (count in service) and new jets per month
+// what a new jet costs (million dollars, flyaway, public figures) - nobody builds what they cannot pay for
+export const COST = { f22: 150, f35: 82, f15: 90, f16: 65, fa18: 70, typhoon: 100, rafale: 95, gripen: 55, su35: 85, su57: 100, j20: 110, mig31: 60, mig29: 30, f15a: 40 };
+
+// fighters by type (count in service), the factory lines (the most they can build per month) and the daily
+// money the air force gets for new jets (million dollars a day)
 export const POWERS = {
   us: { name: 'Egyesült Államok', short: 'USA', colour: '#4a7fd8', nations: ['us'],
-    fleet: { f22: 180, f35: 650, f15: 30, f16: 900, fa18: 500 }, production: { f35: 10, f15: 2 }, pilots: 3200, skill: 1.0,
+    fleet: { f22: 180, f35: 650, f15: 30, f16: 900, fa18: 500 }, production: { f35: 10, f15: 2 }, income: 24, pilots: 3200, skill: 1.0,
     home: { lat: 38.9, lon: -77.0 } },
   eu: { name: 'Európa', short: 'EU', colour: '#3cc0a0', nations: ['uk', 'fr', 'de', 'it', 'pl', 'se', 'hu'],
-    fleet: { typhoon: 370, rafale: 200, gripen: 104, f35: 75, f16: 48 }, production: { typhoon: 1, rafale: 1.5, gripen: 1, f35: 2 }, pilots: 1300, skill: 0.95,
+    fleet: { typhoon: 370, rafale: 200, gripen: 104, f35: 75, f16: 48 }, production: { typhoon: 1, rafale: 1.5, gripen: 1, f35: 2 }, income: 9, pilots: 1300, skill: 0.95,
     home: { lat: 50.8, lon: 4.4 } },
   ru: { name: 'Oroszország', short: 'RU', colour: '#d84a4a', nations: ['ru'],
-    fleet: { su35: 130, su57: 28, mig31: 120, mig29: 90 }, production: { su35: 1.5, su57: 1 }, pilots: 1100, skill: 0.85,
+    fleet: { su35: 130, su57: 28, mig31: 120, mig29: 90 }, production: { su35: 1.5, su57: 1 }, income: 5, pilots: 1100, skill: 0.85,
     home: { lat: 55.75, lon: 37.6 } },
   cn: { name: 'Kína', short: 'CN', colour: '#e0b030', nations: ['cn'],
-    fleet: { j20: 300, su35: 24 }, production: { j20: 10 }, pilots: 1500, skill: 0.85,
+    fleet: { j20: 300, su35: 24 }, production: { j20: 10 }, income: 20, pilots: 1500, skill: 0.85,
     home: { lat: 39.9, lon: 116.4 } },
 };
 export const NATION_NAMES = { us: 'USA', uk: 'Egyesült Királyság', fr: 'Franciaország', de: 'Németország', it: 'Olaszország', pl: 'Lengyelország',
@@ -59,10 +63,10 @@ export function strength(fleet, skill = 1) { return Object.entries(fleet).reduce
 // a fresh war: everybody against everybody, Europe together; trust from history
 export function newWar(playerPower = 'us', seed = Date.now()) {
   const w = { version: 1, seed, day: 0, started: false, player: playerPower, powers: {}, trust: {}, allied: {}, war: {}, fronts: {},
-    intel: {}, log: [], over: null, missions: 0, policy: { production: null, focus: null } };
+    intel: {}, log: [], over: null, missions: 0, policy: { production: {}, focus: null } };
   for (const id of POWER_IDS) {
     const p = POWERS[id];
-    w.powers[id] = { fleet: { ...p.fleet }, start: totalFleet(p.fleet), lost: {}, built: {}, out: false, pilots: p.pilots };
+    w.powers[id] = { fleet: { ...p.fleet }, start: totalFleet(p.fleet), lost: {}, built: {}, out: false, pilots: p.pilots, money: p.income * 20, spent: 0 };
   }
   const T = { 'eu-us': 25, 'ru-us': -60, 'cn-us': -55, 'eu-ru': -55, 'cn-eu': -25, 'cn-ru': 5 };
   for (const [k, v] of Object.entries(T)) { w.trust[k] = v; w.allied[k] = false; w.war[k] = true; }
@@ -127,16 +131,25 @@ function seeded(w) { let s = (w.seed + w.day * 7919) % 2147483647; return () => 
 export function simulateDay(w, skip = null) {
   const r = seeded(w), report = [];
   w.day++;
-  // production (and the factories the enemy has bombed make less)
+  // production: each line builds at most its monthly rate, and every jet is paid for from the budget - when the money
+  // is gone the lines stand still (the factories the enemy has bombed make less, too)
   for (const id of POWER_IDS) {
     const P = w.powers[id];
     if (P.out) continue;
-    for (const [k, perMonth] of Object.entries(POWERS[id].production)) {
-      const f = (P.damage || 0) > 0 ? 1 - P.damage : 1, add = perMonth / 30 * f;
-      P.fleetFrac = P.fleetFrac || {};
-      P.fleetFrac[k] = (P.fleetFrac[k] || 0) + add;
-      const whole = Math.floor(P.fleetFrac[k]);
-      if (whole > 0) { P.fleet[k] = (P.fleet[k] || 0) + whole; P.fleetFrac[k] -= whole; P.built[k] = (P.built[k] || 0) + whole; }
+    if (P.money === undefined) { P.money = POWERS[id].income * 20; P.spent = 0; }          // an older save
+    const dmg = (P.damage || 0) > 0 ? 1 - P.damage : 1;
+    P.money += POWERS[id].income * dmg;                                                   // the budget of the day
+    P.money = Math.min(P.money, POWERS[id].income * 60);                                  // no endless savings: two months at most
+    P.fleetFrac = P.fleetFrac || {};
+    // the line the government wants first (the player chooses it for his own side), then the others
+    const order = Object.keys(POWERS[id].production).sort((a, b) => (a === (w.policy.production && w.policy.production[id]) ? -1 : b === (w.policy.production && w.policy.production[id]) ? 1 : 0));
+    for (const k of order) {
+      const perMonth = POWERS[id].production[k], cost = COST[k] || 80;
+      P.fleetFrac[k] = Math.min(1.5, (P.fleetFrac[k] || 0) + perMonth / 30 * dmg);          // the line's progress, never more than a jet and a half ahead
+      while (P.fleetFrac[k] >= 1 && P.money >= cost) {
+        P.fleetFrac[k] -= 1; P.money -= cost; P.spent += cost;
+        P.fleet[k] = (P.fleet[k] || 0) + 1; P.built[k] = (P.built[k] || 0) + 1;
+      }
     }
     if (P.damage) P.damage = Math.max(0, P.damage - 0.01);       // repairs
   }
@@ -229,4 +242,13 @@ export function pickTypes(fleet, n, rnd = Math.random) {
     for (const [k, v] of entries) { x -= v; if (x <= 0) { out.push(k); break; } }
   }
   return out;
+}
+
+// the budget as the player sees it: money, the daily income, and how many jets a month it really pays for
+export function budgetOf(w, id) {
+  const P = w.powers[id], inc = POWERS[id].income * (1 - (P.damage || 0));
+  let monthly = 0, cost = 0;
+  for (const [k, perMonth] of Object.entries(POWERS[id].production)) { monthly += perMonth; cost += perMonth * (COST[k] || 80); }
+  const afford = Math.min(monthly, inc * 30 / (cost / monthly));
+  return { money: Math.round(P.money || 0), income: Math.round(inc * 10) / 10, perMonth: Math.round(afford * 10) / 10, capacity: monthly };
 }

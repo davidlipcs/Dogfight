@@ -10,7 +10,7 @@ import { School, gearUp } from './school.js';
 import { InstructorPilot } from './autopilot.js';
 import { Sortie } from './sortie.js';
 import { POWERS, FRONTS, QUALITY, NATION_NAMES, newWar, loadWar, saveWar, seenFleet, totalFleet, trustOf, alliedWith, atWar,
-  proposeAlliance, proposeCeasefire, simulateDay, aiDiplomacy, applyMission, pickTypes, frontEnemies, changeTrust } from './campaign.js';
+  proposeAlliance, proposeCeasefire, simulateDay, aiDiplomacy, applyMission, pickTypes, frontEnemies, changeTrust, budgetOf, COST } from './campaign.js';
 import { makeRoster, rating, afterSortie, restDay, portraitUrl, RANKS, STATUS_HU } from './roster.js';
 const TODS = [['day', 'nappal'], ['overcast', 'borult'], ['sunset', 'naplemente'], ['night', 'éjszaka']];
 const KINDS = { sweep: 'Légtérfölény (sweep)', cap: 'Légtérvédelmi járőr (CAP)' };
@@ -365,8 +365,9 @@ export class CareerMode {
     const fleetRow = (id) => {
       const { fleet, exact } = seenFleet(w, id), t = totalFleet(fleet), start = w.powers[id].start;
       return `<div class="cr-power" style="--c:${POWERS[id].colour}"><b>${POWERS[id].name}${w.powers[id].out ? ' – KIESETT' : ''}</b>
-        <span>${exact ? '' : '≈'}${t} vadászgép ${exact ? '' : '(becslés)'} · ${Math.round(t / start * 100)}%</span>
+        <span>${exact ? '' : '≈'}${t} vadászgép ${exact ? '' : '(becslés)'} · ${exact ? Math.round(t / start * 100) : Math.min(100, Math.round(t / start * 100))}%</span>
         <div class="bar"><i style="width:${Math.min(100, t / start * 100)}%"></i></div>
+        ${id === me ? (() => { const b = budgetOf(w, id); return `<small>💰 költségvetés: <b>${b.money} M$</b> · +${b.income} M$/nap · a pénz havi ~<b>${b.perMonth}</b> új gépre elég (a gyárak legfeljebb ${b.capacity}-ot tudnának)</small>`; })() : ''}
         <small>${Object.entries(fleet).map(([k, v]) => `${k.toUpperCase()} ${exact ? '' : '~'}${v}`).join(' · ')}</small>
         ${id !== me ? `<small>bizalom: ${Math.round(trustOf(w, me, id))} · ${alliedWith(w, me, id) ? '<b>SZÖVETSÉGES</b>' : atWar(w, me, id) ? 'háborúban' : 'tűzszünet'}</small>` : ''}</div>`;
     };
@@ -582,7 +583,11 @@ export class CareerMode {
         <div class="buttons">${!alliedWith(w, me, id) ? `<button type="button" class="small" data-ally="${id}">Szövetség ajánlása</button>` : ''}
         ${atWar(w, me, id) ? `<button type="button" class="small" data-cease="${id}">Tűzszünet</button><button type="button" class="small" data-strike="${id}">Csapás a repülőgépgyárakra</button>` : ''}
         ${!atWar(w, me, id) && !alliedWith(w, me, id) ? `<button type="button" class="small" data-aid="${id}">Segítség küldése (+bizalom)</button>` : ''}</div></div>`).join('')}
+      <h3>Gyártás és költségvetés</h3>
+      <p class="hint">A gyárak csak annyit építenek, amennyit a keret kifizet (egy gép ára alább). Melyik gyártósor kapja a pénzt először? Most: <b>${((w.policy.production || {})[me] || 'egyenlően').toString().toUpperCase()}</b></p>
+      <div class="buttons">${Object.keys(POWERS[me].production).map((k) => `<button type="button" class="small" data-prod="${k}">${k.toUpperCase()} · ${COST[k]} M$/db · max ${POWERS[me].production[k]}/hó</button>`).join('')}</div>
       <p id="cr-pmsg" class="cr-award"></p><div class="buttons"><button type="button" id="cr-back">Vissza</button></div>`, 'Karrier · politika');
+    for (const b of this.root.querySelectorAll('[data-prod]')) b.onclick = () => { (w.policy.production = w.policy.production || {})[me] = b.dataset.prod; this.save(); this.politics(); };
     const msg = (t) => { $('cr-pmsg').textContent = t; this.save(); };
     for (const b of this.root.querySelectorAll('[data-ally]')) b.onclick = () => { msg(proposeAlliance(w, me, b.dataset.ally).text); setTimeout(() => this.politics(), 1600); };
     for (const b of this.root.querySelectorAll('[data-cease]')) b.onclick = () => { msg(proposeCeasefire(w, me, b.dataset.cease).text); setTimeout(() => this.politics(), 1600); };
