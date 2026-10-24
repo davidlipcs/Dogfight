@@ -10,7 +10,7 @@ import { School, gearUp } from './school.js';
 import { InstructorPilot } from './autopilot.js';
 import { Sortie } from './sortie.js';
 import { POWERS, FRONTS, QUALITY, NATION_NAMES, newWar, loadWar, saveWar, seenFleet, totalFleet, trustOf, alliedWith, atWar,
-  proposeAlliance, proposeCeasefire, simulateDay, aiDiplomacy, applyMission, pickTypes, frontEnemies, changeTrust, budgetOf, COST } from './campaign.js';
+  proposeAlliance, proposeCeasefire, answerOffer, simulateDay, aiDiplomacy, applyMission, pickTypes, frontEnemies, changeTrust, budgetOf, COST } from './campaign.js';
 import { makeRoster, rating, afterSortie, restDay, portraitUrl, RANKS, STATUS_HU } from './roster.js';
 const TODS = [['day', 'nappal'], ['overcast', 'borult'], ['sunset', 'naplemente'], ['night', 'éjszaka']];
 const KINDS = { sweep: 'Légtérfölény (sweep)', cap: 'Légtérvédelmi járőr (CAP)' };
@@ -422,7 +422,7 @@ export class CareerMode {
     const red = pickTypes(w.powers[foe].fleet, nRed).map((t) => ({ type: t, n: 1, power: foe }));
     const blue = [], nBlue = Math.max(0, nRed - 2 + (rank >= 2 ? 0 : 1));
     for (const t of pickTypes(w.powers.us.fleet, nBlue)) blue.push({ type: t === 'f22' && Math.random() < 0.5 ? 'f15' : t, n: 1, power: 'us', label: 'USAF' });
-    for (const id of Object.keys(POWERS)) if (id !== 'us' && alliedWith(w, 'us', id) && f.sides.includes(id)) for (const t of pickTypes(w.powers[id].fleet, 2)) blue.push({ type: t, n: 1, power: id, label: POWERS[id].short });
+    for (const id of Object.keys(POWERS)) if (id !== 'us' && alliedWith(w, 'us', id) && f.sides.includes(id)) for (const t of pickTypes(w.powers[id].fleet, trustOf(w, 'us', id) >= 85 ? 4 : trustOf(w, 'us', id) >= 70 ? 3 : 2)) blue.push({ type: t, n: 1, power: id, label: POWERS[id].short });
     const role = rank < 1 ? 'wing' : 'lead';
     return { front: frontId, foe, role, red, blue, rank, skill: ['normal', 'normal', 'hard', 'hard', 'ace', 'ace', 'ace'][rank], minutes: 8, bearing: Math.random() * Math.PI * 2,
       kind: over.kind || (Math.random() < 0.3 ? 'cap' : 'sweep'), jet: over.jet || this.fleetJet(), tod: over.tod || 'day',
@@ -596,7 +596,10 @@ export class CareerMode {
   politics() {
     const w = this.war, me = w.player;
     const others = Object.keys(POWERS).filter((id) => id !== me && !w.powers[id].out);
-    this.frame(`<h2>Politika és stratégia</h2><p class="hint">Ezredesként már te is ott ülsz, ahol a döntések születnek. A szövetséghez legalább 60-as bizalom kell.</p>
+    const offers = w.offers || [];
+    this.frame(`<h2>Politika és stratégia</h2><p class="hint">Ezredesként már te is ott ülsz, ahol a döntések születnek. A szövetséghez legalább 60-as bizalom kell. Az országok a bizalom szerint döntenek: szövetséget bontanak, tűzszünetet mondanak fel, gyárat bombáznak, segítenek egymásnak.</p>
+      ${offers.length ? `<h3>Ajánlatok</h3>${offers.map((o, i) => `<div class="cr-power" style="--c:${POWERS[o.from].colour}"><b>${POWERS[o.from].name}: ${o.type === 'alliance' ? 'szövetséget ajánl' : 'tűzszünetet ajánl'}</b><small>${w.day - o.day}. napja · bizalom ${Math.round(trustOf(w, me, o.from))}</small>
+        <div class="buttons"><button type="button" class="small primary" data-offer="${i}" data-yes="1">Elfogadom</button><button type="button" class="small" data-offer="${i}" data-yes="0">Elutasítom</button></div></div>`).join('')}` : ''}
       ${others.map((id) => `<div class="cr-power" style="--c:${POWERS[id].colour}"><b>${POWERS[id].name}</b><small>bizalom: ${Math.round(trustOf(w, me, id))} · ${alliedWith(w, me, id) ? 'SZÖVETSÉGES' : atWar(w, me, id) ? 'háborúban' : 'tűzszünet'}</small>
         <div class="buttons">${!alliedWith(w, me, id) ? `<button type="button" class="small" data-ally="${id}">Szövetség ajánlása</button>` : ''}
         ${atWar(w, me, id) ? `<button type="button" class="small" data-cease="${id}">Tűzszünet</button><button type="button" class="small" data-strike="${id}">Csapás a repülőgépgyárakra</button>` : ''}
@@ -607,6 +610,7 @@ export class CareerMode {
       <p id="cr-pmsg" class="cr-award"></p><div class="buttons"><button type="button" id="cr-back">Vissza</button></div>`, 'Karrier · politika');
     for (const b of this.root.querySelectorAll('[data-prod]')) b.onclick = () => { (w.policy.production = w.policy.production || {})[me] = b.dataset.prod; this.save(); this.politics(); };
     const msg = (t) => { $('cr-pmsg').textContent = t; this.save(); };
+    for (const b of this.root.querySelectorAll('[data-offer]')) b.onclick = () => { msg(answerOffer(w, Number(b.dataset.offer), b.dataset.yes === '1').text); setTimeout(() => this.politics(), 1500); };
     for (const b of this.root.querySelectorAll('[data-ally]')) b.onclick = () => { msg(proposeAlliance(w, me, b.dataset.ally).text); setTimeout(() => this.politics(), 1600); };
     for (const b of this.root.querySelectorAll('[data-cease]')) b.onclick = () => { msg(proposeCeasefire(w, me, b.dataset.cease).text); setTimeout(() => this.politics(), 1600); };
     for (const b of this.root.querySelectorAll('[data-aid]')) b.onclick = () => { changeTrust(w, me, b.dataset.aid, 8, 'segítséget küldtünk'); w.powers[me].fleet.f16 = Math.max(0, (w.powers[me].fleet.f16 || 0) - 6); msg('6 F-16-ot átadtunk – nő a bizalom.'); setTimeout(() => this.politics(), 1600); };

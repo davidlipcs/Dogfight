@@ -64,7 +64,7 @@ export function strength(fleet, skill = 1) { return Object.entries(fleet).reduce
 // a fresh war: everybody against everybody, Europe together; trust from history
 export function newWar(playerPower = 'us', seed = Date.now()) {
   const w = { version: 1, seed, day: 0, started: false, player: playerPower, powers: {}, trust: {}, allied: {}, war: {}, fronts: {},
-    intel: {}, log: [], over: null, missions: 0, policy: { production: {}, focus: null } };
+    intel: {}, log: [], offers: [], over: null, missions: 0, policy: { production: {}, focus: null } };
   for (const id of POWER_IDS) {
     const p = POWERS[id];
     w.powers[id] = { fleet: { ...p.fleet }, start: totalFleet(p.fleet), lost: {}, built: {}, out: false, pilots: p.pilots, money: p.income * 20, spent: 0 };
@@ -179,7 +179,7 @@ export function simulateDay(w, skip = null) {
       const ka = 0.05 * sb / (sa + sb), kb = 0.05 * sa / (sa + sb);   // fraction of the committed jets lost
       const la = loseJets(w, a, ka * ca), lb = loseJets(w, b, kb * cb);
       w.fronts[f.id].lastBattle = { day: w.day, a, b, la, lb };
-      if (a === w.player || b === w.player) changeTrust(w, a, b, -0.02);           // a day of fighting: a little less trust
+      changeTrust(w, a, b, -0.02);                                                 // a day of fighting: a little less trust
       report.push({ front: f.id, a, b, la, lb });
     }
   }
@@ -227,16 +227,62 @@ function checkOut(w) {
   if (w.powers[w.player].out && !w.over) w.over = { day: w.day, winners: left, player: false };
 }
 
-// the other powers' own decisions every few days: alliances when trust is high, ceasefires when losing badly
+// the other powers' own decisions every few days.  They follow the trust between them (and towards you):
+//  - an alliance falls apart when the trust collapses (below 20); a truce is called off when it is low (below -40)
+//  - allies help each other: the strong one sends jets to the one that is losing
+//  - deep hatred means attacks on the enemy's factories
+//  - a common enemy brings them closer, high trust makes them ally; a power that is badly beaten asks for a ceasefire
+//  - towards you: offers of an alliance (trust 70+) or of a ceasefire (25+ when somebody is losing), visible in the
+//    politics screen and the log; and the ones who hate you hit your factories
 export function aiDiplomacy(w) {
+  const r = seeded(w), ratio = (id) => totalFleet(w.powers[id].fleet) / Math.max(1, w.powers[id].start);
+  w.offers = (w.offers || []).filter((o) => w.day - o.day <= 10 && !w.powers[o.from].out);
+  const hasOffer = (from, type) => w.offers.some((o) => o.from === from && o.type === type);
+  const hit = (id, by, d) => { const P = w.powers[id]; P.damage = clamp((P.damage || 0) + d, 0, 0.8); log(w, `${POWERS[by].name} bombázta ${id === w.player ? 'a te' : `${POWERS[id].name}`} gyárait (a gyártás −${Math.round(d * 100)} %)`); };
   for (const a of POWER_IDS) for (const b of POWER_IDS) {
-    if (a >= b || a === w.player || b === w.player || w.powers[a].out || w.powers[b].out) continue;
+    if (a >= b || w.powers[a].out || w.powers[b].out) continue;
+    const pl = a === w.player || b === w.player, other = a === w.player ? b : a;
+    if (!pl) {
+      const common = POWER_IDS.filter((c) => c !== a && c !== b && atWar(w, a, c) && atWar(w, b, c)).length;
+      changeTrust(w, a, b, common * 0.6);
+    }
     const t = trustOf(w, a, b);
-    // a common enemy brings them together a little
-    const common = POWER_IDS.filter((c) => c !== a && c !== b && atWar(w, a, c) && atWar(w, b, c)).length;
-    changeTrust(w, a, b, common * 0.6);
-    if (!alliedWith(w, a, b) && t >= 70) { w.allied[pairKey(a, b)] = true; w.war[pairKey(a, b)] = false; log(w, `SZÖVETSÉG: ${POWERS[a].name} és ${POWERS[b].name}`); }
+    // an alliance dies of distrust (yours included)
+    if (alliedWith(w, a, b) && t < 20) {
+      w.allied[pairKey(a, b)] = false; w.war[pairKey(a, b)] = true;
+      log(w, `SZÖVETSÉG FELBONTVA: ${POWERS[a].name} és ${POWERS[b].name} (bizalom ${Math.round(t)})`);
+      continue;
+    }
+    // a truce is called off when the trust is gone
+    if (!alliedWith(w, a, b) && !atWar(w, a, b) && t < -40) { declareWar(w, a, b); log(w, `TŰZSZÜNET FELMONDVA: ${POWERS[a].name} és ${POWERS[b].name}`); continue; }
+    if (alliedWith(w, a, b)) {
+      // the strong ally helps the weak one: two of its best jets
+      const [s, wk] = ratio(a) >= ratio(b) ? [a, b] : [b, a];
+      if (ratio(wk) < 0.6 && ratio(s) > 0.8 && r() < 0.35) {
+        const type = Object.keys(w.powers[s].fleet).sort((x, y) => (QUALITY[y] || 6) - (QUALITY[x] || 6)).find((k) => w.powers[s].fleet[k] > 10);
+        if (type) { w.powers[s].fleet[type] -= 2; w.powers[wk].fleet[type] = (w.powers[wk].fleet[type] || 0) + 2; changeTrust(w, a, b, 1); log(w, `${POWERS[s].name} 2 ${type.toUpperCase()}-t küldött szövetségesének (${POWERS[wk].name})`); }
+      }
+      continue;
+    }
+    if (atWar(w, a, b)) {
+      const weak = Math.min(ratio(a), ratio(b));
+      if (!pl && t >= 10 && weak < 0.55) { w.war[pairKey(a, b)] = false; changeTrust(w, a, b, 10); log(w, `TŰZSZÜNET: ${POWERS[a].name} és ${POWERS[b].name} (a veszteségektől megfogyatkozva)`); continue; }
+      if (t <= -60 && r() < 0.06) { const victim = pl ? w.player : (ratio(a) < ratio(b) ? a : b); hit(victim, victim === a ? b : a, 0.15); }
+    }
+    if (!pl && !alliedWith(w, a, b) && t >= 70) { w.allied[pairKey(a, b)] = true; w.war[pairKey(a, b)] = false; log(w, `SZÖVETSÉG: ${POWERS[a].name} és ${POWERS[b].name}`); continue; }
+    if (pl) {
+      if (t >= 70 && !hasOffer(other, 'alliance')) { w.offers.push({ from: other, type: 'alliance', day: w.day }); log(w, `${POWERS[other].name} szövetséget ajánl neked (bizalom ${Math.round(t)})`); }
+      else if (atWar(w, a, b) && t >= 25 && (ratio(other) < 0.55 || ratio(w.player) < 0.5) && !hasOffer(other, 'ceasefire')) { w.offers.push({ from: other, type: 'ceasefire', day: w.day }); log(w, `${POWERS[other].name} tűzszünetet ajánl (bizalom ${Math.round(t)})`); }
+    }
   }
+}
+// the player answers an offer
+export function answerOffer(w, i, accept) {
+  const o = (w.offers || [])[i];
+  if (!o) return { ok: false, text: '' };
+  w.offers.splice(i, 1);
+  if (!accept) { changeTrust(w, w.player, o.from, -3, 'elutasítottad az ajánlatukat'); return { ok: true, text: 'Elutasítottad.' }; }
+  return o.type === 'alliance' ? proposeAlliance(w, w.player, o.from) : proposeCeasefire(w, w.player, o.from);
 }
 // enemy jets of a front for a mission there: what types (by the fleet) and how good (the power's skill)
 export function frontEnemies(w, frontId) {
