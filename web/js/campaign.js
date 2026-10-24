@@ -179,6 +179,7 @@ export function simulateDay(w, skip = null) {
       const ka = 0.05 * sb / (sa + sb), kb = 0.05 * sa / (sa + sb);   // fraction of the committed jets lost
       const la = loseJets(w, a, ka * ca), lb = loseJets(w, b, kb * cb);
       w.fronts[f.id].lastBattle = { day: w.day, a, b, la, lb };
+      if (a === w.player || b === w.player) changeTrust(w, a, b, -0.02);           // a day of fighting: a little less trust
       report.push({ front: f.id, a, b, la, lb });
     }
   }

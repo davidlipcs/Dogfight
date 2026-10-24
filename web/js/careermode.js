@@ -520,6 +520,15 @@ export class CareerMode {
     for (const b of m.blue) if (b.power !== 'us') trust[b.power] = (trust[b.power] || 0) + (r.won ? 4 : 1);
     if (!m.blue.some((b) => b.power === 'eu') && FRONTS.find((f) => f.id === m.front).sides.includes('eu') && r.won) trust.eu = 3;   // you helped Europe's front
     applyMission(w, { losses, front: m.front, won: r.won, trust, trustWhy: 'közös harc a fronton', intel: 0.02 });
+    // whoever you fight trusts you less: every enemy jet you shoot down costs trust with its country, and a little
+    // with the countries allied to it (they saw it, too)
+    const trustLines = [];
+    {
+      const b0 = trustOf(w, w.player, foe), shot = (r.redLost || []).length, d = 3 + 1.2 * shot;
+      changeTrust(w, w.player, foe, -d, `harcoltatok egymás ellen (${shot} lelőtt gép)`);
+      for (const o of Object.keys(POWERS)) if (o !== w.player && o !== foe && alliedWith(w, foe, o)) changeTrust(w, w.player, o, -d * 0.4, `megtámadtátok a szövetségesét (${POWERS[foe].short})`);
+      trustLines.push(`Bizalom ${POWERS[foe].short}: ${Math.round(b0)} → ${Math.round(trustOf(w, w.player, foe))} (harc ellenük)`);
+    }
     this.passDays(DAYS);
     this.s.sorties++; this.s.radio.push(r.radio); this.radioAvg();
     // awards and promotions
@@ -533,6 +542,7 @@ export class CareerMode {
     const score = this.s.sorties + this.s.kills * 2;
     while ((this.s.rank || 0) < 6 && score >= promoteAt[(this.s.rank || 0) + 1]) { this.s.rank = (this.s.rank || 0) + 1; extra.push(`ELŐLÉPTETÉS: ${RANKS[this.s.rank]}${this.s.rank === 2 ? ' – mostantól te választod a kísérőidet' : this.s.rank === 3 ? ' – mostantól te választod a helyet, az időpontot és a gépet' : this.s.rank === 4 ? ' – pilótákat küldhetsz ki' : this.s.rank === 5 ? ' – politikai döntések' : ''}`); }
     this.save();
+    for (const l of trustLines) extra.push(l);
     if (r.scramble && r.scrambleSec != null) extra.push(r.scrambleSec <= 150 ? `Riadó → felszállás: ${r.scrambleSec} s – gyors reakció!` : `Riadó → felszállás: ${r.scrambleSec} s – lassú volt.`);
     this.debrief({ ...r, title: m.title, extra: extra.map((e) => `<p class="cr-award">🎖 ${e}</p>`).join('') + (flight ? this.flightFates(flight, r) : '') });
   }
