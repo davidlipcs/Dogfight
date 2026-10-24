@@ -9,8 +9,8 @@ const GLIDE = 3 * DEG;
 
 export class InstructorPilot {
   // field: the air base (runway north-south through field.x / field.y); circuits: how many patterns before landing
-  constructor(ac, field, { circuits = 1, height = 450, onPhase = null } = {}) {
-    this.ac = ac; this.field = field; this.circuits = circuits; this.height = height; this.onPhase = onPhase;
+  constructor(ac, field, { circuits = 1, height = 450, onPhase = null, lane = 0 } = {}) {
+    this.ac = ac; this.field = field; this.circuits = circuits; this.height = height; this.onPhase = onPhase; this.lane = lane;   // lane: metres off the centre line (formation take-off)
     this.phase = ac.onGround ? 'hold' : 'downwind'; this.holdT = 0; this.wp = 0; this.t = 0;
     this.vRot = (ac.spec.rotateIas || 60) + 6; this.vApp = (ac.spec.rotateIas || 60) * (ac.spec.trainer && ac.spec.noAB ? 1.28 : 1.42);
     ac.pilot = this;
@@ -31,8 +31,8 @@ export class InstructorPilot {
     const hdgErr = (wantDeg) => wrap(wantDeg * DEG - Math.atan2(ac.forward.x, ac.forward.y));
     if (this.phase === 'hold') { c.throttle = 0.05; c.brakes = true; c.pitch = 0; c.roll = 0; c.yaw = 0; return; }
     if (this.phase === 'roll') {
-      c.throttle = ac.spec.noAB ? 1 : 1;
-      c.yaw = clamp(hdgErr(0) * 4 - (ac.pos.x - f.x) * 0.02, -1, 1); c.roll = 0;
+      c.throttle = ac.spec.noAB ? 1 : 1.1;
+      c.yaw = clamp(hdgErr(0) * 4 - (ac.pos.x - f.x - this.lane) * 0.04, -1, 1); c.roll = 0;
       c.pitch = fm.ias > this.vRot ? 0.55 : 0;
       if (!fm.onGround && ac.pos.z - f.elevation > 8) this.set('climb');
       return;

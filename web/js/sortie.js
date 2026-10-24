@@ -84,7 +84,7 @@ export class Sortie {
       this.boardT = this.t;
       this.p.fm.parkBrake = false; this.p.controls.throttle = 0.3;
       g.hud.message('GÁZT RÁ, FELSZÁLLÁS!', 'warn', 3, 'sc');
-      this.setPhase('takeoff');
+      this.setPhase('takeoff'); this.startMission();
     } else {
       this.pre = this.checklist();
       g.hud.message('Beültél. Ellenőrizd a gépet, mielőtt gurulásra kérsz engedélyt.', 'info', 4, 'pre');
@@ -131,14 +131,21 @@ export class Sortie {
       if (fade) fade.classList.remove('on');
       g.hud.message('A földi személyzet a pálya elejére vontatott. FELSZÁLLÁS!', 'good', 4, 'tow');
       g.state.subBanner = '';
-      this.setPhase('takeoff');
+      this.setPhase('takeoff'); this.startMission();
     }, 1300);
     this.setPhase('towing');
+  }
+  // the mission (and with it the flight standing next to you) exists from the start of the take-off
+  startMission() {
+    if (this.mission) return;
+    this.mission = new Mission(this.g, { ...this.m, groundStart: true, embedded: true }, (r) => this.fightOver(r));
+    this.mission.quiet = true;
   }
   startFight() {
     const g = this.g;
     this.airT = this.t;
-    this.mission = new Mission(g, { ...this.m, groundStart: true, embedded: true }, (r) => this.fightOver(r));
+    this.startMission();
+    this.mission.quiet = false; this.mission.render();
     this.setPhase('fight');
   }
   fightOver(r) {
@@ -178,6 +185,7 @@ export class Sortie {
     this.t += dt; this.phaseT += dt;
     const g = this.g, p = this.p, f = this.flags;
     if (this.phase === 'fight') { this.mission.update(dt); return; }
+    if (this.phase === 'takeoff' && this.mission) this.mission.update(dt);
     if (this.phase === 'preflight' || this.phase === 'taxi') {
       const pl = g.pilot;
       if (pl && pl.pitch !== null) { if (pl.pitch > 0.6) f.pu = true; if (pl.pitch < -0.6) f.pd = true; }
@@ -204,7 +212,7 @@ export class Sortie {
       if (this.phaseT % 0.5 < dt) this.render();
     }
   }
-  onEvent(kind, d) { if (this.phase === 'fight' && this.mission) this.mission.onEvent(kind, d); }
+  onEvent(kind, d) { if ((this.phase === 'fight' || this.phase === 'takeoff') && this.mission) this.mission.onEvent(kind, d); }
   enter() { if (this.phase === 'fight' && this.mission) this.mission.enter(); }
   respawn() {}
   infoLine() {

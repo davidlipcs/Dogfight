@@ -111,26 +111,53 @@ export class Mission {
       return ac;
     };
     this.blue = [];
+    // the flight on the runway next to you (a sortie from the base): lead / wingman and the allies stand in rows
+    // behind the start line and take off one after the other; they are handed over to their fighting pilots in the air
+    const field = g.terrain.airfield, onRunway = !!m.groundStart && m.groundFlight !== false;
+    this.team = [];
+    // the team stands AHEAD of you on the runway, in rows of three; the front row goes first, so you see them take off
+    // and follow (the lead / wingman is in the front row)
+    const hasFlightMate = m.role === 'wing' || m.wingman !== false;
+    const nTeam = Math.min(9, (hasFlightMate ? 1 : 0) + (m.blue || []).reduce((n, grp) => n + grp.n, 0)), rows = Math.max(1, Math.ceil(nTeam / 3));
+    const LANES = [-14, 14, 0];
+    const onGround = (spec, name, kind) => {
+      const i = this.team.length;
+      if (i >= 9) return null;
+      const row = rows - 1 - Math.floor(i / 3), lane = LANES[i % 3], x = field.x + lane, y = field.y - 1380 + 75 * (row + 1), z = g.terrain.height(x, y);
+      const ac = mk(spec, 'blue', V(x, y, z), 0, name);
+      ac.fm.placeOnGround(x, y, z, 0); ac.controls.throttle = 0; ac.fm.parkBrake = false;
+      new InstructorPilot(ac, field, { circuits: 0, lane });
+      ac.crew = { kind, delay: 6 + Math.floor(i / 3) * 6 + (i % 3) * 1.5, rolling: false, handed: false };
+      this.team.push(ac); this.blue.push(ac);
+      return ac;
+    };
     if (m.role === 'wing') {
-      const lead = this.lead = mk(blueSpec(m.leadType || m.playerType), 'blue', add(ref, add(mul(this.dir, 260), mul(side, -180))), hdg, `${m.leadName || (m.callsign || 'VIPER 1-1').replace(/-\d$/, '-1')} (vezér)`);
-      lead.pos.z = ref.z + 20;
-      new LeadPilot(lead, 'wing', m.kind === 'intercept' ? null : this.area);
-      lead.isLead = true; this.blue.push(lead);
+      const spec = blueSpec(m.leadType || m.playerType), nm = `${m.leadName || (m.callsign || 'VIPER 1-1').replace(/-\d$/, '-1')} (vezér)`;
+      const lead = this.lead = onRunway ? onGround(spec, nm, 'lead') : mk(spec, 'blue', add(ref, add(mul(this.dir, 260), mul(side, -180))), hdg, nm);
+      if (!onRunway) { lead.pos.z = ref.z + 20; new LeadPilot(lead, 'wing', m.kind === 'intercept' ? null : this.area); this.blue.push(lead); }
+      lead.isLead = true;
       g.radio.callsign = (m.callsign || 'VIPER 1-1').replace(/-\d$/, '-2');
     } else if (m.wingman !== false) {
-      const w = mk(blueSpec(m.wingType || m.playerType), 'blue', add(ref, add(mul(this.dir, -260), mul(side, 170))), hdg, `${m.wingName || 'Kísérő'} (2-es)`);
-      new WingmanPilot(w, p); g.wingman = w; this.blue.push(w);
+      const spec = blueSpec(m.wingType || m.playerType), nm = `${m.wingName || 'Kísérő'} (2-es)`;
+      let w;
+      if (onRunway) w = onGround(spec, nm, 'wing');
+      else { w = mk(spec, 'blue', add(ref, add(mul(this.dir, -260), mul(side, 170))), hdg, nm); new WingmanPilot(w, p); this.blue.push(w); }
+      if (w) g.wingman = w;
     }
     // more friendly flights (allies), on both sides of yours
     let k = 0;
     for (const grp of m.blue || []) for (let i = 0; i < grp.n; i++, k++) {
-      const pos = add(add(ref, mul(side, (k % 2 ? 1 : -1) * (2500 + 1200 * Math.floor(k / 2)))), mul(this.dir, -800 * Math.floor(k / 2)));
-      const ac = mk(blueSpec(grp.type), 'blue', pos, hdg, `${grp.label || 'Szövetséges'} ${k + 1} (${blueSpec(grp.type).short})`);
+      const spec = blueSpec(grp.type), nm = `${grp.label || 'Szövetséges'} ${k + 1} (${spec.short})`;
+      let ac = onRunway ? onGround(spec, nm, 'ally') : null;
+      if (!ac) {                                                                       // no room on the runway: already in the air
+        const pos = add(add(ref, mul(side, (k % 2 ? 1 : -1) * (2500 + 1200 * Math.floor(k / 2)))), mul(this.dir, -800 * Math.floor(k / 2)));
+        ac = mk(spec, 'blue', pos, hdg, nm); new AIPilot(ac, m.allySkill || 'normal', this.area); this.blue.push(ac);
+      }
       ac.power = grp.power;
-      new AIPilot(ac, m.allySkill || 'normal', this.area); this.blue.push(ac);
     }
     // air policing: weapons hold for everybody on your side, the lead and the wingman as well
-    if (m.kind === 'intercept') for (const a of this.blue) if (a.pilot) a.pilot.holdFire = true;
+    this.holdAll = m.kind === 'intercept';
+    if (this.holdAll) for (const a of this.blue) if (a.pilot) a.pilot.holdFire = true;
     // the other side
     this.scn = m.scenario || 'ident';                    // air policing: 'ident' (a foreign fighter), 'liner' (an airliner in trouble), 'hostile' (it attacks)
     this.weaponsFree = false; this.hostileAct = false; this.answered = false;
@@ -248,9 +275,34 @@ export class Mission {
       if (v === this.lead) this.say('awacs', `${this.g.radio.callsign}, your lead is down! You have the flight.`, 600);
     }
   }
+  // the flight on the runway ahead of you: they roll one row after the other (the front row first), and fly their
+  // own tasks once they are well up in the air
+  updateTeam(dt) {
+    if (!this.team.length) return;
+    const p = this.p, g = this.g;
+    if (!this.go) { this.go = true; this.goT = 0; }                         // the delays count from the start of the take-off
+    for (const a of this.team) {
+      const c = a.crew;
+      if (!a.alive || c.handed) continue;
+      if (this.go && !c.rolling && this.t - this.goT >= c.delay) {
+        c.rolling = true; if (a.pilot && a.pilot.release) a.pilot.release();
+        const nm = c.kind === 'lead' ? 'Lead' : c.kind === 'wing' ? 'Two' : a.name.split(' ')[0];
+        this.say(c.kind === 'wing' ? 'wing' : c.kind === 'lead' ? 'lead' : 'awacs', `${nm}, rolling.`, 100);
+      }
+      if (c.rolling && a.pos.z - g.terrain.height(a.pos.x, a.pos.y) > 140) { c.handed = true; this.handOver(a); }
+    }
+  }
+  handOver(a) {
+    const m = this.m;
+    if (a.crew.kind === 'lead') new LeadPilot(a, 'wing', m.kind === 'intercept' ? null : this.area);
+    else if (a.crew.kind === 'wing') new WingmanPilot(a, this.p);
+    else new AIPilot(a, m.allySkill || 'normal', this.area);
+    if (this.holdAll && !this.weaponsFree && a.pilot) a.pilot.holdFire = true;
+  }
   update(dt) {
     if (this.over) return;
     this.t += dt;
+    this.updateTeam(dt);
     const p = this.p, m = this.m;
     if (this.pending && (this.pending.t -= dt) <= 0) { this.calls.late++; this.pending = null; this.g.hud.message('A vezér választ várt a rádión (I)!', 'warn', 2.5, 'radio'); }
     // the lead's radio calls: tally, engage
@@ -341,6 +393,7 @@ export class Mission {
     if (this.onEnd) this.onEnd(this.result || { won: false, status: 'abort', kills: 0, blueLost: [], redLost: [], radio: 0 });
   }
   render() {
+    if (this.quiet) return;                               // a Sortie shows its own panel until the fight starts
     const m = this.m, reds = this.red.filter((a) => a.alive).length;
     let task = '';
     if (m.kind === 'intercept') {
