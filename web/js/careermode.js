@@ -370,6 +370,7 @@ export class CareerMode {
   warRoom() {
     const w = this.war, me = w.player, rank = this.s.rank || 0;
     if (w.over) { this.warEnd(); return; }
+    if (this.s.alert) { const a = this.s.alert; this.s.alert = null; this.save(); this.fireAlert(a); return; }      // the alarm: straight to the jet
     const fleetRow = (id) => {
       const { fleet, exact } = seenFleet(w, id), t = totalFleet(fleet), start = w.powers[id].start;
       return `<div class="cr-power" style="--c:${POWERS[id].colour}"><b>${POWERS[id].name}${w.powers[id].out ? ' – KIESETT' : ''}</b>
@@ -409,7 +410,38 @@ export class CareerMode {
     if ($('cr-roster')) $('cr-roster').onclick = () => this.rosterScreen(assigned);
     if ($('cr-politics')) $('cr-politics').onclick = () => this.politics();
   }
-  passDays(n) { for (let i = 0; i < n; i++) { simulateDay(this.war); if (this.war.day % 4 === 0) aiDiplomacy(this.war); if (this.roster) restDay(this.roster); } this.save(); }
+  passDays(n) { for (let i = 0; i < n; i++) { simulateDay(this.war); if (this.war.day % 4 === 0) aiDiplomacy(this.war); if (this.roster) restDay(this.roster); } this.rollAlert(n); this.save(); }
+  // the enemy may strike without warning: whatever your rank, the alarm sounds the moment you come back to the
+  // operations room - no briefing, no button.  Some of them are only readiness exercises (nobody says so)
+  rollAlert(n) {
+    const w = this.war;
+    if (!w || !w.started || w.over || this.s.alert || this.s.hospital || this.s.pow || !this.s.alive) return;
+    if (Math.random() >= 1 - Math.pow(0.93, n)) return;
+    const fronts = FRONTS.filter((f) => f.sides.includes(w.player) && frontEnemies(w, f.id).length);
+    if (!fronts.length) return;
+    this.s.alert = { front: fronts[Math.floor(Math.random() * fronts.length)].id, drill: Math.random() < 0.3 };
+  }
+  fireAlert(a) {
+    this.ensureRoster();
+    const o = this.makeOrder(a.front, { scramble: true });
+    o.alert = true; o.drill = a.drill; o.tod = Math.random() < 0.7 ? 'day' : 'night';
+    const m = this.missionOf(o);
+    m.alert = true; m.drill = a.drill; m.scramble = true;
+    m.title = a.drill ? 'RIADÓ' : `RIADÓ! ${POWERS[o.foe].short} támadás a bázis ellen`;
+    this.fly(m, null, (r) => this.afterAlert(m, o, r));        // at the home base: the map is already there, nothing to wait for
+  }
+  afterAlert(m, o, r) {
+    this.s.order = null;
+    if (r.why === 'drill') {
+      this.s.sorties++; this.s.radio.push(r.radio); this.radioAvg();
+      const t = r.scrambleSec, grade = t <= 60 ? 'kiváló' : t <= 100 ? 'jó' : t <= 150 ? 'megfelelő' : 'lassú';
+      this.debrief({ ...r, title: 'Készenléti gyakorlat', text: `Nem éles riasztás volt, hanem gyakorlat: a gépedig és a gurulásig ${t} másodperc telt el a hangjelzéstől – ${grade} reakció.` });
+      return;
+    }
+    // a slow reaction costs: the attackers did damage at the base
+    if (r.scrambleSec > 150) { const P = this.war.powers[this.war.player]; P.damage = Math.min(0.8, (P.damage || 0) + 0.1); this.war.log.unshift({ day: this.war.day, text: 'A lassú reakció miatt a támadás kárt tett a bázison (a gyártás −10 %)' }); }
+    this.afterWarMission(m, o.foe, r, o.flight);
+  }
   // the order of the day: the front, the enemies there by their real fleets, your flight and help, sized by rank.
   // You do not choose it: it is given to you.  From captain you choose your wingmen, from major the front, the
   // kind of mission, the time of day and the jet - except when the klaxon sounds (an alert is not planned).

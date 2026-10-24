@@ -73,6 +73,10 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
 Bevetésnél a vezéred, a kísérőid és a szövetséges gépek **a kifutón állnak előtted**, sorokban, és **előbb szállnak fel**: az első sor indul először, rádión jelentik, hogy gurulnak, és a levegőben veszik át a saját feladatukat. Te utánuk indulsz, és beéred őket. Legfeljebb 9 gép fér a kifutóra, a többi már a levegőben vár.
 
+## Váratlan riasztás
+
+A háborúban bármikor, bármilyen rangon **megszólalhat a riadó**: amint visszatérsz a hadműveleti központba (egy bevetés vagy egy pihenőnap után), nincs eligazítás és nincs „Indulás” gomb: a sziréna már szól, az óra fut a hangjelzés óta, és rohanni kell a gépig, felszállni, és megvédeni a bázist. A felszállásig eltelt idő számít (150 másodperc fölött a támadás kárt tesz a bázison). Néhány riasztás **csak gyakorlat**, de ezt senki nem mondja: a torony csak akkor szól, amikor a gép gurulni kezd.
+
 ## Kanyonfutam (külön mód)
 
 A főmenüben a **Küldetés** sorban a **Kanyonfutam**: alacsony repülés egy szoros völgyben (a Grand Canyonban, ha nincs más világtérkép kiválasztva), kapuk a völgy fenekén, a végén egy célpont, utána meredek kihúzás a gerincen át. **2:15 alatt** kell teljesíteni. 350 m fölött a radar meglát: 4 másodpercenként +5 s büntetés. A pálya mindig ugyanaz az adott térképen (a domborzatból számolódik), így az idők összehasonlíthatók; a rekordot a böngésző őrzi. Szabad játékban, a karrier nélkül játszható.

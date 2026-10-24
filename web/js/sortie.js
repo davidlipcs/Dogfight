@@ -21,7 +21,7 @@ const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 export class Sortie {
   constructor(game, m, onEnd) {
     this.g = game; this.m = m; this.onEnd = onEnd; this.t = 0; this.phaseT = 0; this.result = null; this.mission = null;
-    this.scramble = !!m.scramble; this.flags = {}; this.done = {}; this.ended = false;
+    this.scramble = !!m.scramble; this.drill = !!m.drill; this.flags = {}; this.done = {}; this.ended = false;
     const b = this.b = game.base, p = game.player;
     b.build();
     b.jetsOnGround = [];
@@ -137,7 +137,7 @@ export class Sortie {
   }
   // the mission (and with it the flight standing next to you) exists from the start of the take-off
   startMission() {
-    if (this.mission) return;
+    if (this.mission || this.drill) return;                  // a drill has no enemy
     this.mission = new Mission(this.g, { ...this.m, groundStart: true, embedded: true }, (r) => this.fightOver(r));
     this.mission.quiet = true;
   }
@@ -149,7 +149,7 @@ export class Sortie {
     this.setPhase('fight');
   }
   fightOver(r) {
-    this.result = { ...r, scrambleSec: this.scramble && this.airT ? Math.round(this.airT - (this.boardT || 0)) : null };
+    this.result = { ...r, scrambleSec: this.scramble && this.airT ? Math.round(this.airT) : null };       // the time from the alarm to being airborne
     const g = this.g, p = this.p;
     // the enemies are gone, the sky quietens
     g.world.aircraft = g.world.aircraft.filter((a) => a === p || a.team === 'blue' && a.alive);
@@ -186,6 +186,18 @@ export class Sortie {
     const g = this.g, p = this.p, f = this.flags;
     if (this.phase === 'fight') { this.mission.update(dt); return; }
     if (this.phase === 'takeoff' && this.mission) this.mission.update(dt);
+    // a readiness exercise (nobody told you): the tower speaks only when the jet starts to roll
+    if (this.drill && this.phase === 'takeoff' && !this.drillTold && p.speed > 8) {
+      this.drillTold = true; this.drillSec = Math.round(this.t);
+      g.radio.say('tower', `${g.radio.callsign}, tower: this is only a readiness exercise, I repeat, a readiness exercise. Abort the take-off, stop and return to the apron. Good time.`, 300);
+      g.hud.message('GYAKORLAT – a torony szerint ez csak készenléti gyakorlat. Állj meg!', 'info', 6, 'drill');
+      this.result = { won: true, why: 'drill', status: 'ok', kills: 0, blueLost: [], redLost: [], radio: 100, scrambleSec: this.drillSec };
+      this.render();
+    }
+    if (this.drill && this.drillTold && this.phase === 'takeoff') {
+      p.controls.throttle = Math.min(p.controls.throttle, 0.0); p.controls.brakes = true; p.fm.parkBrake = true;      // the ground crew's chocks
+      if (p.speed < 1.5) { p.fm.parkBrake = true; this.setPhase('shutdown'); g.hud.message('Megálltál. E = hajtómű leállítása, kiszállás', 'good', 6, 'sd'); }
+    }
     if (this.phase === 'preflight' || this.phase === 'taxi') {
       const pl = g.pilot;
       if (pl && pl.pitch !== null) { if (pl.pitch > 0.6) f.pu = true; if (pl.pitch < -0.6) f.pd = true; }
@@ -201,7 +213,11 @@ export class Sortie {
       if (this.phaseT % 0.5 < dt) this.render();
     } else if (this.phase === 'takeoff') {
       const agl = p.pos.z - g.terrain.height(p.pos.x, p.pos.y);
-      if (!p.onGround && agl > 30 && p.alive) this.startFight();
+      if (!p.onGround && agl > 30 && p.alive && this.drill) {                            // he took off anyway: the exercise ends in the air
+        if (!this.result) this.result = { won: true, why: 'drill', status: 'ok', kills: 0, blueLost: [], redLost: [], radio: 100, scrambleSec: Math.round(this.t) };
+        g.radio.say('tower', `${g.radio.callsign}, tower: it was an exercise. Come home and land.`, 300);
+        this.setPhase('rtb');
+      } else if (!p.onGround && agl > 30 && p.alive) this.startFight();
       if (!p.alive || p.ejected) { this.setPhase('log'); this.result = { won: false, why: 'crash', status: p.ejected ? 'ejected' : 'shot_down', kills: 0, blueLost: [this.m.playerType], redLost: [], radio: 0 }; this.openLog(); }
       if (this.phaseT % 1 < dt) this.render();
     } else if (this.phase === 'rtb') {
@@ -217,7 +233,7 @@ export class Sortie {
   respawn() {}
   infoLine() {
     const m = this.m, name = esc(m.title || 'Bevetés');
-    return `${name} · WASD = séta · Shift = futás · E = használ · I = rádió`;
+    return `${this.scramble && this.phase !== 'log' ? `⏱ ${Math.round(this.t)} s a riasztás óta · ` : ''}${name} · WASD = séta · Shift = futás · E = használ · I = rádió`;
   }
   // ------------------------------------------------------------------ the briefing panel
   render() {
@@ -231,19 +247,19 @@ export class Sortie {
     let body = '';
     if (ph === 'kit') body = '<p>Menj a <b>felszerelés-konténerhez</b> (sárga jelzés), és vedd fel a holmidat. Kitartott <kbd>Shift</kbd> = futás.</p>';
     else if (ph === 'walk') body = this.scramble
-      ? `<p><b>RIADÓ!</b> Fuss a gépedhez (zöld jelzés)! Eltelt: ${Math.round(this.t)} s</p>`
+      ? `<p><b>RIADÓ!</b> Fuss a gépedhez (zöld jelzés)! <b>⏱ ${Math.round(this.t)} s</b></p>`
       : `<p>Sétálj a gépedhez (zöld jelzés): <b>${spec.name}</b>.${this.b.walker.kit ? '' : ' <b>De előbb a felszerelés!</b>'}</p>`;
     else if (ph === 'preflight' || ph === 'taxi') {
       body = '<p>Ellenőrzés a pilótafülkéből:</p><ul class="pre">' + this.pre.map((c) => `<li class="${c.ok() ? 'ok' : ''}">${c.ok() ? '☑' : '☐'} ${c.text}</li>`).join('') + '</ul>';
       body += ph === 'taxi' ? '<p class="tut-task"><b>RÁDIÓ</b>mondd: <b>READY FOR TAKEOFF</b></p>'
         : this.flags.allDone ? '<p class="tut-task"><b>RÁDIÓ</b>mondd: <b>REQUEST TAXI</b> (I)</p>' : '';
     } else if (ph === 'towing') body = '<p>A földi személyzet a kifutóhoz vontat…</p>';
-    else if (ph === 'takeoff') body = `<p>Teljes gáz (<kbd>Shift</kbd>), emeld az orrod felemelkedési sebességnél, futómű be (<kbd>G</kbd>).${this.scramble ? ` Eltelt: ${Math.round(this.t)} s` : ''}</p>`;
+    else if (ph === 'takeoff') body = `<p>Teljes gáz (<kbd>Shift</kbd>), emeld az orrod felemelkedési sebességnél, futómű be (<kbd>G</kbd>).${this.scramble ? ` <b>⏱ ${Math.round(this.t)} s</b>` : ''}</p>`;
     else if (ph === 'rtb') body = '<p>A feladat kész. <b>Térj vissza a bázisra és szállj le</b> – a kifutó a HUD-on a cián négyzet. Rádió: INBOUND FOR LANDING, GEAR DOWN, CLEAR OF RUNWAY.</p>';
     else if (ph === 'shutdown') body = '<p>Megálltál a betonon. <kbd>E</kbd> = hajtómű leállítása és kiszállás.</p>';
     else if (ph === 'walkback') body = '<p>Sétálj a <b>műveleti épülethez</b> (sárga jelzés), és add le a jelentést.</p>';
     else if (ph === 'log') body = '<p>Töltsd ki a naplót.</p>';
-    this.panel.innerHTML = `<div class="tut-head"><span>${esc(m.title || 'Bevetés')}</span></div><h3>${this.scramble ? 'Riasztás – QRA' : 'Bevetés'}</h3>
+    this.panel.innerHTML = `<div class="tut-head"><span>${esc(m.title || 'Bevetés')}</span></div><h3>${m.alert ? 'RIADÓ!' : this.scramble ? 'Riasztás – QRA' : 'Bevetés'}</h3>
       <ol class="cr-stages-mini">${list}</ol>${body}`;
     if (ph === 'fight') this.panel.hidden = false;
   }
