@@ -50,6 +50,7 @@ export const FRONTS = [
   { id: 'scs', name: 'Dél-kínai-tenger', lat: 15.5, lon: 114.5, sides: ['us', 'cn'], why: 'mesterséges szigetek, kifutópályákkal' },
   { id: 'japan', name: 'Japán-tenger', lat: 40.0, lon: 134.5, sides: ['us', 'cn', 'ru'], why: 'három nagyhatalom találkozik' },
   { id: 'siberia', name: 'Amur-folyó (orosz–kínai határ)', lat: 48.4, lon: 135.1, sides: ['ru', 'cn'], why: 'a két szomszéd régi vitája' },
+  { id: 'atlantic', name: 'Izland – az Atlanti-óceán kapuja', lat: 63.98, lon: -22.6, sides: ['us', 'eu'], why: 'Keflavík és a GIUK-rés: itt csak az európai légierővel kerülsz szembe' },
   { id: 'india', name: 'Himalája – Ladakh', lat: 34.2, lon: 77.6, sides: ['cn', 'us'], why: 'a világ teteje' },
 ];
 
@@ -74,7 +75,13 @@ export function newWar(playerPower = 'us', seed = Date.now()) {
   for (const id of POWER_IDS) if (id !== playerPower) w.intel[id] = 0.35;   // estimate error (+-35 %)
   return w;
 }
-export function loadWar() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+export function loadWar() {
+  try {
+    const w = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (w) for (const f of FRONTS) if (!w.fronts[f.id]) w.fronts[f.id] = { control: {}, heat: 0.5, lastBattle: null };   // fronts added since the save
+    return w;
+  } catch (e) { return null; }
+}
 export function saveWar(w) { try { localStorage.setItem(KEY, JSON.stringify(w)); } catch (e) { /* private mode */ } }
 
 export const trustOf = (w, a, b) => w.trust[pairKey(a, b)] || 0;
