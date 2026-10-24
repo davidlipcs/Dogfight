@@ -35,7 +35,7 @@ const TAKEOFF_HINT_NOAB = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig  ·  feleme
 const TAKEOFF_HINT = 'FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret (vagy S)  ·  G = futómű';
 const CAT_HINT = 'KATAPULT: adj teljes gázt (Shift tartva, 100%), és a katapult kilő az orr felé  ·  utána húzd az orrot (S), G = futómű';
 const SPLASH = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, RELOAD_TIME = 10, MAX_ENEMIES = 6, THROTTLE_RATE = 0.4, MAX_AB = 1.1;
+const WAVE_DELAY = 5, FIRST_WAVE_DELAY = 25, RELOAD_TIME = 10, MAX_ENEMIES = 6, MAX_ACTIVE = 4, REINFORCE_GAP = 70, THROTTLE_RATE = 0.4, MAX_AB = 1.1;
 const CHASE_DISTANCE = 26, CHASE_HEIGHT = 5.5;
 const HEAD_YAW = 160 * DEG;                           // a pilot turns the head at most 160 degrees each way
 const CAM_FIX = qaxis(V(1, 0, 0), Math.PI / 2);     // three.js cameras look down -Z with +Y up
@@ -414,7 +414,7 @@ class Game {
 
   static freshState() {
     return { wave: 0, kills: 0, deaths: 0, banner: '', subBanner: '', paused: true, waveTimer: FIRST_WAVE_DELAY, waveActive: false,
-      score: 0, streak: 0, duelWins: 0, duelLosses: 0, duelStreak: 0, over: false, modeLine: '', credits: 0 };
+      score: 0, streak: 0, reserve: 0, reserveT: 0, spawned: 0, duelWins: 0, duelLosses: 0, duelStreak: 0, over: false, modeLine: '', credits: 0 };
   }
   // a new match on the same scene (terrain, models and the renderer stay)
   newMatch(opts) {
@@ -568,24 +568,30 @@ class Game {
     this.career.best('bestWave', st.wave);
     if (st.wave >= 5) this.medal('wave5');
     if (this.scenario === 'survival') { this.career.best('bestSurvival', st.wave); if (st.wave >= 4) this.medal('survivor'); }
-    const count = Math.min(this.opts.enemies + st.wave - 1, MAX_ENEMIES);
+    const count = Math.min(this.opts.enemies + st.wave - 1, MAX_ENEMIES), now = Math.min(count, MAX_ACTIVE);
+    st.reserve = count - now; st.reserveT = 0; st.spawned = 0;
+    this.spawnEnemies(now, 0);
+    st.waveActive = true;
+    const toZone = Math.max(0, Math.hypot(ZONE.x - p.pos.x, ZONE.y - p.pos.y) - ZONE.r);
+    this.hud.message(`${st.wave}. HULLÁM - ${count} ellenség${st.reserve ? ` (egyszerre ${now}, a többi erősítésként jön)` : ''} a harci zónában${toZone > 1000 ? ` (${(toZone / 1000).toFixed(0)} km)` : ''}`, 'warn', 5);
+  }
+  // n enemies in a line across the combat zone (back: metres further away, for reinforcements)
+  spawnEnemies(n, back) {
+    const st = this.state, p = this.player, r = this.rnd;
     const from = norm(V(ZONE.x - p.pos.x, ZONE.y - p.pos.y, 0), V(0, 1, 0));
-    const center = add(V(ZONE.x, ZONE.y, 0), mul(from, ZONE.r * 0.35));
+    const center = add(V(ZONE.x, ZONE.y, 0), mul(from, ZONE.r * 0.35 + back));
     const side = V(from.y, -from.x, 0), area = { ...this.nav.zone, safe: this.nav.base };
-    for (let i = 0; i < count; i++) {
-      const pos = add(center, mul(side, (i - (count - 1) / 2) * 3500 + r.uniform(-800, 800)));
+    for (let i = 0; i < n; i++) {
+      const pos = add(center, mul(side, (i - (n - 1) / 2) * 3500 + r.uniform(-800, 800)));
       pos.z = Math.max(r.uniform(3000, 7500), this.terrain.height(pos.x, pos.y) + 1500);
       const heading = Math.atan2(-from.x, -from.y) / DEG + r.uniform(-20, 20);
       const type = this.enemyType(r);
       const spec = BANDITS[type];
       const loadout = type === 'f16' || spec.proc ? 'default' : buildLoadout(spec, 2, 4).layout;
-      const ac = new Aircraft(spec, `Bandita ${i + 1} (${spec.short})`, 'red', pos, heading, 240, { livery: 'viper', missiles: missilesFor(spec, true), loadout, rnd: rng(Math.floor(r() * 1e9)) });
+      const ac = new Aircraft(spec, `Bandita ${++st.spawned} (${spec.short})`, 'red', pos, heading, 240, { livery: 'viper', missiles: missilesFor(spec, true), loadout, rnd: rng(Math.floor(r() * 1e9)) });
       new AIPilot(ac, this.opts.difficulty, area);
       this.world.addAircraft(ac);
     }
-    st.waveActive = true;
-    const toZone = Math.max(0, Math.hypot(ZONE.x - p.pos.x, ZONE.y - p.pos.y) - ZONE.r);
-    this.hud.message(`${st.wave}. HULLÁM - ${count} ellenség a harci zónában${toZone > 1000 ? ` (${(toZone / 1000).toFixed(0)} km)` : ''}`, 'warn', 5);
   }
   // duel: one opponent 9 km ahead, head-on, same height; every round starts with a full jet
   spawnDuel() {
@@ -1237,7 +1243,16 @@ class Game {
       this.hud.message('SIKERES FELSZÁLLÁS - húzd be a futóművet (G)', 'good', 4);
     }
     if (this.scenario === 'race' || this.scenario === 'canyon') return;
-    if (!this.tutorial && st.waveActive && !this.enemiesAlive().length) {
+    // reinforcements: the rest of a big wave comes in groups, when the first ones are thinned out (or after a while)
+    if (!this.tutorial && st.waveActive && st.reserve > 0) {
+      st.reserveT += dt;
+      if (this.enemiesAlive().length <= 1 || st.reserveT > REINFORCE_GAP) {
+        const n = Math.min(st.reserve, 3);
+        this.spawnEnemies(n, 6000); st.reserve -= n; st.reserveT = 0;
+        this.hud.message(`ERŐSÍTÉS: még ${n} ellenség érkezik${st.reserve ? ` (utána még ${st.reserve})` : ''}`, 'warn', 4, 'reinf');
+      }
+    }
+    if (!this.tutorial && st.waveActive && !(st.reserve > 0) && !this.enemiesAlive().length) {
       st.waveActive = false; st.waveTimer = WAVE_DELAY;
       const scen = this.scenario;
       if (scen === 'duel') {

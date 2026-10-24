@@ -438,6 +438,18 @@ export const PLANE_GROUPS = [
   ['Európa', ['gripen', 'typhoon', 'rafale']], ['Kína', ['j20']], ['Gyakorlógépek', ['t6', 't38', 't45']],
 ];
 export const TRAINERS = { t6: T6A, t38: T38C, t45: T45C };
+// a narrow-body airliner: the unidentified aircraft of the air policing sorties (never a player's aircraft)
+export const LINER = {
+  ...TRAINER, id: 'liner', model: 'liner', proc: true, name: 'Személyszállító', short: 'Liner', callsign: 'Flight', trainer: false, noAB: true,
+  emptyMass: 42000, internalFuel: 12000, wingArea: 122, wingSpan: 34, length: 37,
+  engines: 2, thrustDry: 190000, thrustAb: 190000, fuelFlowDry: 1.3, fuelFlowAb: 1.3,
+  clAlpha: 5.0, clMax: 1.7, alphaStall: 15, alphaLimit: 13, cd0: 0.026, kInduced: 0.05, pylonCd: 0,
+  waveDrag: [[0, 0], [0.76, 0], [0.8, 0.01], [0.85, 0.05], [0.9, 0.14]],
+  gMax: 2.5, gMin: -1.0, rollRate: 28, yawBeta: 3, airbrakeCd: 0.03, hp: 220, rcsFront: 20, rcsSide: 60,
+  gearHeight: 4.35, tailStrike: 9, rotateIas: 78,
+  hitboxes: [[[0, 0, 0], [2.1, 17.5, 2.1]], [[0, -3, -1], [17, 3.5, 0.4]], [[0, -15, 3], [6, 3, 4.5]]],
+  gunPos: [0, 16, 0],
+};
 
 // the enemies fly the same jets with a weaker airframe: less G, slower roll, lower angle of attack limit
 export const BANDITS = {
@@ -454,6 +466,7 @@ export const BANDITS = {
   rafale: { ...RAFALE, gMax: 7.4, rollRate: 210, alphaLimit: 24 },
   j20: { ...J20, gMax: 7, rollRate: 180, alphaLimit: 22 },
   f35: { ...F35A, name: 'F-35A (ellenfél)', gMax: 7.2, rollRate: 190, alphaLimit: 24 },
+  liner: LINER,
 };
 export const F16C_BANDIT = BANDITS.f16;
 

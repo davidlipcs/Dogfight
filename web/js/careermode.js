@@ -29,7 +29,7 @@ const STAGES = [
   { id: 'class2', name: 'Rádióóra 2 – kötelék és légiharc', lessons: ['radio3', 'radio4'] },
   { id: 'branch', name: 'Fegyvernem: Air Force vagy Navy' },
   { id: 'adv', name: 'Haladó képzés – T-38C Talon / T-45C Goshawk' },
-  { id: 'class3', name: 'Rádióóra 3 – AWACS, üzemanyag, parancsok', lessons: ['radio5', 'radio6'] },
+  { id: 'class3', name: 'Rádióóra 3 – AWACS, üzemanyag, parancsok, az idegen gép kikérdezése', lessons: ['radio5', 'radio6', 'radio7'] },
   { id: 'bfm', name: 'Vadászgép-átképzés: légiharc egy oktató ellen' },
   { id: 'wings', name: 'Szárnyavatás – hadnagy' },
   { id: 'qra', name: 'Légtérrendészet (Baltikum) – 3 bevetés kísérőként (2-es)' },
@@ -46,6 +46,8 @@ const QUIZ = {
   winchester: 'Elfogyott minden fegyvered.', rtb: 'Hazaindulsz a bázisra.', engage: 'A kísérőd támadja meg az ellenséget.', cover: 'A kísérőd védje a hátadat.',
   rejoin: 'A kísérőd jöjjön vissza alakzatba.', break: 'Rakéta jön a kísérődre – figyelmeztesd, hogy törjön ki.', picture: 'Az AWACS-tól kérdezed, hol az ellenség.',
   checking_in: 'Bejelentkezel az AWACS-nál.',
+  interrogate: 'Egy ismeretlen gép sodródik a határ felé: kikérdezed, ki ő.', follow_me: 'Utasítod az idegen gépet, hogy kövessen a bázisra.',
+  weapons_free_req: 'Az idegen gép rád lőtt: tűzengedélyt kérsz az AWACS-tól.',
 };
 
 export class CareerMode {
@@ -72,7 +74,8 @@ export class CareerMode {
     this.s.stage = STAGES[Math.min(STAGES.length - 1, i + 1)].id;
     this.save();
   }
-  unlockedSet() { return new Set(this.s ? this.s.lessons : []); }
+  // (the air policing lesson came with class 3: older saves that finished it get it too)
+  unlockedSet() { const l = new Set(this.s ? this.s.lessons : []); if (l.has('radio6')) l.add('radio7'); return l; }
   // a flight: only the radio calls taught so far, your callsign; back here (paused) when it ends
   async go(opts, place) {
     this.root.hidden = true;
@@ -105,7 +108,7 @@ export class CareerMode {
         <div class="hint">Bevetések: ${this.s.sorties || 0} · lelövések: ${this.s.kills || 0} · rádiófegyelem: ${this.s.radioAvg || '-'}% · kitüntetések: ${(this.s.awards || []).length}</div></div></div>
       <ol class="cr-stages">${rows}</ol>
       <div class="buttons"><button type="button" class="primary" id="cr-go">▶ ${this.stage.name}</button>
-      <button type="button" class="small" id="cr-calls">Megtanult rádióhívások (${this.s.lessons.length ? CALLS.filter((c) => this.s.lessons.includes(c.lesson)).length : 0})</button>
+      <button type="button" class="small" id="cr-calls">Megtanult rádióhívások (${this.s.lessons.length ? CALLS.filter((c) => this.unlockedSet().has(c.lesson)).length : 0})</button>
       <button type="button" class="small" id="cr-logb">Repülési napló (${(this.s.logbook || []).length})</button>
       <button type="button" class="small" id="cr-reset">Új karrier</button></div>`);
     $('cr-logb').onclick = () => this.logbookScreen();
@@ -135,7 +138,7 @@ export class CareerMode {
     };
   }
   callsList() {
-    const known = CALLS.filter((c) => this.s.lessons.includes(c.lesson));
+    const known = CALLS.filter((c) => this.unlockedSet().has(c.lesson));
     this.frame(`<h2>Megtanult rádióhívások</h2><p class="hint">Repülés közben: <kbd>I</kbd> röviden = lista és beírás, <kbd>I</kbd> nyomva tartva = mondd ki (angolul). A hívójel elhagyható.</p>
       <div class="cr-calls">${known.length ? known.map((c) => `<div><b>${c.say}</b> <span>${c.hu}</span> <i>${c.alt.slice(0, 3).join(' · ')}</i></div>`).join('') : '<p>Még egyet sem – a rádióórákon tanulod meg őket.</p>'}</div>
       <div class="buttons"><button type="button" id="cr-back">Vissza</button></div>`);
@@ -258,7 +261,12 @@ export class CareerMode {
   qra(role) {
     const n = role === 'wing' ? 3 : 2, done = this.s.qra || 0;
     this.ensureRoster();
-    const m = { kind: 'intercept', role, playerType: this.fleetJet(), red: [{ type: Math.random() < 0.5 ? 'su35' : 'mig31', n: 1, power: 'ru' }], title: `Légtérrendészet ${done + 1}. / ${n}`, bearing: 70 * Math.PI / 180,
+    // every sortie is different: a foreign fighter that has to be identified and shown the way out, an airliner in
+    // trouble that has to be talked down to the runway, or one that attacks (then we return fire).  The first is
+    // the plain one.
+    const scn = done === 0 ? 'ident' : ['ident', 'liner', 'hostile'][Math.floor(Math.random() * 3)];
+    const m = { kind: 'intercept', scenario: scn, role, playerType: this.fleetJet(), title: `Légtérrendészet ${done + 1}. / ${n}`, bearing: 70 * Math.PI / 180,
+      red: [scn === 'liner' ? { type: 'liner', n: 1, power: 'civ' } : { type: ['su35', 'mig31', 'mig29'][Math.floor(Math.random() * 3)], n: 1, power: 'ru' }],
       callsign: `${this.s.callsign} 1-${role === 'wing' ? 2 : 1}`, scramble: true, tod: 'day' };
     const flight = this.autoFlight(role);
     this.applyFlight(m, flight);
@@ -267,7 +275,7 @@ export class CareerMode {
       const fl = this.flightFates(flight, r);
       if (r.won) { this.s.qra = done + 1; if (this.s.qra >= n) { this.s.qra = 0; this.next(); if (role === 'wing') { this.s.rank = 1; this.award('Előléptetés: főhadnagy'); } } }
       if (r.why === 'shot_intruder') { this.s.court = (this.s.court || 0) + 1; }
-      const text = r.why === 'escaped' ? 'A célpont elhagyta a légterünket, mielőtt odaértél. Legközelebb gyorsabban a levegőbe!' : r.why === 'intruder_lost' ? 'A célpont magától lezuhant – a feladatot nem lehetett befejezni, de ez nem a te hibád.' : r.why === 'shot_intruder' ? 'Lelőtted az idegen gépet békeidőben: hadbírósági eljárás indul ellened.' : '';
+      const text = r.why === 'landed' ? 'A személyszállító gép biztonságban leszállt. Száznegyvenkét utas köszöni.' : r.why === 'neutralised' ? 'A támadó gépet semlegesítettétek: ő lőtt először, ti csak viszonoztátok.' : r.why === 'escaped' ? 'A célpont elhagyta a légterünket, mielőtt odaértél. Legközelebb gyorsabban a levegőbe!' : r.why === 'intruder_lost' ? 'A célpont magától lezuhant – a feladatot nem lehetett befejezni, de ez nem a te hibád.' : r.why === 'shot_intruder' ? 'Lelőtted az idegen gépet békeidőben: hadbírósági eljárás indul ellened.' : '';
       this.debrief({ ...r, title: m.title, text, extra: fl });
     });
   }
@@ -410,7 +418,7 @@ export class CareerMode {
     this.ensureRoster();
     const foe = enemies[Math.floor(Math.random() * enemies.length)];
     const big = Math.random() < 0.35 + rank * 0.05;
-    const nRed = big ? 4 + Math.floor(Math.random() * 7) : 2 + Math.floor(Math.random() * 2);
+    const nRed = big ? 4 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2);   // at most 6; the Mission sends them in groups of 4
     const red = pickTypes(w.powers[foe].fleet, nRed).map((t) => ({ type: t, n: 1, power: foe }));
     const blue = [], nBlue = Math.max(0, nRed - 2 + (rank >= 2 ? 0 : 1));
     for (const t of pickTypes(w.powers.us.fleet, nBlue)) blue.push({ type: t === 'f22' && Math.random() < 0.5 ? 'f15' : t, n: 1, power: 'us', label: 'USAF' });

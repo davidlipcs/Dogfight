@@ -40,6 +40,10 @@ export const CALLS = [
   { id: 'cover', say: 'COVER ME', alt: ['COVER', 'CHECK SIX', 'CHECK MY SIX'], to: 'wing', lesson: 'radio6', hu: 'parancs: védd a hátamat' },
   { id: 'rejoin', say: 'REJOIN', alt: ['FORM UP', 'JOIN UP', 'RETURN TO FORMATION'], to: 'wing', lesson: 'radio6', hu: 'parancs: gyere vissza alakzatba' },
   { id: 'break', say: 'BREAK LEFT', alt: ['BREAK RIGHT', 'BREAK'], to: 'wing', lesson: 'radio6', hu: 'figyelmeztetés: rakéta / ellenség – kitörés' },
+  // ---- air policing: the other aircraft (an unidentified intruder), and the rules of engagement
+  { id: 'interrogate', say: 'UNKNOWN AIRCRAFT IDENTIFY', alt: ['IDENTIFY YOURSELF', 'STATE YOUR INTENTIONS', 'STATE INTENTIONS', 'INTERROGATE', 'IDENTIFY'], to: 'target', lesson: 'radio7', hu: 'az idegen gép kikérdezése: kérd az azonosítást' },
+  { id: 'follow_me', say: 'FOLLOW ME', alt: ['FOLLOW ME TO LAND', 'FOLLOW MY LEAD', 'ESCORT', 'DIVERT'], to: 'target', lesson: 'radio7', hu: 'utasítás az idegen gépnek: kövess' },
+  { id: 'weapons_free_req', say: 'REQUEST WEAPONS FREE', alt: ['WEAPONS FREE', 'HOSTILE ACT', 'REQUEST ENGAGE', 'REQUEST CLEARANCE TO ENGAGE'], to: 'awacs', lesson: 'radio7', hu: 'tűzengedélyt kérsz (ha az idegen gép lőtt rád)' },
   // ---- AWACS (the airborne radar: who is where)
   { id: 'picture', say: 'PICTURE', alt: ['REQUEST PICTURE', 'BOGEY DOPE', 'DECLARE', 'BRAA'], to: 'awacs', lesson: 'radio5', hu: 'hol vannak az ellenséges gépek? (irány, táv, magasság)' },
   { id: 'checking_in', say: 'CHECKING IN', alt: ['ON STATION', 'CHECK IN'], to: 'awacs', lesson: 'radio5', hu: 'bejelentkezel az AWACS-hoz' },
@@ -99,7 +103,7 @@ class Speaker {
 
 export const PORTRAITS = { tower: 'assets/people/tower.png', awacs: 'assets/people/awacs.png', instructor: 'assets/people/instructor.png',
   instructor_navy: 'assets/people/navy_instructor.png', general: 'assets/people/general.png' };
-const NAMES = { tower: 'TORONY', awacs: 'AWACS „MAGIC”', wing: 'KÍSÉRŐ', lead: 'VEZÉR', instructor: 'OKTATÓ', you: 'TE' };
+const NAMES = { tower: 'TORONY', awacs: 'AWACS „MAGIC”', wing: 'KÍSÉRŐ', lead: 'VEZÉR', instructor: 'OKTATÓ', you: 'TE', intruder: 'IDEGEN GÉP' };
 const asset = (p) => (window.DOGFIGHT_ASSETS && window.DOGFIGHT_ASSETS[p.replace('assets/', '')]) || p;
 
 // --------------------------------------------------------------------- the radio itself
@@ -128,6 +132,7 @@ export class Radio {
     return all.filter((c) => {
       if (c.to === 'wing') return !!g.wingman && g.wingman.alive;
       if (c.to === 'awacs') return !p || !p.onGround;
+      if (c.to === 'target') return !!this.talkOk;
       return true;
     });
   }

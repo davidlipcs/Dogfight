@@ -73,6 +73,17 @@ rakétát és ágyút használnak, notcholnak, flare-t és chaffot szórnak.
 
 A főmenüben a **Küldetés** sorban a **Kanyonfutam**: alacsony repülés egy szoros völgyben (a Grand Canyonban, ha nincs más világtérkép kiválasztva), kapuk a völgy fenekén, a végén egy célpont, utána meredek kihúzás a gerincen át. **2:15 alatt** kell teljesíteni. 350 m fölött a radar meglát: 4 másodpercenként +5 s büntetés. A pálya mindig ugyanaz az adott térképen (a domborzatból számolódik), így az idők összehasonlíthatók; a rekordot a böngésző őrzi. Szabad játékban, a karrier nélkül játszható.
 
+## Légtérrendészet: nem mindig ugyanaz a feladat
+
+A hadnagyi Baltikum-bevetések változatosak. Az AWACS csak „ismeretlen gépet” jelent, hogy mi van valójában, az azonosítás után derül ki:
+- **Idegen vadász**: mellé repülsz (600 m, 8 s), azonosítod, rádión **kikérdezed** (`UNKNOWN AIRCRAFT IDENTIFY`). Vagy válaszol és fordul, vagy hallgat, és akkor `FOLLOW ME`, majd kikíséred.
+- **Bajba jutott személyszállító**: eltévedt, kevés az üzemanyaga. Kikérdezed, utasítod (`FOLLOW ME`), és **a leszállópályáig kíséred**, amíg földet nem ér. Rálőni tilos.
+- **Támadó**: nem válaszol, rád fordul. Tűzparancs csak akkor van, ha ő lő (rakétát indít, radarral befog, vagy elég sokáig támad); előtte `REQUEST WEAPONS FREE` kérésre az AWACS visszautasít, és ha lelövöd, hadbíróság. Utána viszont a vezéred is, te is lőhettek.
+
+Az új hívások a 3. rádióórán tanulhatók (`radio7`).
+
+A harcokban egyszerre legfeljebb 4 ellenség van; a többi **erősítésként** érkezik, ha az első csoport meggyengült (vagy 70–90 másodperc után).
+
 ## Oktatás (nem kötelező)
 
 A főmenü **Oktatás** gombja egy vezetett repülést indít a kiválasztott géppel. 11 lecke, mindegyik elmagyarázza,

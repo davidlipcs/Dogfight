@@ -223,6 +223,19 @@ export const DESIGNS = {
     gear: [[0, 6.2, -0.7, 1.95, 0.35, -95], [-2.2, -1.5, -0.5, 2.05, 0.5, 95], [2.2, -1.5, -0.5, 2.05, 0.5, 95]],
     camo: true, decals: { side: [-7.3, 2.25, 2.6], wing: [5.6, -4.4] },
   },
+  liner: {
+    name: 'Személyszállító (kétmotoros, keskenytörzsű)', paint: 0xf4f6f8, accent: 0x1c4a9a, nation: 'se', civil: true,
+    fus: [[17.6, 0.05, 0.05, 0.05], [16.2, 0.9, 0.9, 0.1], [13.5, 1.6, 1.6, 0.2], [9.5, 1.95, 1.98, 0.2, 2.2], [-8.0, 1.95, 1.98, 0.2, 2.2],
+      [-12.5, 1.6, 1.7, 0.35], [-16.0, 0.8, 1.0, 0.8], [-18.3, 0.15, 0.25, 1.2]],
+    canopy: [[16.4, 14.6], 0.7, 0.4], seats: [0.4],
+    nacelles: [[5.6, -2.0, [[4.2, 0.95, 0.95, 2], [3.4, 1.05, 1.05, 2], [0.0, 1.05, 1.05, 2], [-2.6, 0.9, 0.9, 2], [-3.3, 0.55, 0.55, 2]]]],
+    wing: { root: [3.8, -4.4], tip: [-4.0, -6.0], x0: 1.9, x1: 16.8, z0: -1.1, z1: -0.3, thick: 0.12 },
+    htail: { root: [-12.4, -16.6], tip: [-15.4, -17.6], x0: 1.0, x1: 6.2, z0: 1.4, z1: 1.7 },
+    vtails: [{ x: 0, root: [-9.8, -17.4], tip: [-14.8, -18.3], z0: 1.6, z1: 7.8, cant: 0 }],
+    stripes: [[14.5, -13.5]],
+    nozzles: [], gun: [0, 17, 0],
+    gear: [[0, 13.2, -1.7, 2.3, 0.45, -95], [-3.1, -1.4, -1.7, 2.3, 0.6, 95], [3.1, -1.4, -1.7, 2.3, 0.6, 95]],
+  },
   su57: {
     name: 'Su-57 Felon', paint: 0x9fa8b2, accent: 0x667383, nation: 'ru', internal: true,
     fus: [[10.0, 0.03, 0.03, -0.2], [8.7, 0.5, 0.42, -0.15, 3], [6.8, 0.82, 0.62, 0.0, 3], [5.3, 0.98, 0.82, 0.15, 3], [3.0, 1.9, 0.6, 0.15, 3.2],
@@ -384,8 +397,12 @@ export function buildProc(key, env, skin = null) {
     const [ya, yb] = d.antiglare, f = d.fus.find(([y]) => y <= ya) || d.fus[1];
     const p = new THREE.PlaneGeometry(f[1] * 1.1, ya - yb); p.translate(0, (ya + yb) / 2, f[3] + f[2] * 0.97); add(p, m.dark);
   }
-  // canopy and cockpit (cockpitGeom: the canopy sits on the fuselage top, the pilot's eye inside it)
-  {
+  // canopy and cockpit (cockpitGeom: the canopy sits on the fuselage top, the pilot's eye inside it); an airliner has a
+  // windscreen band and a row of cabin windows instead
+  if (d.civil) {
+    const ws = new THREE.BoxGeometry(2.7, 1.1, 0.42); ws.translate(0, 15.9, 1.15); add(ws, m.dark);
+    for (const sx of [-1, 1]) for (let yy = 12; yy > -9.5; yy -= 0.95) { const w = new THREE.BoxGeometry(0.03, 0.4, 0.34); w.translate(sx * 1.97, yy, 0.55); add(w, m.dark); }
+  } else {
     const k = cockpitGeom(d), { c0, c1, len, hw, hh, base, eye } = k, ymid = (c0 + c1) / 2;
     const g = new THREE.SphereGeometry(1, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2);
     g.rotateX(Math.PI / 2); g.scale(hw, len / 2, hh); g.translate(0, ymid, base);
