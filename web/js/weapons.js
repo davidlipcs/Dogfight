@@ -426,7 +426,13 @@ export class Missile {
     const rel = sub(t.pos, this.pos), d = len(rel), closing = -dot(sub(t.vel, this.vel), norm(rel));
     if (d / Math.max(closing, 1) > 1.6) return;
     this.evadeJudged = true;
-    if (this.rnd() < (t.pilot.skill.evade || 0)) {
+    // the base chance (difficulty) is scaled by what the pilot could actually do: it must have noticed the
+    // missile (defend state), have flares/chaff left, and a missile that is still fast and fresh is harder to shake
+    let p = t.pilot.skill.evade || 0;
+    if (t.pilot.state !== 'defend') p *= 0.25;
+    if (t.flares + t.chaff <= 0) p *= 0.3;
+    if (closing > 450) p *= 0.7; else if (this.age > 14) p *= 1.25;
+    if (this.rnd() < Math.min(p, 0.6)) {
       this.defeated = true; this.status = 'MISSED';
       t.dispense(world);
       world.emit('evaded', { target: t, missile: this });

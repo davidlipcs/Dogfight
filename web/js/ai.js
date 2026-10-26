@@ -103,15 +103,15 @@ export class PlayerPilot {
 // (plus a margin), never for anyone near the home base: taking off and landing is safe.
 // maxIr / maxArh: the farthest they ever shoot (m).  Kept well inside what the player can lock and answer,
 // so nobody gets a missile from 15 km out of nowhere.
-// evade: the chance that the pilot defeats a missile at the last moment (break + flares), by difficulty
+// evade: base chance that the pilot defeats a missile at the last moment (break + flares), by difficulty; checkEvade scales it by awareness, countermeasures left and missile energy
 const SKILLS = {
-  easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5, maxIr: 3500, maxArh: 0, evade: 0.12 },
-  normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7, maxIr: 4500, maxArh: 8000, evade: 0.24 },
-  hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 10000, evade: 0.36 },
+  easy: { g: 0.6, precision: 0.65, missileCd: 36, cm: 0.3, aware: 0.2, gunCone: 0.7, arh: false, zone: 0.5, maxIr: 3500, maxArh: 0, evade: 0.08 },
+  normal: { g: 0.8, precision: 0.85, missileCd: 24, cm: 0.6, aware: 0.45, gunCone: 1.0, arh: true, zone: 0.7, maxIr: 4500, maxArh: 8000, evade: 0.15 },
+  hard: { g: 0.92, precision: 0.95, missileCd: 15, cm: 0.9, aware: 0.75, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 10000, evade: 0.24 },
   // added: the full airframe, sharp eyes, quick to shoot again - still inside what the player can answer
-  ace: { g: 1.0, precision: 1.0, missileCd: 11, cm: 1.0, aware: 0.95, gunCone: 1.8, arh: true, zone: 0.88, maxIr: 6500, maxArh: 13000, evade: 0.5 },
+  ace: { g: 1.0, precision: 1.0, missileCd: 11, cm: 1.0, aware: 0.95, gunCone: 1.8, arh: true, zone: 0.88, maxIr: 6500, maxArh: 13000, evade: 0.35 },
   // the player's wingman
-  wing: { g: 0.95, precision: 0.95, missileCd: 14, cm: 0.9, aware: 0.8, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 11000, evade: 0.3 },
+  wing: { g: 0.95, precision: 0.95, missileCd: 14, cm: 0.9, aware: 0.8, gunCone: 1.4, arh: true, zone: 0.8, maxIr: 5500, maxArh: 11000, evade: 0.2 },
 };
 const MIN_AGL = 450;
 
