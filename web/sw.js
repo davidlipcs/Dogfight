@@ -4,7 +4,7 @@ const CACHE = 'dogfight-plus-v5';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'js/three.min.js', 'js/game.js',
   'js/util.js', 'js/specs.js', 'js/terrain.js', 'js/sim.js', 'js/ai.js', 'js/render.js', 'js/glb.js', 'js/hud.js', 'js/mfd.js',
   'js/tutorial.js', 'js/audio.js', 'js/flight.js', 'js/weapons.js', 'js/career.js', 'js/voice.js', 'js/touch.js', 'js/hangar.js',
-  'js/shopui.js', 'js/music.js', 'js/keys.js', 'js/race.js',
+  'js/shopui.js', 'js/music.js', 'js/keys.js', 'js/race.js', 'js/tube.js', 'js/net.js',
   'assets/f16.json', 'assets/terrain.json', 'assets/livery_viper.jpg', 'assets/livery_aggressor.jpg', 'assets/terrain_color.jpg',
   'assets/cockpit.png', 'assets/f16.glb', 'assets/fa18.glb', 'assets/f22.glb', 'assets/f15.glb', 'assets/aim9m.glb', 'assets/aim120c.glb'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting())); });

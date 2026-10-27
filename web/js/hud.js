@@ -240,7 +240,7 @@ export class HUD {
         const p = this.project(cam, t.pos), d = len(sub(t.pos, ac.pos));
         if (p && d < 40000) {
           this.circle(p[0], p[1], 9 * u, CYAN);
-          this.text(`KÍSÉRŐ ${(d / 1000).toFixed(1)}`, p[0], p[1] - 18 * u, CYAN, 10 * u + 2, 'center');
+          this.text(`${t.tag || 'KÍSÉRŐ'} ${t.ghost && d < 10000 ? `${Math.round(d)} m` : (d / 1000).toFixed(1)}`, p[0], p[1] - 18 * u, CYAN, 10 * u + 2, 'center');
         }
         continue;
       }

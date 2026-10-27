@@ -81,6 +81,13 @@ A háborúban bármikor, bármilyen rangon **megszólalhat a riadó**: amint vis
 
 A főmenüben a **Küldetés** sorban a **Kanyonfutam**: alacsony repülés egy szoros völgyben (a Grand Canyonban, ha nincs más világtérkép kiválasztva), kapuk a völgy fenekén, a végén egy célpont, utána meredek kihúzás a gerincen át. **2:15 alatt** kell teljesíteni. 350 m fölött a radar meglát: 4 másodpercenként +5 s büntetés. A pálya mindig ugyanaz az adott térképen (a domborzatból számolódik), így az idők összehasonlíthatók; a rekordot a böngésző őrzi. Szabad játékban, a karrier nélkül játszható.
 
+## Alagútfutam és játék a barátoddal (két játékos)
+
+- **Alagútfutam** (Küldetés sor): zárt pálya egy üvegrács-csőben, az útja a cső alján fut; 3 kör, a rendszer méri a körök idejét és a legjobbat. Aki kilóg a csőből, annak duplán számít az idő. A pálya mindig ugyanaz, így az idők összehasonlíthatók.
+- **Közös repülés**: ellenség nélküli szabad repülés a bázis fölött, formációban.
+- **Barátommal** sor a főmenüben: szerver nélkül, böngészőből böngészőbe (WebRTC). Az egyik játékos **Szobát nyit** és elküldi a kapott kódot (Messenger, Discord…), a másik **Csatlakozik**: beilleszti, és visszaküld egy válaszkódot; ezt a házigazda beilleszti, és összekapcsol titeket. Utána bármelyikőtök indítja a gyűrű-, kanyon-, alagútfutamot vagy a közös repülést, a másiknál ugyanaz indul el (ugyanazon a térképen). Egymást ghost-gépként látjátok, távolsággal („BARÁT 53 m”), a futamokban látod a barátod állását, a célban pedig az eredmény-összehasonlítást.
+- Egyelőre nincs közös harc (lövés, rakéta): mindenki a saját fizikáját repüli, és csak a pozíciók mennek át. Ha az internet mögött szigorú tűzfal / mobilháló van, a kapcsolat nem mindig jön létre.
+
 ## Légtérrendészet: nem mindig ugyanaz a feladat
 
 A hadnagyi Baltikum-bevetések változatosak. Az AWACS csak „ismeretlen gépet” jelent, hogy mi van valójában, az azonosítás után derül ki:

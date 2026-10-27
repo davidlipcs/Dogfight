@@ -158,6 +158,9 @@
   .mp-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
   #mp-sel { font-weight: 600; color: var(--caution); }
   #worldload .bar { margin: 14px 0 8px; }
+  #netdlg textarea { width: 100%; box-sizing: border-box; background: rgba(0,0,0,.35); color: var(--text); border: 1px solid var(--panel-edge); border-radius: 5px; padding: 8px; font: 12px/1.35 monospace; word-break: break-all; resize: vertical; }
+  #netdlg .buttons { margin-top: 8px; }
+  #net-state.on { color: var(--hud); }
   #wl-bar { height: 100%; width: 0; background: var(--hud); }
   .hangar-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   #hangar-credits { font: 600 22px var(--display); color: var(--caution); }
@@ -347,8 +350,17 @@
           <input type="radio" name="scen" id="s-surv" value="survival"><label for="s-surv">Túlélés</label>
           <input type="radio" name="scen" id="s-race" value="race"><label for="s-race">Gyűrűverseny</label>
           <input type="radio" name="scen" id="s-canyon" value="canyon"><label for="s-canyon">Kanyonfutam</label>
+          <input type="radio" name="scen" id="s-tube" value="tube"><label for="s-tube">Alagútfutam</label>
+          <input type="radio" name="scen" id="s-free" value="free"><label for="s-free">Közös repülés</label>
         </div>
         <span class="hint" id="scen-hint"></span>
+      </div>
+      <div class="row">
+        <span class="label">Barátommal</span>
+        <button type="button" class="small primary" id="net-host">👥 Szobát nyitok</button>
+        <button type="button" class="small" id="net-join">🔗 Csatlakozom</button>
+        <b id="net-state">nincs összekötve</b>
+        <span class="hint">két játékos, szerver nélkül: gyűrű-, kanyon-, alagútfutam és közös repülés – egymást látjátok</span>
       </div>
       <div class="row">
         <span class="label">Helyszín</span>
@@ -551,6 +563,25 @@
     </div>
     <div class="mp-foot"><span id="mp-sel"></span><span class="buttons"><button type="button" id="mp-cancel">Mégse</button><button type="button" class="primary" id="mp-ok">Itt harcolok ▶</button></span></div>
     <div class="hint" id="mp-attr"></div>
+  </div>
+</div>
+<div id="netdlg" class="screen dim" hidden>
+  <div class="card">
+    <div class="eyebrow">Két játékos · szerver nélkül</div>
+    <h1 id="nd-title" style="font-size:34px">Összekötés</h1>
+    <p id="nd-help"></p>
+    <div id="nd-outwrap" hidden>
+      <div class="hint" id="nd-outlabel"></div>
+      <textarea id="nd-out" readonly rows="4"></textarea>
+      <div class="buttons"><button type="button" id="nd-copy">📋 Másolás</button></div>
+    </div>
+    <div id="nd-inwrap" hidden>
+      <div class="hint" id="nd-inlabel"></div>
+      <textarea id="nd-in" rows="4" placeholder="DF1-…"></textarea>
+      <div class="buttons"><button type="button" class="primary" id="nd-go">Tovább</button></div>
+    </div>
+    <div id="nd-msg" class="hint"></div>
+    <div class="buttons"><button type="button" id="nd-close">Mégse</button></div>
   </div>
 </div>
 <div id="worldload" class="screen dim" hidden>

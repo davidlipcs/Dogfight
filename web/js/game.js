@@ -20,12 +20,17 @@ import { Music } from './music.js';
 import { keyEditor, buildMap } from './keys.js';
 import { Race, fmtTime } from './race.js';
 import { CanyonRun, LIMIT as CANYON_LIMIT } from './canyon.js';
+import { TubeRun } from './tube.js';
+import { link, NetPilot, snapshot } from './net.js';
 import { Carrier, DECK_Z } from './carrier.js';
 import { buildWorld, PLACES } from './world.js';
 import { Radio } from './radio.js';
 import { MapPicker } from './mappick.js';
 import { CareerMode } from './careermode.js';
 import { Base, Lobby } from './base.js';
+
+// the matches that can be played with a friend over the link, and how far apart the two start (m)
+const NET_SCENS = new Set(['race', 'canyon', 'tube', 'free']), NET_SIDE = { race: 40, canyon: 25, tube: 35, free: 90 };
 
 // The fight happens on the far side of the map: the enemies live in the combat zone and never attack anyone
 // near the home base (safe area), so taking off and landing is quiet.  An air start puts the player on the
@@ -357,6 +362,10 @@ class Game {
     this.threats = new Set(); this.hitBy = new Set(); this.rumbleT = 0;
     this.hangar = window.dogfightHangar || new Hangar();
     this.bt = { charge: 1, active: 0 }; this.race = null; this.prevPos = null; this.realFps = { n: 0, t: performance.now() };
+    this.ghost = null; this.peerProg = null; this.myFin = null; this.netT = 0; this.progT = 0;
+    link.on('s', (m) => { if (this.ghost && this.ghost.pilot) this.ghost.pilot.receive(m); });
+    link.on('prog', (m) => { this.peerProg = m; this.versus(); });
+    link.on('bye', () => this.hud.message('A barátod kilépett a meccsből', 'warn', 4, 'net'));
     addEventListener('gamepadconnected', (e) => this.hud.message(`KONTROLLER CSATLAKOZTATVA`, 'good', 3, 'pad'));
     this.state = Game.freshState();
     this.player = null; this.pilot = null; this.helpVisible = false; this.locked = false; this.inMenu = false;
@@ -433,6 +442,7 @@ class Game {
     this.stick = { x: 0, y: 0, idle: 0 };
     this.player = null; this.wingman = null; this.killCam = null; this.followM = null;
     if (this.race) { this.race.dispose(); this.race = null; }
+    this.ghost = null; this.peerProg = null; this.myFin = null;
     this.bt = { charge: 1, active: 0 };
     this.threats.clear(); this.hitBy.clear();
     this.spawnPlayer();
@@ -487,18 +497,21 @@ class Game {
   spawnPlayer() {
     const w = this.world;
     if (this.player) w.aircraft = w.aircraft.filter((a) => a !== this.player);
-    const duel = this.scenario === 'duel', canyon = this.scenario === 'canyon', race = this.scenario === 'race' || canyon, air = this.opts.airStart || duel || race, field = this.terrain.airfield;
+    const sc = this.scenario, duel = sc === 'duel', canyon = sc === 'canyon', tube = sc === 'tube', free = sc === 'free', race = sc === 'race' || canyon || tube, air = this.opts.airStart || duel || race || free, field = this.terrain.airfield;
     let pos, heading = 0, speed = 0;
     if (race) {
       // ring race: 3 km north of the base, heading north, the first ring ahead
       const start = V(field.x, field.y + 3000, 0);
-      if (!this.race) this.race = canyon ? new CanyonRun(this.terrain, this.view.scene) : new Race(this.terrain, this.view.scene, start, 0);
+      if (!this.race) this.race = canyon ? new CanyonRun(this.terrain, this.view.scene) : tube ? new TubeRun(this.terrain, this.view.scene, V(field.x, field.y + 3500, 0)) : new Race(this.terrain, this.view.scene, start, 0);
       this.race.reset();
-      const r0 = this.race.rings[0];
-      pos = add(r0.c, mul(r0.n, -1800));
-      pos.z = canyon ? Math.max(r0.c.z, this.terrain.height(pos.x, pos.y) + 90) : Math.max(r0.c.z + 60, this.terrain.height(pos.x, pos.y) + 250);
-      speed = canyon ? 270 : 220; heading = Math.atan2(r0.n.x, r0.n.y) / DEG;
-      this.prevPos = null;
+      if (tube) { const pose = this.race.startPose(); pos = pose.pos; heading = pose.heading; speed = 230; }
+      else {
+        const r0 = this.race.rings[0];
+        pos = add(r0.c, mul(r0.n, -1800));
+        pos.z = canyon ? Math.max(r0.c.z, this.terrain.height(pos.x, pos.y) + 90) : Math.max(r0.c.z + 60, this.terrain.height(pos.x, pos.y) + 250);
+        speed = canyon ? 270 : 220; heading = Math.atan2(r0.n.x, r0.n.y) / DEG;
+      }
+      this.prevPos = null; this.myFin = null;
     } else if (duel) {
       // duel: in the combat zone, heading north; the opponent comes head-on (spawnDuel)
       pos = V(ZONE.x, ZONE.y - 7000, 5000);
@@ -506,6 +519,9 @@ class Game {
       for (const a of this.world.aircraft) if (a.team !== 'blue' && a.alive) a.alive = false;
       this.world.aircraft = this.world.aircraft.filter((a) => a.team === 'blue');
       this.state.waveActive = false; this.state.waveTimer = 3;
+    } else if (free) {
+      // free flight (together with a friend): over the base, heading north
+      pos = V(field.x, field.y + 2500, 0); pos.z = Math.max(1800, this.terrain.height(pos.x, pos.y) + 900); speed = 230;
     } else if (air) {
       // between the base and the combat zone, heading for the zone
       const k = 0.45;
@@ -518,6 +534,10 @@ class Game {
     } else {
       const [x, y, hdg] = field.startPosition();
       pos = V(x, y, 0); heading = hdg;
+    }
+    if (link.open && NET_SCENS.has(sc)) {                // two players: side by side, not on top of each other
+      const side = link.role === 'host' ? -1 : 1, h = heading * DEG;
+      pos = pos.clone(); pos.x += Math.cos(h) * side * NET_SIDE[sc]; pos.y -= Math.sin(h) * side * NET_SIDE[sc];
     }
     // the hangar: engine-room upgrades, the paint scheme and the mods ride on the player's jet
     const hg = this.hangar, base = AIRCRAFT[this.opts.aircraft] || TRAINERS[this.opts.aircraft] || AIRCRAFT.f16;
@@ -540,9 +560,49 @@ class Game {
     this.killCam = null; this.followM = null; this.threats.clear(); this.hitBy.clear();
     if (this.wingman && this.wingman.alive) this.wingman.pilot.lead = ac;
     else if (air && this.wantWingman()) this.spawnWingman();
+    this.syncGhost();
     if (this.scenario === 'survival' && this.state.wave === 0) this.state.waveTimer = air ? 12 : FIRST_WAVE_DELAY;
   }
-  wantWingman() { return !!this.opts.wingman && !this.opts.tutorial && this.scenario !== 'duel' && this.scenario !== 'race' && this.scenario !== 'canyon' && !this.opts.benchmark; }
+  wantWingman() { return !!this.opts.wingman && !this.opts.tutorial && this.scenario !== 'duel' && this.scenario !== 'race' && this.scenario !== 'canyon' && this.scenario !== 'tube' && this.scenario !== 'free' && !this.opts.benchmark; }
+  // ---------------------------------------------------------------- two players (net.js)
+  // the friend's jet as a ghost aircraft in the world (made when the match and the link both exist)
+  syncGhost() {
+    const sc = this.scenario;
+    if (!link.open || !NET_SCENS.has(sc) || this.opts.tutorial || !link.peer) { this.ghost = null; return; }
+    if (this.ghost && this.world.aircraft.includes(this.ghost)) return;
+    const spec = AIRCRAFT[link.peer.aircraft] || TRAINERS[link.peer.aircraft] || AIRCRAFT.f16;
+    const ac = new Aircraft(spec, link.peer.name || 'Barát', 'blue', V(1e6, 1e6, 8000), 0, 0, { livery: 'viper', missiles: missilesFor(spec, true) });
+    ac.tag = 'BARÁT'; new NetPilot(ac);
+    this.world.addAircraft(ac); this.ghost = ac;
+  }
+  // 20 packets a second with the jet's state, once a second the race progress
+  netStep(dt) {
+    if (!link.open || !this.player || !NET_SCENS.has(this.scenario)) return;
+    if (!this.ghost) this.syncGhost();
+    this.netT += dt; this.progT += dt;
+    if (this.netT >= 0.05) { this.netT = 0; if (this.player.alive && !this.player.ejected) link.sendFast(snapshot(this.player)); }
+    if (this.race && this.progT >= 1) { this.progT = 0; link.send(this.progress()); }
+  }
+  raceTime() { const r = this.race; return !r || !r.finished ? null : this.scenario === 'tube' ? r.finalTime : r.time; }
+  progress() {
+    const r = this.race;
+    return { t: 'prog', n: r.next, total: r.total || r.rings.length, time: this.scenario === 'tube' ? r.clock : r.time, fin: this.raceTime() };
+  }
+  // both are over the line: who won
+  versus() {
+    const mine = this.myFin, theirs = this.peerProg && this.peerProg.fin;
+    if (mine === null || mine === undefined || theirs === null || theirs === undefined || this.versusShown === `${mine}|${theirs}`) return;
+    this.versusShown = `${mine}|${theirs}`;
+    const d = mine - theirs, name = (link.peer && link.peer.name) || 'a barátod';
+    this.hud.message(`${d < 0 ? 'NYERTÉL' : 'VESZTETTÉL'}: te ${fmtTime(mine)} · ${name} ${fmtTime(theirs)} (${d < 0 ? '' : '+'}${d.toFixed(1)} s)`, d < 0 ? 'good' : 'warn', 10, 'versus');
+    if (d < 0) this.sounds.play('medal', 0.6);
+  }
+  // the friend's race standing for the mode line
+  friendLine() {
+    const g = this.peerProg;
+    if (!link.open || !g) return link.open ? ' · barát: csatlakozva' : '';
+    return ` · barát ${g.fin !== null && g.fin !== undefined ? fmtTime(g.fin) : `${Math.min(g.n, g.total)}/${g.total} · ${fmtTime(g.time)}`}`;
+  }
   // the wingman joins behind and to the right of the player (same type, the weaker AI airframe and missiles)
   spawnWingman() {
     const p = this.player, spec = BANDITS[p.spec.id] || BANDITS[p.spec.model] || BANDITS.f16;
@@ -908,6 +968,7 @@ class Game {
       const wdt = bt.active > 0 ? dt * 0.35 : dt;
       this.world.update(wdt);
       if (this.race && this.player.alive) this.raceStep(wdt);
+      this.netStep(dt);
       if (this.chute) this.chute.update(wdt, this.terrain);
       if (this.player.alive && !this.player.ejected && this.carrier.active !== false) this.carrierStep(dt);
       this.carrier.update(dt);
@@ -934,7 +995,7 @@ class Game {
     // the cockpit displays of the player's jet (drawn only while they can be seen)
     const nav = this.nav;
     nav.wave = st.wave; nav.enemies = this.enemiesAlive().length;
-    this.hud.nav = this.race ? null : nav; this.hud.tutorial = !!this.tutorial;     // race: no combat-zone marks
+    this.hud.nav = this.race || this.scenario === 'free' ? null : nav; this.hud.tutorial = !!this.tutorial;     // race: no combat-zone marks
     const vis = this.view.visuals.get(this.player);
     if (vis && vis.screens && !vis.displays) vis.displays = new CockpitDisplays(this.player.spec, vis.screens);
     if (vis && vis.displays && this.view.cockpitView) vis.displays.update(sdt, this.player, this.world, nav);
@@ -1104,14 +1165,26 @@ class Game {
     const prev = this.prevPos || copy(p.pos);
     this.prevPos = copy(p.pos);
     const ev = r.update(dt, p, prev);
-    if (ev === 'ring') { this.addScore(20); this.hud.popup(`${this.scenario === 'canyon' ? 'KAPU' : 'GYŰRŰ'} ${r.next}/${r.rings.length}`, 'rgba(255,200,64,0.95)'); this.sounds.play('splash', 0.4); }
-    else if (ev === 'miss') this.hud.message('MELLÉ! Fordulj vissza a gyűrűhöz', 'warn', 2, 'race');
+    if (ev === 'finish') { this.myFin = this.raceTime(); if (link.open) link.send(this.progress()); this.versus(); }
+    if (this.scenario === 'tube' && ev === 'lap') {
+      this.addScore(60); this.hud.popup(`${r.lap - 1}. KÖR  ${fmtTime(r.lastLap)}`, 'rgba(255,200,64,0.95)'); this.sounds.play('medal', 0.4);
+    } else if (this.scenario === 'tube' && ev === 'out') this.hud.message('KILÓGTÁL A CSŐBŐL – az idő duplán számít', 'warn', 2, 'race');
+    else if (ev === 'ring' && this.scenario === 'tube') this.addScore(5);
+    else if (ev === 'ring') { this.addScore(20); this.hud.popup(`${this.scenario === 'canyon' ? 'KAPU' : 'GYŰRŰ'} ${r.next}/${r.rings.length}`, 'rgba(255,200,64,0.95)'); this.sounds.play('splash', 0.4); }
+    else if (ev === 'miss' && this.scenario !== 'tube') this.hud.message('MELLÉ! Fordulj vissza a gyűrűhöz', 'warn', 2, 'race');
     else if (ev === 'target') {
       this.world.emit('explosion', { pos: r.targetPos, size: 3, ground: true });
       this.addScore(150); this.hud.popup('CÉLPONT MEGSEMMISÍTVE', 'rgba(255,90,60,0.95)'); this.sounds.play('medal', 0.5);
       this.hud.message('CÉLPONT TALÁLVA – most húzd fel meredeken a gerincen át!', 'good', 5, 'race');
     } else if (ev === 'radar') this.hud.message('RADARKONTAKT! +5 s – repülj alacsonyabban (350 m alatt)', 'warn', 3, 'race');
-    else if (ev === 'finish' && this.scenario === 'canyon') {
+    else if (ev === 'finish' && this.scenario === 'tube') {
+      const st = this.state, reward = 400 + (r.record ? 250 : 0);
+      this.addScore(reward);
+      st.banner = `CÉL!  ${fmtTime(r.finalTime)}  (${r.laps} kör)`;
+      st.subBanner = `${r.record ? 'ÚJ REKORD! · ' : `rekord: ${fmtTime(r.best)} · `}legjobb kör ${fmtTime(r.bestLap)}${r.penalty > 0.5 ? ` · csőből kilógás +${r.penalty.toFixed(1)} s` : ''} · +${reward} kredit  ·  ${this.touchOn() ? 'Koppints' : 'Enter'}: újra`;
+      this.sounds.play('medal', 0.7);
+      this.career.save();
+    } else if (ev === 'finish' && this.scenario === 'canyon') {
       const st = this.state, reward = r.success ? 500 + (r.record ? 250 : 0) : 100;
       this.addScore(reward);
       st.banner = r.success ? `KÜLDETÉS TELJESÍTVE  ${fmtTime(r.time)}` : `TÚL LASSÚ  ${fmtTime(r.time)}`;
@@ -1139,11 +1212,16 @@ class Game {
     if (this.tutorial) return '';
     if (this.scenario === 'race' && this.race) {
       const r = this.race;
-      return `GYŰRŰVERSENY · ${Math.min(r.next, r.rings.length)}/${r.rings.length} · ${fmtTime(r.time)} · rekord ${fmtTime(r.best)}`;
+      return `GYŰRŰVERSENY · ${Math.min(r.next, r.rings.length)}/${r.rings.length} · ${fmtTime(r.time)} · rekord ${fmtTime(r.best)}${this.friendLine()}`;
     }
+    if (this.scenario === 'tube' && this.race) {
+      const r = this.race;
+      return `ALAGÚTFUTAM · kör ${r.lap}/${r.laps} · ${fmtTime(r.clock)}${r.lastLap ? ` · utolsó ${fmtTime(r.lastLap)}` : ''}${r.bestLap ? ` · legjobb ${fmtTime(r.bestLap)}` : ''}${r.outside ? ' · KILÓGSZ A CSŐBŐL' : ''}${this.friendLine()}`;
+    }
+    if (this.scenario === 'free') return `KÖZÖS REPÜLÉS${link.open ? ' · a barátoddal' : ' · egyedül (a menüben köss össze a barátoddal)'}`;
     if (this.scenario === 'canyon' && this.race) {
       const r = this.race, t = r.time + r.penalty, left = CANYON_LIMIT - t;
-      return `KANYONFUTÁS · ${r.hit ? 'célpont találva · húzz fel!' : 'cél: a völgy végén'} · ${fmtTime(t)} / ${fmtTime(CANYON_LIMIT)}${left < 0 ? ' · LEJÁRT' : ''}${r.penalty ? ` · radar +${r.penalty} s` : ''} · rekord ${fmtTime(r.best)}`;
+      return `KANYONFUTÁS · ${r.hit ? 'célpont találva · húzz fel!' : 'cél: a völgy végén'} · ${fmtTime(t)} / ${fmtTime(CANYON_LIMIT)}${left < 0 ? ' · LEJÁRT' : ''}${r.penalty ? ` · radar +${r.penalty} s` : ''} · rekord ${fmtTime(r.best)}${this.friendLine()}`;
     }
     if (this.scenario === 'duel') return `PÁRBAJ · győzelem ${st.duelWins} · vereség ${st.duelLosses}${st.duelStreak > 1 ? ` · ${st.duelStreak} egymás után` : ''}`;
     if (this.scenario === 'survival') return `TÚLÉLÉS · egy életed van · rekord: ${this.career.data.bestSurvival || 0}. hullám`;
@@ -1242,7 +1320,7 @@ class Game {
       st.subBanner = '';
       this.hud.message('SIKERES FELSZÁLLÁS - húzd be a futóművet (G)', 'good', 4);
     }
-    if (this.scenario === 'race' || this.scenario === 'canyon') return;
+    if (this.scenario === 'race' || this.scenario === 'canyon' || this.scenario === 'tube' || this.scenario === 'free') return;
     // reinforcements: the rest of a big wave comes in groups, when the first ones are thinned out (or after a while)
     if (!this.tutorial && st.waveActive && st.reserve > 0) {
       st.reserveT += dt;
@@ -1460,7 +1538,7 @@ async function boot() {
     menuSaved = m;
     try { localStorage.setItem(MENU_KEY, JSON.stringify(m)); } catch (e) { /* private mode */ }
   };
-  const SCEN_HINT = { waves: 'egyre nagyobb hullámok, a bázison újratölthetsz', canyon: 'alacsony repülés a völgyben, célpont a végén, meredek kihúzás a gerincen át – 2:15 alatt (Grand Canyon)', duel: '1 ellenfél szemből - minden kör tele géppel, a levegőben indul',
+  const SCEN_HINT = { waves: 'egyre nagyobb hullámok, a bázison újratölthetsz', canyon: 'alacsony repülés a völgyben, célpont a végén, meredek kihúzás a gerincen át – 2:15 alatt (Grand Canyon)', tube: 'üvegrács-alagút úttal, 3 kör, a körök és a legjobb idő mérve – a barátoddal egymás ellen is', free: 'szabad repülés ellenség nélkül – a barátoddal együtt, formációban', duel: '1 ellenfél szemből - minden kör tele géppel, a levegőben indul',
     survival: 'egy életed van, a hullámok gyorsan jönnek - meddig bírod?' };
   const DIFF_HINT = { easy: 'pont ×0,6', normal: 'pont ×1', hard: 'pont ×1,5', ace: 'teljes erejű ellenfél · pont ×2' };
   const showHints = () => { $('scen-hint').textContent = SCEN_HINT[pick('scen')]; $('diff-hint').textContent = DIFF_HINT[pick('diff')]; };
@@ -1524,6 +1602,8 @@ async function boot() {
   restoreArms(plane()); showLoadout();
   // The main menu starts a match, and the game can come back to it any time (Esc -> Főmenü), during a match
   // or after it: from there the match continues (Folytatás) or a new one starts on the same scene.
+  let fromPeer = false;
+  const helloMsg = () => ({ t: 'hello', name: (window.dogfightCareerMode && window.dogfightCareerMode.s && window.dogfightCareerMode.s.callsign) || 'Pilóta', aircraft: document.querySelector('input[name=plane]:checked').value });
   const start = (airStart, tutorial = false, benchmark = false) => {
     const difficulty = document.querySelector('input[name=diff]:checked').value;
     const enemies = Number($('enemies').value);
@@ -1538,6 +1618,9 @@ async function boot() {
     // the canyon run needs a canyon: the Grand Canyon, unless a world place is chosen
     if (opts.scenario === 'canyon' && placeKey(place) === 'island') { place = PLACES.find((q) => q.id === 'grandcanyon') || place; showPlace(); }
     saveMenu();
+    if (!tutorial && !benchmark && link.open && NET_SCENS.has(scenario) && !fromPeer) {       // the friend starts the same match
+      link.send(helloMsg()); link.send({ t: 'start', scen: scenario, place: placeKey(place) === 'island' ? null : place });
+    }
     if (!tutorial && !benchmark) { career.data.matches++; career.save(); }
     $('menu').hidden = true;
     let game = window.game;
@@ -1628,6 +1711,64 @@ async function boot() {
     applySettings();
     game.resume();
   };
+  // two players over a WebRTC link (net.js): the offer / answer codes are copied by hand
+  const nd = { open: (v) => { $('netdlg').hidden = !v; } };
+  const netShow = () => {
+    const st = link.status;
+    $('net-state').textContent = st === 'open' ? `összekötve${link.peer ? ': ' + link.peer.name : ''}` : st === 'wait' ? 'várakozás a barátra…' : st === 'closed' ? 'megszakadt' : 'nincs összekötve';
+    $('net-state').classList.toggle('on', st === 'open');
+  };
+  link.onstatus = (st) => {
+    netShow();
+    if (st === 'open') {
+      link.send(helloMsg());
+      nd.open(false);
+      const g = window.game;
+      if (g && g.inMenu === false) g.hud.message('A barátod csatlakozott', 'good', 3, 'net');
+    } else if (st === 'closed') {
+      const g = window.game;
+      if (g) { g.ghost = null; g.world.aircraft = g.world.aircraft.filter((a) => !a.ghost); g.hud.message('Megszakadt a kapcsolat a barátoddal', 'warn', 4, 'net'); }
+    }
+  };
+  link.on('hello', (m) => { link.peer = { name: String(m.name || 'Barát').slice(0, 24), aircraft: m.aircraft }; netShow(); if (!m.re) link.send({ ...helloMsg(), re: 1 }); const g = window.game; if (g && g.world) g.syncGhost(); });
+  link.on('start', (m) => {
+    if (!NET_SCENS.has(m.scen)) return;
+    setPick('scen', m.scen); place = m.place || PLACES[0]; showPlace(); showHints();
+    fromPeer = true;
+    try { start(true); } finally { fromPeer = false; }
+  });
+  const dlg = (title, help) => { $('nd-title').textContent = title; $('nd-help').textContent = help; $('nd-msg').textContent = ''; $('nd-outwrap').hidden = $('nd-inwrap').hidden = true; $('nd-out').value = $('nd-in').value = ''; nd.open(true); };
+  const fail = (e) => { $('nd-msg').textContent = 'Hiba: ' + (e && e.message ? e.message : e); };
+  $('net-host').addEventListener('click', async () => {
+    dlg('Szobát nyitok', 'Elkészítem a meghívó kódot – ezt küldd el a barátodnak (Messenger, Discord…). Ő beilleszti, és visszaküld egy válaszkódot; azt illeszd be ide.');
+    $('nd-msg').textContent = 'A kód készül… (pár másodperc)';
+    try {
+      const code = await link.host();
+      $('nd-out').value = code; $('nd-outlabel').textContent = '1. Ezt küldd el a barátodnak:'; $('nd-outwrap').hidden = false;
+      $('nd-inlabel').textContent = '2. Az ő válaszkódját illeszd be ide:'; $('nd-inwrap').hidden = false; $('nd-go').textContent = 'Kapcsolódás';
+      $('nd-go').onclick = async () => { try { $('nd-msg').textContent = 'Kapcsolódás…'; await link.accept($('nd-in').value); } catch (e) { fail(e); } };
+      $('nd-msg').textContent = '';
+    } catch (e) { fail(e); }
+  });
+  $('net-join').addEventListener('click', () => {
+    dlg('Csatlakozom', 'Illeszd be a barátod meghívó kódját. Kapsz egy válaszkódot – azt küldd vissza neki, és ő kapcsol össze.');
+    $('nd-inlabel').textContent = 'A barátod meghívó kódja:'; $('nd-inwrap').hidden = false; $('nd-go').textContent = 'Válaszkód készítése';
+    $('nd-go').onclick = async () => {
+      try {
+        $('nd-msg').textContent = 'A válaszkód készül…';
+        const code = await link.join($('nd-in').value);
+        $('nd-out').value = code; $('nd-outlabel').textContent = 'Ezt küldd vissza a barátodnak – ha beilleszti, összekapcsol titeket:'; $('nd-outwrap').hidden = false;
+        $('nd-inwrap').hidden = true; $('nd-msg').textContent = 'Várakozás, hogy a barátod beillessze…';
+      } catch (e) { fail(e); }
+    };
+  });
+  $('nd-copy').addEventListener('click', async () => {
+    const t = $('nd-out').value;
+    try { await navigator.clipboard.writeText(t); $('nd-msg').textContent = 'Kimásolva.'; } catch (e) { $('nd-out').select(); $('nd-msg').textContent = 'Jelöld ki és másold ki kézzel (Ctrl+C).'; }
+  });
+  $('nd-close').addEventListener('click', () => { nd.open(false); if (link.status === 'wait') { link.close(); netShow(); } });
+  addEventListener('beforeunload', () => { if (link.open) link.send({ t: 'bye' }); });
+  netShow();
   // the entry view: the air base itself (base.js Lobby), the menu to the left of it.  Leaving a fight comes back
   // here; only the Kilépés button leaves the game.
   const lobbyOpts = () => ({ airStart: false, carrierStart: false, difficulty: 'normal', enemies: 0, mode: 'arcade', aircraft: document.querySelector('input[name=plane]:checked').value,

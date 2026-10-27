@@ -76,7 +76,7 @@ export class Aircraft {
   get extreme() { return this.fm.extreme; }
 
   physicsStep(dt, world) {
-    if (this.crashed) return;
+    if (this.crashed || this.ghost) return;               // a friend's jet over the link (net.js) is moved by its NetPilot
     if (this.alive) {
       this.fm.step(dt, this.controls, world.terrain);
       const ev = this.fm.contactEvent;
@@ -96,7 +96,7 @@ export class Aircraft {
   }
 
   sensorStep(dt, world) {
-    if (!this.alive) return;
+    if (!this.alive || this.ghost) return;
     const r = this.radar;
     r.update(dt, world);
     const msg = { locked: ['RADAR LOCK', 'good'], lost: ['LOCK LOST', 'warn'], decoyed: ['LOCK LOST - CHAFF', 'warn'] }[r.lastEvent];
