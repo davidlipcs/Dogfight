@@ -17,6 +17,42 @@ function glbJson(file) {
   return JSON.parse(b.subarray(20, 20 + len).toString('utf8'));
 }
 const V = (x, y, z) => ({ x, y, z });
+// the bounding box of all the meshes of a glb (in the glb's own frame): the accessor min / max of every POSITION, through the node transforms
+function matMul(a, b) {
+  const o = new Array(16).fill(0);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k];
+  return o;
+}
+function nodeMatrix(n) {
+  if (n.matrix) return n.matrix;
+  const t = n.translation || [0, 0, 0], q = n.rotation || [0, 0, 0, 1], sc = n.scale || [1, 1, 1];
+  const [x, y, z, w] = q;
+  const r = [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w), 0, 2 * (x * y - z * w), 1 - 2 * (x * x + z * z), 2 * (y * z + x * w), 0, 2 * (x * z + y * w), 2 * (y * z - x * w), 1 - 2 * (x * x + y * y), 0, 0, 0, 0, 1];
+  return matMul([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, t[0], t[1], t[2], 1], matMul(r, [sc[0], 0, 0, 0, 0, sc[1], 0, 0, 0, 0, sc[2], 0, 0, 0, 0, 1]));
+}
+function glbBounds(j) {
+  const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+  const walk = (i, parent) => {
+    const n = j.nodes[i], m = matMul(parent, nodeMatrix(n));
+    if (n.mesh !== undefined) {
+      for (const pr of j.meshes[n.mesh].primitives) {
+        const a = j.accessors[pr.attributes.POSITION];
+        if (!a.min || !a.max) continue;
+        for (let c = 0; c < 8; c++) {
+          const p = [c & 1 ? a.max[0] : a.min[0], c & 2 ? a.max[1] : a.min[1], c & 4 ? a.max[2] : a.min[2]];
+          for (let k = 0; k < 3; k++) {
+            const v = m[k] * p[0] + m[4 + k] * p[1] + m[8 + k] * p[2] + m[12 + k];
+            lo[k] = Math.min(lo[k], v); hi[k] = Math.max(hi[k], v);
+          }
+        }
+      }
+    }
+    for (const c of n.children || []) walk(c, m);
+  };
+  const ident = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  for (const i of j.scenes[j.scene || 0].nodes) walk(i, ident);
+  return { lo, hi };
+}
 const add = (a, b) => V(a.x + b.x, a.y + b.y, a.z + b.z);
 const VAPOR_STEP = { f16: [0.27, -1.0, -0.03], fa18: [0.45, -1.4, -0.05] };
 const specs = { ...S.AIRCRAFT, ...S.TRAINERS, ...S.BANDITS };
@@ -33,6 +69,7 @@ for (const spec of Object.values(specs)) {
   const marks = nodes.filter((n) => n.mesh === undefined && !(n.children || []).length);
   const gm = marks.find((n) => n.name === 'ref_gear_main_R');
   const modelZ = -(spec.gearHeight + gm.translation[1]);
+  const bb = glbBounds(j);
   const ref = {};
   for (const n of marks) { const p = n.translation || [0, 0, 0]; ref[n.name] = V(p[0], -p[2], p[1] + modelZ); }
   const pick = (re) => Object.keys(ref).filter((k) => re.test(k)).sort().map((k) => ref[k]);
@@ -54,6 +91,7 @@ for (const spec of Object.values(specs)) {
     eye: legacy ? V(...f16json.eye) : ref.ref_eye || V(0, 2.4, 1.1),
     panel: legacy ? V(0, 3.28, 0.63) : ref.ref_panel || panelByModel[spec.model] || V(0, 5.37, 1.0 + modelZ),
     panelFov: legacy ? 30 : { f22: 42, f15: 38 }[spec.model] || 40,
+    bbox: { min: V(bb.lo[0], -bb.hi[2], bb.lo[1] + modelZ), max: V(bb.hi[0], -bb.lo[2], bb.hi[1] + modelZ) },
     refs: ref,
   };
 }
@@ -66,6 +104,7 @@ return {
 `;
 for (const [k, o] of Object.entries(out)) {
   src += `\t${k} = {\n\t\tmodelZ = ${num(o.modelZ)}, gearHeight = ${o.gearHeight}, flameScale = ${o.flameScale}, cockpit = "${o.cockpit}", panelFov = ${o.panelFov},\n`;
+  src += `\t\tbbox = { min = ${vec(o.bbox.min)}, max = ${vec(o.bbox.max)} },\n`;
   src += `\t\ttail = ${vec(o.tail)}, gun = ${vec(o.gun)}, eye = ${vec(o.eye)}, panel = ${vec(o.panel)},\n`;
   src += `\t\tnozzles = { ${o.nozzles.map(vec).join(', ')} },\n`;
   src += `\t\twingtips = { ${o.wingtips.map(vec).join(', ')} },\n`;

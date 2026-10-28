@@ -167,7 +167,7 @@ local function missileModel(spec)
 		return p
 	end
 	local body = part("Body", Vector3.new(len * 0.82, d, d), CFrame.Angles(0, math.rad(90), 0), white, Enum.PartType.Cylinder)
-	m.PrimaryPart = body
+	m.WorldPivot = CFrame.new()                                      -- the pivot is the model's own origin (not the cylinder's turned body part)
 	part("Nose", Vector3.new(d * 1.4, d, d), CFrame.new(0, 0, -len * 0.45 * K) * CFrame.Angles(0, math.rad(90), 0), ir and dark or white, Enum.PartType.Cylinder)
 	for i = 0, 3 do
 		local a = i * math.pi / 2 + math.pi / 4

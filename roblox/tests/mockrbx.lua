@@ -192,7 +192,7 @@ for n in ([[Name Parent Size Position AnchorPoint Rotation Visible Active ZIndex
 TextSize TextWrapped TextXAlignment TextYAlignment TextTransparency TextStrokeTransparency TextStrokeColor3 Font FontFace RichText AutomaticSize ClipsDescendants
 LayoutOrder Image ImageColor3 ImageTransparency ScaleType AutoButtonColor TextScaled Color Thickness Transparency ApplyStrokeMode LineJoinMode CornerRadius
 PaddingTop PaddingBottom PaddingLeft PaddingRight FillDirection Padding SortOrder HorizontalAlignment VerticalAlignment Wraps CellSize CellPadding Scale
-ScrollBarThickness CanvasSize AutomaticCanvasSize CanvasPosition ScrollingDirection IgnoreGuiInset ResetOnSpawn DisplayOrder Enabled ZIndexBehavior
+ScrollBarThickness WorldPivot SizingMode Face Brightness CanvasSize AutomaticCanvasSize CanvasPosition ScrollingDirection IgnoreGuiInset ResetOnSpawn DisplayOrder Enabled ZIndexBehavior
 Anchored CanCollide CanQuery CanTouch Massless CastShadow Material Shape Reflectance Locked TopSurface BottomSurface CFrame Orientation PrimaryPart
 MeshType Texture LightEmission LightInfluence EmissionDirection SpreadAngle RotSpeed LockedToPart ZOffset Rate Lifetime Speed Drag Acceleration
 Looped Volume SoundId PlaybackSpeed TimePosition IsPlaying PlaybackRegionsEnabled PlaybackRegion LoopRegion RollOffMaxDistance

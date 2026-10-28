@@ -2,6 +2,7 @@
 -- Builds a fighter out of plain parts (no meshes, so nothing to upload): the same model flies in the game,
 -- sits in the hangar preview and carries the bought paint scheme and the pilot's outfit.
 -- The nose points to -Z (LookVector), like every Roblox model.
+local JetInfo = require(script.Parent.JetInfo)
 local Catalog = require(script.Parent.Catalog)
 local Config = require(script.Parent.Config)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -256,7 +257,12 @@ local function fromImported(src: Instance, key: string, skin, enemy: boolean?): 
 	local _, size = model:GetBoundingBox()
 	if size.X > size.Z then model:PivotTo(CFrame.Angles(0, math.rad(90), 0) * model:GetPivot()) end   -- the long axis along Z
 	local _, size2 = model:GetBoundingBox()
-	model:ScaleTo(length / math.max(size2.X, size2.Z))
+	-- the game's reference points (nozzles, missile stations, lamps, the eye ...) are in the jet frame of JetInfo: the model is put so that its
+	-- box fills the same box there (the same length, the same middle), or the flames and the missiles would hang next to it
+	local info = JetInfo[key]
+	local want = length
+	if info and info.bbox then want = info.bbox.max[2] - info.bbox.min[2] end
+	model:ScaleTo(want / math.max(size2.X, size2.Z))
 	local bb = model:GetBoundingBox()
 	model:PivotTo(CFrame.new(-bb.Position) * model:GetPivot())                                        -- centred
 
@@ -271,6 +277,12 @@ local function fromImported(src: Instance, key: string, skin, enemy: boolean?): 
 		flip = front > rear
 	end
 	if flip then model:PivotTo(CFrame.Angles(0, math.rad(180), 0) * model:GetPivot()) end
+	if info and info.bbox then
+		local b = info.bbox
+		-- jet frame (x right, y forward, z up) -> model frame (x right, y up, -z forward)
+		local middle = Vector3.new((b.min[1] + b.max[1]) / 2, (b.min[3] + b.max[3]) / 2, -(b.min[2] + b.max[2]) / 2)
+		model:PivotTo(CFrame.new(middle) * model:GetPivot())
+	end
 
 	local body = Instance.new("Part")
 	body.Name = "Body"
