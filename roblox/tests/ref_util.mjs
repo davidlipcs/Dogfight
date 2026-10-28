@@ -1,0 +1,14 @@
+import './shim.mjs';
+const U = await import('./js/util.js');
+const { V, qheading, qlook, qaxis, qmul, xform, toLocal, rng, rotateTowards, closestApproach, norm, interp, smoothstep, angleBetween, headingDeg, bankAngle } = U;
+const out = {};
+const q1 = qheading(37, 12), q2 = qlook(V(0.3, 0.8, 0.2)), q3 = qlook(V(0, 0.1, 0.99));
+out.q = [q1, q2, q3, qmul(q1, q2)].map((q) => [q.x, q.y, q.z, q.w]);
+const v = V(1, 2, 3);
+out.x = [xform(q1, v), toLocal(q1, v), U.fwdOf(q1), U.upOf(q2), U.rightOf(q3)].map((a) => [a.x, a.y, a.z]);
+const r = rng(12345); out.rng = [r(), r(), r(), r.uniform(5, 9), r.gauss(0, 1), r.gauss(2, 3)];
+const r2 = rng(0xdeadbeef); out.rng2 = Array.from({ length: 5 }, () => r2());
+out.rot = [rotateTowards(V(1, 0, 0), V(0, 1, 0.2), 0.3), norm(V(3, 4, 12))].map((a) => [a.x, a.y, a.z]);
+out.ca = closestApproach(V(100, 50, 20), V(-30, -5, 1), 2);
+out.interp = [interp([[0, 1], [1, 3], [2, 4]], 1.5), smoothstep(0, 4, 1.2), angleBetween(V(1, 0, 0), V(1, 1, 0)), headingDeg(V(-1, 1, 0)), bankAngle(q1)];
+console.log(JSON.stringify(out));

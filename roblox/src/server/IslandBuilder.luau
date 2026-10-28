@@ -1,15 +1,15 @@
 --!nonstrict
 -- Builds the game's real island as Roblox terrain, from the height grid and the ground colours of the browser game
--- (IslandMath).  It takes a few minutes, so do it ONCE in Studio (see roblox/README.md): the terrain is saved with the place.
---   require(game.ReplicatedStorage.Shared.IslandMath) is not needed by hand - in the Command Bar (View > Command Bar) run:
+-- (IslandData + the simulation's own SimTerrain, so what you see is what the flight model collides with).  It takes a few
+-- minutes, so do it ONCE in Studio (see roblox/README.md): the terrain is saved with the place.  In the Command Bar (View > Command Bar) run:
 --   require(game.ServerScriptService.Server.IslandBuilder).build()
 -- The terrain is a thin shell (three voxels) over the sea bed: nothing is dug, so it stays light.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
-local Island = require(Shared.Island)
-local IslandMath = require(Shared.IslandMath)
+local IslandData = require(Shared.IslandData)
+local SimTerrain = require(Shared.sim.SimTerrain)
 
 local IslandBuilder = {}
 
@@ -24,14 +24,17 @@ local MATERIAL = {
 }
 
 function IslandBuilder.build(progress: ((number) -> ())?)
-	IslandMath.load()
+	local data = IslandData.load()
+	local sim = SimTerrain.new(data)
 	local terrain = workspace.Terrain
 	terrain:Clear()
 	local V = Config.Island.Voxel
 	local half = Config.World.Half
 	local nv = math.floor(half * 2 / V)              -- voxels per side
-	local VS = Config.Island.HeightScale
-	local field = IslandMath.airfield()
+	local S = Config.Island.StudsPerMeter
+	local cell = data.size / data.res
+	local field = data.airfield
+	local fieldX, fieldZ, fieldY = field.x * S, -field.y * S, field.elevation * S
 	local SLAB = 16
 	local t0 = os.clock()
 	local slabsPerSide = math.ceil(nv / SLAB)
@@ -49,11 +52,16 @@ function IslandBuilder.build(progress: ((number) -> ())?)
 				for z = 1, d do
 					local X = (vx0 + x - 0.5) * V - half
 					local Z = (vz0 + z - 0.5) * V - half
-					local y = IslandMath.height(X, Z)
-					-- the air base is flat
-					if math.abs(X - field.X) < 190 and math.abs(Z - field.Z) < 230 then y = field.Y end
+					local mx, my = X / S, -Z / S                     -- the game's metres
+					local y = sim:height(mx, my) * S
 					surf[x][z] = y
-					mat[x][z] = y > 0.5 and IslandMath.material(X, Z) or 0
+					local m = 0
+					if y > 0.5 then
+						local gi = math.clamp(math.floor((mx + data.size / 2) / cell + 0.5), 0, data.res)
+						local gj = math.clamp(math.floor((my + data.size / 2) / cell + 0.5), 0, data.res)
+						m = IslandData.material(data, gi, gj)
+					end
+					mat[x][z] = m
 					local top = math.floor(y / V)
 					if top < lo then lo = top end
 					if top > hi then hi = top end

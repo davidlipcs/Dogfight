@@ -86,9 +86,10 @@ Config.EnemyModels = { "su35", "mig29", "typhoon", "su57", "mig31", "rafale", "j
 Config.Gun = { Damage = 7, Range = 1500, Rate = 14, Radius = 13, Heat = 0.045 }
 Config.Missile = { Damage = 60, Speed = 520, TurnRate = 1.9, Life = 9, Range = 3200, FuseRadius = 14, Cone = 28 }
 
--- The island is the game's own (IslandBuilder.luau): 1 metre of the game = Island.StudsPerMeter studs across, and the
--- heights are Island.HeightScale studs per metre (a little exaggerated, so that the hills read next to a 15 stud jet).
-Config.Island = { StudsPerMeter = 0.1, HeightScale = 0.12, Voxel = 4 }
+-- The island is the game's own (IslandBuilder.luau): 1 metre of the game = Island.StudsPerMeter studs, in all three
+-- directions (the whole 102.4 km island is 10240 studs across, the highest peak 443 studs).  The aircraft and the missiles are
+-- drawn bigger than that scale (Config.Scale), or they would be a stud or two long.
+Config.Island = { StudsPerMeter = 0.1, HeightScale = 0.1, Voxel = 4 }
 
 Config.World = {
 	Half = 5120,          -- the playing field is +-Half studs (the whole island: 102.4 km * 0.1)

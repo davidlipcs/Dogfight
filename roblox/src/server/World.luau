@@ -4,7 +4,13 @@ local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared").Config)
-local IslandMath = require(ReplicatedStorage:WaitForChild("Shared").IslandMath)
+local Island = require(ReplicatedStorage:WaitForChild("Shared").Island)
+
+local function airfield()
+	local S = Config.Island.StudsPerMeter
+	local a = Island.airfield
+	return Vector3.new(a.x * S, a.elevation * S, -a.y * S)
+end
 
 local World = {}
 
@@ -38,7 +44,7 @@ function World.build()
 	local island = workspace:GetAttribute("IslandBuilt") == true
 	if island then
 		-- the game's own island is already in the place (IslandBuilder, built once in Studio)
-		airBase(box, IslandMath.airfield())
+		airBase(box, airfield())
 	else
 		warn("Dogfight Plus: the real island is not built yet (see roblox/README.md, 'A sziget'). A simple island is used meanwhile.")
 		terrain:Clear()
@@ -82,7 +88,7 @@ end
 
 -- where a player's jet starts: over the air base (the two teams of a team fight on its two sides)
 function World.spawnPoint(team: string?, pvp: boolean?, rng)
-	local field = IslandMath.airfield()
+	local field = airfield()
 	local W = Config.World
 	local a
 	if pvp then a = (team == "A" and math.pi or 0) + rng:NextNumber(-0.5, 0.5) else a = rng:NextNumber(0, math.pi * 2) end
