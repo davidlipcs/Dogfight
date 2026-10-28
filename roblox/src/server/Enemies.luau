@@ -57,9 +57,17 @@ Enemies.clearRoom = clearRoom
 local function spawnOne(room, s)
 	local E, W = Config.Enemy, Config.World
 	local a = rng:NextNumber(0, math.pi * 2)
-	local pos = Vector3.new(math.cos(a) * W.EnemyRing, rng:NextNumber(350, 800), math.sin(a) * W.EnemyRing)
+	local pos = Vector3.new(math.cos(a) * W.EnemyRing, rng:NextNumber(W.EnemyAltitude[1], W.EnemyAltitude[2]), math.sin(a) * W.EnemyRing)
 	local look = (Vector3.new(0, 400, 0) - pos).Unit
-	local model = JetBuilder.build(nil, nil, true)
+	-- an imported enemy model when there is one
+	local key = nil
+	local have = ReplicatedStorage:FindFirstChild("JetModels")
+	if have then
+		local avail = {}
+		for _, k in Config.EnemyModels do if have:FindFirstChild(k) then table.insert(avail, k) end end
+		if #avail > 0 then key = avail[rng:NextInteger(1, #avail)] end
+	end
+	local model = JetBuilder.build(nil, nil, true, false, nil, key)
 	model.Name = "Enemy"
 	local hp = E.Health + math.min(s.wave, 10) * 4
 	model:SetAttribute("Health", hp)

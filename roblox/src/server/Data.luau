@@ -22,6 +22,7 @@ local function fresh()
 		coins = Config.Coins.Start, kills = 0, best = 0, flown = 0,
 		air = {}, pilot = {},            -- owned: [id] = true
 		airOn = nil, pilotOn = nil,      -- worn (nil = the factory paint / the plain flight suit)
+		jetOn = nil,                     -- the jet model (Config.JetModels key; nil = the one built from parts)
 		receipts = {},
 		version = 1,
 	}
@@ -47,7 +48,7 @@ end
 function Data.view(player: Player)
 	local p = profiles[player]
 	if not p then return nil end
-	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, double = p.double == true }
+	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true }
 end
 
 function Data.push(player: Player)

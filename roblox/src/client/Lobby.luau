@@ -36,7 +36,7 @@ local function rebuildPreview()
 	local pilot = tryPilot ~= nil and tryPilot or profile.pilotOn
 	if air == "" then air = nil end
 	if pilot == "" then pilot = nil end
-	previewModel = JetBuilder.build(air, pilot, false, gear == "twoseat")
+	previewModel = JetBuilder.build(air, pilot, false, gear == "twoseat", nil, profile.jetOn)
 	previewModel.PrimaryPart.Anchored = true
 	previewModel:PivotTo(CFrame.new(ORIGIN))
 	JetBuilder.setFlame(previewModel, 0.4)
@@ -118,6 +118,29 @@ local function render()
 		if c:IsA("GuiObject") then c:Destroy() end
 	end
 	coinsLabel.Text = string.format("%d érme", profile.coins or 0)
+	if tab == "jet" then
+		local have = ReplicatedStorage:FindFirstChild("JetModels")
+		local any = false
+		for _, j in Config.JetModels do
+			local ok = have ~= nil and have:FindFirstChild(j.key) ~= nil
+			any = any or ok
+			local f = Ui.make("Frame", { BackgroundColor3 = Ui.Panel, BorderSizePixel = 0, Parent = listFrame }, { Ui.corner(8), Ui.make("UIStroke", { Color = profile.jetOn == j.key and Ui.Green or Color3.fromRGB(60, 80, 86), Thickness = profile.jetOn == j.key and 3 or 1 }) })
+			Ui.label(f, j.name, { Position = UDim2.new(0, 8, 0, 10), Size = UDim2.new(1, -16, 0, 40), TextSize = 15, Font = Enum.Font.GothamBold, TextWrapped = true })
+			Ui.label(f, string.format("hossz %.1f m", j.length), { Position = UDim2.new(0, 8, 0, 56), Size = UDim2.new(1, -16, 0, 16), TextSize = 12, TextColor3 = Color3.fromRGB(150, 170, 165) })
+			local label = profile.jetOn == j.key and "Ezzel repülsz" or ok and "Kiválasztom" or "nincs importálva"
+			Ui.button(f, label, { Position = UDim2.new(0, 8, 0, 100), Size = UDim2.new(1, -16, 0, 30), TextSize = 13, BackgroundColor3 = ok and Ui.Amber or Color3.fromRGB(70, 80, 84) }, function()
+				if ok then
+					remotes.EquipJet:InvokeServer(j.key)
+				else
+					say("Ez a gép még nincs importálva a Studióba (lásd a README-t)", false)
+				end
+			end)
+		end
+		if not any then
+			Ui.label(listFrame, "Még egy gép sincs importálva: a játék a kockákból épített gépet használja.", { Size = UDim2.new(0, 480, 0, 40), TextWrapped = true })
+		end
+		return
+	end
 	if tab == "coins" then
 		local any = false
 		for i, prod in Config.Products do
@@ -212,6 +235,7 @@ function Lobby.init(r, h)
 	end
 	tabBtn("air", "Gép festése (" .. #Catalog.Air .. ")")
 	tabBtn("pilot", "Pilóta (" .. #Catalog.Pilot .. ")")
+	tabBtn("jet", "Gép típusa")
 	tabBtn("coins", "Érmék")
 	local chips = Ui.make("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 44), Size = UDim2.new(1, 0, 0, 30), Parent = shop }, { Ui.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }) })
 	local function chip(id, label)

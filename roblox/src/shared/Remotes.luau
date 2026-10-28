@@ -23,7 +23,7 @@ local EVENTS = {
 	"Profile",        -- server -> client: the coins, the owned and the equipped things
 }
 local FUNCTIONS = {
-	"BuyAir", "BuyPilot", "EquipAir", "EquipPilot",    -- shop: (id) -> ok, message
+	"BuyAir", "BuyPilot", "EquipAir", "EquipPilot", "EquipJet",    -- shop: (id) -> ok, message
 	"BuyProduct", "BuyPass",                            -- Robux: (index) -> ok
 	"GetProfile",
 	"BuySkinRobux",                                     -- (kind "air"/"pilot", id): the Robux purchase of a skin

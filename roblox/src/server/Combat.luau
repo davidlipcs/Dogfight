@@ -12,6 +12,7 @@ local Config = require(Shared.Config)
 local JetBuilder = require(Shared.JetBuilder)
 local Data = require(script.Parent.Data)
 local Rooms = require(script.Parent.Rooms)
+local World = require(script.Parent.World)
 
 local Combat = {}
 local remotes = nil
@@ -148,14 +149,9 @@ function Combat.spawnPlayerJet(player: Player, twoSeat: boolean?)
 	if not room then return nil end
 	Combat.removeJet(player)
 	local p = Data.get(player)
-	local W = Config.World
 	local team = room.team[player] or "A"
-	-- the teams of a team fight start on opposite sides of the island
-	local a
-	if room.mode == "pvp" then a = (team == "A" and 0 or math.pi) + rng:NextNumber(-0.6, 0.6) else a = rng:NextNumber(0, math.pi * 2) end
-	local pos = Vector3.new(math.cos(a) * W.SpawnRadius, W.SpawnHeight + rng:NextNumber(-60, 60), math.sin(a) * W.SpawnRadius)
-	local look = Vector3.new(-pos.X, 0, -pos.Z).Unit
-	local model = JetBuilder.build(p and p.airOn, p and p.pilotOn, false, twoSeat == true)
+	local pos, look = World.spawnPoint(team, room.mode == "pvp", rng)
+	local model = JetBuilder.build(p and p.airOn, p and p.pilotOn, false, twoSeat == true, nil, p and p.jetOn)
 	model.Name = "Jet_" .. player.Name
 	model:SetAttribute("Health", Config.Jet.Health)
 	model:SetAttribute("MaxHealth", Config.Jet.Health)

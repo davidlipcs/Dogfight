@@ -21,6 +21,26 @@ szintaxisát ellenőriztem; az első Studio-s próbán várhatók apróbb hibák
 **B) Rojo nélkül:** `python3 tools/build_rbxlx.py` → `roblox/build/DogfightPlus.rbxlx`, ezt nyisd meg Studióban, és nyomj Play-t.
 Studióban az ellenőrzéshez kapcsold be: Game Settings → Security → *Enable Studio Access to API Services* (különben a mentés nem működik, de a játék fut).
 
+## A sziget és a te gépeid (hogy ugyanúgy nézzen ki, mint a böngészős játék)
+
+A Roblox másik motor, ezért **pixelre azonos nem lesz**, de a lényeg átvihető: ugyanaz a sziget, ugyanazok a gépmodellek.
+
+### 1. A sziget (egyszer, Studióban)
+A böngészős játék magasságtérképéből és szín-térképéből generált adat (`Island*.luau`) van a projektben. A terepet egyszer kell felépíteni, és a hely mentésével megmarad:
+1. Nyisd meg a `DogfightPlus.rbxlx` fájlt a Studióban (ne indíts játékot).
+2. **View → Command Bar**, és futtasd (Enter): `require(game.ServerScriptService.Server.IslandBuilder).build()`
+3. Várj pár percig (az Output ablakban látod a végén: „the island is built”). Utána **File → Save**.
+4. Ha ezt kihagyod, a játék egy egyszerű tartalék szigetet használ (és szól az Outputban).
+A méretarány 1 méter = 0,1 stud (a magasság 0,12 stud/méter, kicsit kihangsúlyozva), a 102 km-es sziget így ~10 000 stud széles. A repülőtér a játékbeli helyén van.
+
+### 2. A gépek (a te Blender-gépeid)
+A `web/assets/*.glb` fájlok (f16, fa18, f15, f22, f35, gripen, typhoon, rafale, su35, su57, mig29, mig31, j20, t38, t45, t6) a játék saját modelljei.
+1. Studióban **File → Import 3D** (vagy a **Home → Asset Manager → Bulk Import**), válaszd ki a `.glb` fájlt, nyomj **Import**-ot. A modell a Workspace-be kerül, a neve a fájl neve (pl. `f16`).
+2. Ismételd meg az összes gépre, amit használni akarsz.
+3. A Command Barban: `require(game.ServerScriptService.Server.Tools).adoptJets()` – ez a modelleket a `ReplicatedStorage.JetModels` mappába teszi, onnan veszi a játék. Mentsd a helyet.
+4. A játékban a **Hangár → Gép típusa** fülön kiválaszthatod a gépet. Az ellenségek is ezeket a modelleket használják (sötét árnyalattal).
+Megjegyzések: a modell hossza a valódi hosszra van skálázva, az orra automatikusan a haladási irányba fordul (ha mégis hátrafelé repül, a `Config.JetModelFlip = { f16 = true }`). A festés-árnyalat a modellen megjelenik, a minták (csíkok, terep stb.) viszont csak a kockákból épített gépen. A kétüléses F/A-18F-hez nincs modell, az továbbra is kockákból épül. Ezek a modellek 60–120 ezer háromszögesek: erős gépen jó, telefonon lassabb lehet.
+
 ## Szobák, csapatok, kétüléses gép
 
 * **Hangár-csoportok (szobák):** a lobbiban a *Szobák / Csapat* gombbal. Aki szobát nyit, megadja a nevét, a módját, és hogy **hányan jöhetnek még be** (összesen legfeljebb **20** fő, `Config.Rooms.MaxPlayers`); lehet **privát** is (4 jegyű kóddal lehet belépni, a listán nem látszik). A szobák egy szerveren belül élnek: mindenki csak a saját szobája gépeit, ellenségeit és rakétáit látja, és csak azok hatnak rá.

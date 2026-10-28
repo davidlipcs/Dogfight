@@ -59,15 +59,43 @@ Config.Jet = {
 	FlareCooldown = 0.5,
 }
 
+-- The jets of the game (the same .glb models as the browser game, imported into Studio - see roblox/README.md).  length: the
+-- real length in metres = studs; a jet that is not imported (not in ReplicatedStorage.JetModels) is built from parts instead.
+-- flip: true / false forces the nose direction of an imported model (nil: worked out from the shape).
+Config.JetModels = {
+	{ key = "f16", name = "F-16C Viper", length = 15.0 },
+	{ key = "fa18", name = "F/A-18E Super Hornet", length = 18.3 },
+	{ key = "f15", name = "F-15EX Eagle II", length = 19.4 },
+	{ key = "f22", name = "F-22A Raptor", length = 18.9 },
+	{ key = "f35", name = "F-35A Lightning II", length = 15.7 },
+	{ key = "gripen", name = "JAS 39 Gripen", length = 14.1 },
+	{ key = "typhoon", name = "Eurofighter Typhoon", length = 15.96 },
+	{ key = "rafale", name = "Dassault Rafale", length = 15.3 },
+	{ key = "su35", name = "Szu-35", length = 21.9 },
+	{ key = "su57", name = "Szu-57", length = 20.1 },
+	{ key = "mig29", name = "MiG-29", length = 17.3 },
+	{ key = "mig31", name = "MiG-31", length = 22.7 },
+	{ key = "j20", name = "J-20", length = 20.3 },
+	{ key = "t38", name = "T-38 Talon", length = 14.1 },
+	{ key = "t45", name = "T-45 Goshawk", length = 12.0 },
+	{ key = "t6", name = "T-6 Texan II", length = 10.2 },
+}
+Config.JetModelFlip = {}                -- e.g. { f16 = true } turns an imported jet round if it flies backwards
+Config.EnemyModels = { "su35", "mig29", "typhoon", "su57", "mig31", "rafale", "j20" }   -- the enemies use these when imported
+
 Config.Gun = { Damage = 7, Range = 1500, Rate = 14, Radius = 13, Heat = 0.045 }
 Config.Missile = { Damage = 60, Speed = 520, TurnRate = 1.9, Life = 9, Range = 3200, FuseRadius = 14, Cone = 28 }
 
+-- The island is the game's own (IslandBuilder.luau): 1 metre of the game = Island.StudsPerMeter studs across, and the
+-- heights are Island.HeightScale studs per metre (a little exaggerated, so that the hills read next to a 15 stud jet).
+Config.Island = { StudsPerMeter = 0.1, HeightScale = 0.12, Voxel = 4 }
+
 Config.World = {
-	Half = 6000,          -- the playing field is +-Half studs
-	IslandRadius = 1500,
-	SpawnRadius = 900,
-	SpawnHeight = 450,
-	EnemyRing = 3500,     -- the enemy waves come in from this far
+	Half = 5120,          -- the playing field is +-Half studs (the whole island: 102.4 km * 0.1)
+	SpawnHeight = 520,    -- above the air base
+	SpawnRadius = 700,
+	EnemyRing = 3300,     -- the enemy waves come in from this far (from the island's middle)
+	EnemyAltitude = { 450, 1000 },
 }
 
 Config.Enemy = {

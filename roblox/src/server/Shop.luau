@@ -56,6 +56,20 @@ function Shop.start(remotes)
 		return true, skin.name .. " megvéve!"
 	end
 
+	remotes.EquipJet.OnServerInvoke = function(player, key)
+		local p = Data.get(player)
+		if not p then return false end
+		if key == nil or key == "" then p.jetOn = nil
+		else
+			local ok = false
+			for _, j in Config.JetModels do if j.key == key then ok = true end end
+			if not ok then return false end
+			p.jetOn = key
+		end
+		Data.push(player)
+		return true
+	end
+
 	remotes.EquipAir.OnServerInvoke = function(player, id)
 		local p = Data.get(player)
 		if not p then return false end

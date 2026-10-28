@@ -3,6 +3,8 @@
 -- sits in the hangar preview and carries the bought paint scheme and the pilot's outfit.
 -- The nose points to -Z (LookVector), like every Roblox model.
 local Catalog = require(script.Parent.Catalog)
+local Config = require(script.Parent.Config)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local JetBuilder = {}
 
@@ -221,11 +223,93 @@ function JetBuilder.removeSeat(model: Model, seat: number)
 	if f then f:Destroy() end
 end
 
+-- An imported jet (the game's own .glb model, imported into Studio and put in ReplicatedStorage.JetModels): scaled to the
+-- real length, turned nose-to--Z, centred, every part welded to the invisible root "Body".  The paint scheme's tint goes
+-- on the painted parts; the patterns are only drawn on the jets built from parts.
+local function fromImported(src: Instance, key: string, skin, enemy: boolean?): Model?
+	local model: Model = src:Clone()
+	model.Name = enemy and "Enemy" or "Jet"
+	local parts = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then table.insert(parts, d)
+		elseif d:IsA("Weld") or d:IsA("WeldConstraint") or d:IsA("Motor6D") or d:IsA("Script") or d:IsA("LocalScript") then d:Destroy() end
+	end
+	if #parts == 0 then model:Destroy() return nil end
+	local length = 15
+	for _, j in Config.JetModels do if j.key == key then length = j.length end end
+
+	model:PivotTo(CFrame.new())
+	local _, size = model:GetBoundingBox()
+	if size.X > size.Z then model:PivotTo(CFrame.Angles(0, math.rad(90), 0) * model:GetPivot()) end   -- the long axis along Z
+	local _, size2 = model:GetBoundingBox()
+	model:ScaleTo(length / math.max(size2.X, size2.Z))
+	local bb = model:GetBoundingBox()
+	model:PivotTo(CFrame.new(-bb.Position) * model:GetPivot())                                        -- centred
+
+	-- the nose points to -Z: the rear of a jet (engines, tail) is heavier than its nose
+	local flip = Config.JetModelFlip[key]
+	if flip == nil then
+		local front, rear = 0, 0
+		for _, p in parts do
+			local v = p.Size.X * p.Size.Y * p.Size.Z
+			if p.Position.Z < -length * 0.3 then front += v elseif p.Position.Z > length * 0.3 then rear += v end
+		end
+		flip = front > rear
+	end
+	if flip then model:PivotTo(CFrame.Angles(0, math.rad(180), 0) * model:GetPivot()) end
+
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Size = Vector3.new(1, 1, 1)
+	body.Transparency = 1
+	body.CanCollide = false
+	body.CanTouch = false
+	body.Massless = true
+	body.Anchored = false
+	body.CFrame = CFrame.new()
+	body.Parent = model
+	model.PrimaryPart = body
+
+	local tint = enemy and Color3.fromRGB(95, 80, 80) or (skin and skin.color and color(skin.color)) or nil
+	for _, p in parts do
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanTouch = false
+		p.Massless = true
+		weld(body, p)
+		local isGlass = p.Transparency > 0.05 or string.find(string.lower(p.Name), "glass") ~= nil
+		if tint and not isGlass and p:IsA("MeshPart") then
+			p.Color = tint
+			local sa = p:FindFirstChildOfClass("SurfaceAppearance")
+			if sa then pcall(function() sa.Color = tint end) end
+		end
+	end
+	-- the afterburner flame and a generous hit box
+	local k = length / 15
+	local flame = newPart(model, "Flame", Vector3.new(5 * k, 1.5 * k, 1.5 * k), CFrame.new(0, 0, length / 2 + 2 * k) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 150, 40), Enum.Material.Neon, Enum.PartType.Cylinder)
+	flame.Transparency = 0.6
+	weld(body, flame)
+	local hit = newPart(model, "Hitbox", Vector3.new(9 * k, 3.5 * k, length * 1.2), CFrame.new(), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic)
+	hit.Transparency = 1
+	hit.CanQuery = true
+	weld(body, hit)
+	return model
+end
+
 -- a Model with PrimaryPart "Body".  air: a Catalog.Air id (nil = the factory grey), pilot: a Catalog.Pilot id (nil = plain),
 -- enemy: true builds the dark hostile scheme (smaller part count); twoSeat: a longer canopy with a rear seat (wsoId: the
 -- outfit of whoever sits there; addPilot puts a pilot in a seat later, removeSeat takes him out)
-function JetBuilder.build(airId: string?, pilotId: string?, enemy: boolean?, twoSeat: boolean?, wsoId: string?): Model
+function JetBuilder.build(airId: string?, pilotId: string?, enemy: boolean?, twoSeat: boolean?, wsoId: string?, modelKey: string?): Model
 	local skin = enemy and ENEMY or (airId and Catalog.AirById[airId]) or DEFAULT
+	-- the game's own model when it is imported (a two-seater uses the built one: there is no rear seat in the single-seat models)
+	if modelKey and not twoSeat then
+		local folder = ReplicatedStorage:FindFirstChild("JetModels")
+		local src = folder and folder:FindFirstChild(modelKey)
+		if src then
+			local m = fromImported(src, modelKey, (airId and Catalog.AirById[airId]) or nil, enemy)
+			if m then return m end
+		end
+	end
 	local model = Instance.new("Model")
 	model.Name = enemy and "Enemy" or "Jet"
 
