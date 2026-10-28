@@ -191,8 +191,8 @@ function Lobby.init(r, h)
 		angle += dt * 0.35
 		camera.CameraType = Enum.CameraType.Scriptable
 		if focus == "pilot" then
-			local c = ORIGIN + Vector3.new(0, 1.8, -3.2)
-			local pos = c + Vector3.new(math.cos(angle) * 4.2, 1.2, math.sin(angle) * 4.2 - 2)
+			local c = ORIGIN + Vector3.new(0, 1.7, -2.8)
+			local pos = c + Vector3.new(math.cos(angle) * 3.6, 0.9, math.sin(angle) * 3.6)
 			camera.CFrame = CFrame.lookAt(pos, c)
 			camera.FieldOfView = 55
 		else

@@ -22,6 +22,7 @@ import { Race, fmtTime } from './race.js';
 import { CanyonRun, LIMIT as CANYON_LIMIT } from './canyon.js';
 import { TubeRun } from './tube.js';
 import { pilotSvg } from './skinart.js';
+import { buildPilot } from './pilotmodel.js';
 import { link, NetPilot, snapshot } from './net.js';
 import { Carrier, DECK_Z } from './carrier.js';
 import { buildWorld, PLACES } from './world.js';
@@ -75,12 +76,9 @@ class Parachute {
     for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; lp.push(0, 0, 0.9, Math.cos(a) * 3.3, Math.sin(a) * 3.3, 7.5 + 0.6); }
     lines.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
     canopy.userData.lines = new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x333333 }));
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.25, 1.1, 4, 8) : new THREE.CylinderGeometry(0.25, 0.25, 1.4, 8),
-      new THREE.MeshStandardMaterial({ color: outfit ? outfit.suit : 0x4a5236, roughness: 0.9 }));
-    body.rotation.x = Math.PI / 2; body.position.z = 0.1;
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), new THREE.MeshStandardMaterial({ color: outfit ? outfit.helmet : 0x55595c, roughness: 0.4 }));
-    helmet.position.z = 0.95;
-    g.add(body, helmet, canopy, canopy.userData.lines);
+    const pilot = buildPilot(outfit, { full: true });       // the pilot hangs under the canopy (pilotmodel.js)
+    pilot.position.z = 1.25; pilot.scale.setScalar(1.05);
+    g.add(pilot, canopy, canopy.userData.lines);
     canopy.visible = false; canopy.userData.lines.visible = false;
     g.position.copy(this.pos);
     scene.add(g);
@@ -547,7 +545,7 @@ class Game {
     const spec = this.opts.benchmark ? base : hg.upgraded(base);
     const ac = new Aircraft(spec, `Te (${spec.callsign} 1)`, 'blue', pos, heading, speed, { isPlayer: true, livery: 'viper', lockAssist: true,
       missiles: missilesFor(spec, false), loadout: spec.trainer ? 'default' : this.opts.loadout || 'default', rnd: rng(Math.floor(this.rnd() * 1e9)),
-      skin: hg.skin, blastMult: hg.modOn('bigboom') ? 1.6 : 1, tracerColor: hg.modOn('tracer') ? [0.85, 0.4, 1, 0.45, 0.1, 0.7] : null });
+      outfit: hg.pilotSkin, skin: hg.skin, blastMult: hg.modOn('bigboom') ? 1.6 : 1, tracerColor: hg.modOn('tracer') ? [0.85, 0.4, 1, 0.45, 0.1, 0.7] : null });
     this.cam.eye = this.models.types[spec.model].eye.clone();
     this.cam.panel = this.models.types[spec.model].panel.clone();
     this.cam.panelFov = this.models.types[spec.model].panelFov;

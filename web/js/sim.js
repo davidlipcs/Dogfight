@@ -29,6 +29,7 @@ export class Aircraft {
     this.hp = spec.hp; this.alive = true; this.burning = false; this.crashed = false; this.deathTime = null;
     this.kills = 0; this.lastAttacker = null; this.lastHitTime = -1e9; this.pilot = null;
     this.lockAssist = !!opts.lockAssist; this.irAutoHold = 0;
+    this.outfit = opts.outfit || null;               // the pilot's bought flight outfit (pilotmodel.js)
     this.skin = opts.skin || null; this.blastMult = opts.blastMult || 1; this.tracerColor = opts.tracerColor || null;   // hangar
     this.fm.extreme = !!spec.tvcAlways;              // the F-22's thrust vectoring is always on
     this.rearm();

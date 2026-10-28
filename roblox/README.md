@@ -43,5 +43,5 @@ Kontroller és telefon (érintő-joystick + gombok) is van.
 
 * Nincs felszállás / leszállás: a gép a levegőből indul, a talajnak ütközés lezuhanás.
 * Nincs hang (nem akartam kitalált hangazonosítókat beírni). A `Hud`-ba és a `Combat`-ba egy-egy `Sound` könnyen beilleszthető.
-* A pilóta-öltözet a pilótafülkében ülő pilótán és a hangár-előnézeten látszik (nincs avatar a repülés alatt).
+* A pilóta kockákból épül (sisak, napellenző, oxigénmaszk, tömlő, hám, kesztyű), a pilótafülkében ülő pilótán és a hangár-előnézeten látszik (nincs avatar a repülés alatt).
 * PvP kikapcsolva (`Config.PvP`); a barátok együtt lőnek az ellenségre.

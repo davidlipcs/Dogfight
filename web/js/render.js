@@ -4,6 +4,7 @@ import { RUNWAY_LENGTH, RUNWAY_WIDTH, TAXIWAY_OFFSET, TAXIWAY_WIDTH, APRON } fro
 import { buildProc, procInfo, DESIGNS } from './proc.js';
 import { GoogleTiles } from './gtiles.js';
 import { patterned } from './skinart.js';
+import { buildPilot } from './pilotmodel.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.55, 0.70).normalize();
 const HORIZON = new THREE.Color(0.72, 0.81, 0.90);
@@ -1006,6 +1007,11 @@ export class SceneView {
     });
     this.scene.add(root);
     v = { root, outside, stores, flames, strobes, lamps, type, trail: 0, phase: Math.random() * 1.2, layer: 0 };
+    if (ac.isPlayer && type.eye) {                     // the pilot sits under the canopy (seen from outside)
+      v.pilot = buildPilot(ac.outfit);
+      v.pilot.position.copy(type.eye).add(type.cockpit === 'legacy' ? V(0, 1.12, -0.12) : V(0, -0.03, -0.04));      // the old F-16 model's eye is a little behind its seat
+      root.add(v.pilot);
+    }
     this.visuals.set(ac, v);
     return v;
   }
@@ -1055,6 +1061,7 @@ export class SceneView {
       const layer = inside ? 1 : 0;
       if (v.layer !== layer) { v.root.traverse((o) => o.layers.set(layer)); v.layer = layer; }
       v.outside.visible = !inside || !v.inside;
+      if (v.pilot) v.pilot.visible = !inside && ac.alive && !ac.ejected;
       if (v.inside) v.inside.visible = inside;
       v.root.position.copy(ac.pos); v.root.quaternion.copy(ac.quat);
       for (const st of ac.stations) {

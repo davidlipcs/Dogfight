@@ -107,30 +107,64 @@ export function swatch(skin, size = 72) {
   return (swatchCache[ck] = cv.toDataURL('image/png'));
 }
 
-// the pilot in his helmet and suit: an SVG picture (shop, radio portrait)
+// ---- the pilot: a flight helmet with visor and oxygen mask, hose, harness, as an SVG picture (shop, radio portrait)
+const mix = (n, k) => {                                    // k > 0 lighter, k < 0 darker
+  const f = (v) => Math.max(0, Math.min(255, Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k))));
+  return `rgb(${f(n >> 16 & 255)},${f(n >> 8 & 255)},${f(n & 255)})`;
+};
+const luma = (n) => 0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255);
+
 export function pilotSvg(p) {
-  const d = (() => {
-    const a = hex(p.accent);
+  const a = hex(p.accent), sun = luma(p.visor) < 70;
+  const decal = (() => {
     switch (p.decal) {
-      case 'stripe': return `<rect x="56" y="14" width="8" height="34" fill="${a}"/>`;
-      case 'star': return `<path d="M60 18l4 9 10 1-7.5 6.5 2.5 9.5-9-5.5-9 5.5 2.5-9.5L46 28l10-1z" fill="${a}"/>`;
-      case 'skull': return `<circle cx="60" cy="30" r="9" fill="${a}"/><circle cx="56" cy="29" r="2.4" fill="#111"/><circle cx="64" cy="29" r="2.4" fill="#111"/><rect x="56" y="36" width="8" height="4" fill="#111"/>`;
-      case 'flame': return `<path d="M44 46c2-10 8-12 6-22 8 6 6 12 10 14 0-6 4-10 4-14 8 8 14 14 12 22z" fill="${a}"/>`;
-      case 'wings': return `<path d="M60 30c-8-8-18-8-24-4 8 2 14 6 24 10zM60 30c8-8 18-8 24-4-8 2-14 6-24 10z" fill="${a}"/>`;
-      case 'bolt': return `<path d="M64 14l-12 18h8l-4 16 16-22h-9z" fill="${a}"/>`;
-      case 'check': return [0, 1, 2, 3].map((i) => [0, 1].map((j) => ((i + j) % 2 ? '' : `<rect x="${42 + i * 9}" y="${18 + j * 9}" width="9" height="9" fill="${a}"/>`)).join('')).join('');
-      case 'dots': return [[48, 26], [60, 20], [72, 26], [54, 36], [66, 36]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.2" fill="${a}"/>`).join('');
+      case 'stripe': return `<rect x="56.5" y="13" width="7" height="26" rx="2" fill="${a}"/>`;
+      case 'star': return `<path d="M60 15l3.4 7.4 8 .9-6 5.4 1.7 7.9-7.1-4-7.1 4 1.7-7.9-6-5.4 8-.9z" fill="${a}"/>`;
+      case 'skull': return `<circle cx="60" cy="26" r="8" fill="${a}"/><circle cx="56.5" cy="25" r="2.2" fill="#111"/><circle cx="63.5" cy="25" r="2.2" fill="#111"/><rect x="57" y="31" width="6" height="3.5" rx="1" fill="#111"/>`;
+      case 'flame': return `<path d="M42 40c1-9 7-11 5-20 7 5 6 11 9 12 0-5 3-9 3-13 7 7 12 13 10 21z" fill="${a}"/>`;
+      case 'wings': return `<path d="M60 27c-7-7-17-7-23-3 7 2 13 5 23 9zM60 27c7-7 17-7 23-3-7 2-13 5-23 9z" fill="${a}"/>`;
+      case 'bolt': return `<path d="M63 12l-11 17h7.5l-4 15 15-20h-8.5z" fill="${a}"/>`;
+      case 'check': return [0, 1, 2, 3].map((i) => [0, 1].map((j) => ((i + j) % 2 ? '' : `<rect x="${44 + i * 8}" y="${17 + j * 8}" width="8" height="8" fill="${a}"/>`)).join('')).join('');
+      case 'dots': return [[48, 24], [60, 18], [72, 24], [54, 33], [66, 33]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3" fill="${a}"/>`).join('');
       default: return '';
     }
   })();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
-<rect width="120" height="140" fill="#1b232b"/>
-<path d="M8 140c0-30 20-44 52-44s52 14 52 44z" fill="${hex(p.suit)}"/><path d="M52 100h16l-3 40H55z" fill="${hex(p.accent)}" opacity=".9"/>
-<rect x="49" y="82" width="22" height="20" rx="6" fill="#c8a07a"/>
-<ellipse cx="60" cy="52" rx="34" ry="38" fill="${hex(p.helmet)}"/>${d}
-<path d="M30 56c0-10 12-14 30-14s30 4 30 14c0 12-10 22-30 22S30 68 30 56z" fill="${hex(p.visor)}"/>
-<path d="M36 52c4-6 14-8 24-8" stroke="#fff" stroke-opacity=".5" stroke-width="3" fill="none" stroke-linecap="round"/>
-<path d="M44 78c4 10 28 10 32 0v8c-4 8-28 8-32 0z" fill="#2a2e34"/>
-<ellipse cx="60" cy="52" rx="34" ry="38" fill="url(#g)"/></svg>`;
+  const eyes = sun ? '' : `<ellipse cx="48.5" cy="54" rx="4.2" ry="2.6" fill="#f2efe8"/><ellipse cx="71.5" cy="54" rx="4.2" ry="2.6" fill="#f2efe8"/>
+<circle cx="49" cy="54" r="2" fill="#3b2a1c"/><circle cx="71" cy="54" r="2" fill="#3b2a1c"/><circle cx="49.6" cy="53.4" r=".7" fill="#fff"/><circle cx="71.6" cy="53.4" r=".7" fill="#fff"/>
+<path d="M43 49.5q5.5-3.2 11 0M66 49.5q5.5-3.2 11 0" stroke="#4a3322" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140"><defs>
+<radialGradient id="bg" cx=".5" cy=".35" r=".8"><stop offset="0" stop-color="#3a4a56"/><stop offset="1" stop-color="#10171d"/></radialGradient>
+<linearGradient id="suit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(p.suit, 0.22)}"/><stop offset="1" stop-color="${mix(p.suit, -0.35)}"/></linearGradient>
+<radialGradient id="hel" cx=".38" cy=".28" r=".85"><stop offset="0" stop-color="${mix(p.helmet, 0.5)}"/><stop offset=".45" stop-color="${hex(p.helmet)}"/><stop offset="1" stop-color="${mix(p.helmet, -0.5)}"/></radialGradient>
+<linearGradient id="vis" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="${mix(p.visor, 0.35)}" stop-opacity="${sun ? 1 : 0.5}"/><stop offset="1" stop-color="${hex(p.visor)}" stop-opacity="${sun ? 1 : 0.28}"/></linearGradient>
+<linearGradient id="mask" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#454c47"/><stop offset="1" stop-color="#1a1e1c"/></linearGradient>
+<linearGradient id="met" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8ecf0"/><stop offset="1" stop-color="#6c737b"/></linearGradient>
+<radialGradient id="skin" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#d6a984"/><stop offset="1" stop-color="#8e6446"/></radialGradient>
+<clipPath id="face"><path d="M33 52C33 42 44 38 60 38S87 42 87 52v9c0 8-12 13-27 13S33 69 33 61z"/></clipPath>
+</defs>
+<rect width="120" height="140" fill="url(#bg)"/>
+<path d="M-4 30C20 8 40-2 60-2s40 10 64 32M-4 70C14 54 30 46 44 42" stroke="#52626e" stroke-width="2" fill="none" opacity=".35"/>
+<path d="M4 140c1-27 20-41 46-45h20c26 4 45 18 46 45z" fill="url(#suit)"/>
+<path d="M4 140c1-27 20-41 46-45" stroke="#000" stroke-opacity=".25" stroke-width="1.5" fill="none"/>
+<ellipse cx="60" cy="97" rx="19" ry="6.5" fill="${mix(p.suit, -0.45)}"/><path d="M50 94c3 6 17 6 20 0v6c-4 5-16 5-20 0z" fill="url(#skin)"/>
+<path d="M30 100l10 40h-11l-11-34z M90 100l-10 40h11l11-34z" fill="#25282c"/><path d="M33 104l9 34M87 104l-9 34" stroke="#6e747b" stroke-width=".8" stroke-dasharray="2 2.2" fill="none"/>
+<rect x="38" y="119" width="44" height="5" fill="#25282c"/><rect x="54" y="115.5" width="12" height="12" rx="2" fill="url(#met)" stroke="#3b4147" stroke-width=".8"/><rect x="57.5" y="119" width="5" height="5" fill="#2a2e33"/>
+<rect x="24" y="112" width="15" height="7" rx="1" fill="${a}" opacity=".92"/><path d="M26 114.5h11M26 116.8h8" stroke="#000" stroke-opacity=".45" stroke-width=".9"/>
+<rect x="8" y="118" width="12" height="9" rx="1.5" fill="${a}" opacity=".8"/>
+<path d="M44 77c-9 6-16 18-14 32 1 6 6 8 8 4-2-10 1-20 9-26" fill="none" stroke="#1d2520" stroke-width="5" stroke-linecap="round"/>
+<path d="M44 77c-9 6-16 18-14 32" fill="none" stroke="#56635a" stroke-width="5" stroke-linecap="round" stroke-dasharray="1.2 2.6" opacity=".7"/>
+<ellipse cx="60" cy="52" rx="34" ry="38" fill="url(#hel)"/>
+<ellipse cx="25.5" cy="63" rx="5.2" ry="10" fill="#2b2f35" stroke="#4a5058" stroke-width="1"/><ellipse cx="94.5" cy="63" rx="5.2" ry="10" fill="#2b2f35" stroke="#4a5058" stroke-width="1"/>
+${decal}
+<path d="M30 40C34 26 46 18 60 18s26 8 30 22" stroke="#fff" stroke-opacity=".4" stroke-width="2" fill="none" stroke-linecap="round"/>
+<path d="M30 49c4-12 16-15 30-15s26 3 30 15v3c-4-8-16-11-30-11S34 44 30 52z" fill="#15181b" opacity=".9"/>
+<g clip-path="url(#face)"><rect x="30" y="36" width="60" height="42" fill="url(#skin)"/>${eyes}</g>
+<path d="M33 52C33 42 44 38 60 38S87 42 87 52v9c0 8-12 13-27 13S33 69 33 61z" fill="url(#vis)" stroke="#0c0e10" stroke-width="2"/>
+<path d="M38 47c5-5 14-7 22-7M70 41c7 1 12 4 15 8" stroke="#fff" stroke-opacity="${sun ? 0.5 : 0.45}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+<path d="M43 64c6-3 28-3 34 0l3 10c-4 12-13 17-20 17s-16-5-20-17z" fill="url(#mask)" stroke="#0c0e10" stroke-width="1"/>
+<circle cx="60" cy="79" r="4.5" fill="#101214" stroke="#555d58" stroke-width="1.2"/><path d="M56 79h8M60 75v8" stroke="#3a403c" stroke-width=".8"/>
+<rect x="37" y="62" width="7" height="6" rx="1.5" fill="url(#met)"/><rect x="76" y="62" width="7" height="6" rx="1.5" fill="url(#met)"/>
+<path d="M44 66c4-2 8-2.5 12-2.5" stroke="#fff" stroke-opacity=".18" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+</svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
