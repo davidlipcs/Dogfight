@@ -24,6 +24,8 @@ local GuiCanvas = require(script.Parent.GuiCanvas)
 local DeviceInput = require(script.Parent.DeviceInput)
 local View = require(script.Parent.View)
 local Env = require(script.Parent.Env)
+local Sounds = require(script.Parent.Sounds)
+local MfdView = require(script.Parent.MfdView)
 
 local V, norm, copy, sub, len = SimMath.V, SimMath.norm, SimMath.copy, SimMath.sub, SimMath.len
 
@@ -44,6 +46,8 @@ local pendingEarn, earnTimer, saveTimer = 0, 0, 0
 local missileCam, followM, followEnd, followLast = false, nil, 0, nil
 local bt = nil
 local pauseGui
+local sounds
+local mfdView
 
 function Game.init(r)
 	remotes = r
@@ -245,6 +249,11 @@ local function onKey(k)
 		hud:message(missileCam and "RAKÉTAKAMERA BE - a kilőtt rakétát követi (U = ki)" or "RAKÉTAKAMERA KI", "info", 2, "mcam")
 		return
 	end
+	if k == "j" or k == "k" or k == "l" then
+		local page = mfdView and mfdView:cycle(({ j = "left", k = "right", l = "center" })[k])
+		if page then hud:message("KIJELZŐ: " .. page, "info", 1, "mfd") end
+		return
+	end
 	if k == "v" then cam.cockpit = not cam.cockpit; cam.panelLook = false; return end
 	if k == "n" then
 		if not cam.cockpit then cam.cockpit, cam.panelLook = true, true else cam.panelLook = not cam.panelLook end
@@ -321,6 +330,7 @@ local function frame(dt)
 		local kind, d = e[1], e[2]
 		view:handleEvent(kind, d)
 		hud:handleEvent(kind, d, match.player)
+		sounds:handleEvent(kind, d, match.player)
 		if kind == "explosion" then
 			local dd = len(sub(d.pos, match.player.pos))
 			if dd < 2500 then
@@ -340,8 +350,13 @@ local function frame(dt)
 		if Game.onCockpit then Game.onCockpit(inside) end
 	end
 
+	sounds:update(match.player, Game.paused, match.world, cam.position, dt)
+
 	-- the HUD
 	local w, h = canvas:size()
+	local showMfd = inside == true and not Game.paused
+	if mfdView then mfdView:update(dt, match.player, match.world, match.nav, showMfd, w, h, cam.panelLook) end
+	hud.hideScopes = showMfd
 	canvas:begin()
 	if match.race or match:scenario() == "free" then hud.nav = nil else hud.nav = match.nav end
 	hud.tutorial = match.opts.tutorial == true
@@ -378,11 +393,12 @@ function Game.start(opts)
 	input.onPress = onKey
 	input.onWheel = function(dir) if match and not Game.paused then match:cycleWeapon(dir) end end
 	local hangar = makeHangar()
+	sounds = Sounds.new(0.7)
 	local env = {
 		terrain = terrain,
 		career = career or Career.new(nil, nil),
 		hangar = hangar, hud = hud,
-		sounds = { play = function() end },
+		sounds = sounds,
 		best = profile and profile.best or {},
 		onRecord = function(kind, t, lap)
 			if remotes and remotes.SaveBest then remotes.SaveBest:FireServer(kind, t, lap) end
@@ -399,6 +415,8 @@ function Game.start(opts)
 				cam.panel = V(info.panel[1], info.panel[2], info.panel[3])
 				cam.panelFov = info.panelFov
 				cam:reset(ac)
+				if mfdView then mfdView:destroy() end
+				mfdView = MfdView.new(spec)
 			end
 		end,
 	}
@@ -429,6 +447,8 @@ function Game.stop()
 	if Game.wasInside and Game.onCockpit then Game.onCockpit(false) end
 	Game.wasInside = false
 	if view then view:destroy() end
+	if sounds then sounds:stopAll(); sounds:destroy(); sounds = nil end
+	if mfdView then mfdView:destroy(); mfdView = nil end
 	match, view, hud, cam = nil, nil, nil, nil
 	local c = workspace.CurrentCamera
 	c.CameraType = Enum.CameraType.Scriptable

@@ -1,45 +1,51 @@
 # Dogfight Plus – Roblox változat
 
-A böngészős játék Roblox-os testvére: **hullámokban támadó ellenséges vadászok**, gépágyú, rakéta, flare, **barátokkal közös égbolt**
-(a Roblox saját szerverein, bárki csatlakozhat), érmék és egy **shop 100 gép-festéssel és 10 kidolgozott pilóta-öltözettel**.
-A kód Luau, Rojo-kompatibilis. **Fontos:** ebben a környezetben nincs Roblox Studio, ezért a kódot itt nem lehetett lefuttatni, csak a
-szintaxisát ellenőriztem; az első Studio-s próbán várhatók apróbb hibák (a Studio Output ablaka kiírja őket).
+A böngészős játék Roblox-os változata. A repülési modell, a fegyverek, az MI, a küldetések (hullámok, párbaj, túlélés, gyűrű-, kanyon- és
+alagútfutam, közös repülés), a HUD, a kamera és a kabin-kijelzők a böngészős játék kódjából vannak átírva Luau-ba (`src/shared/sim`,
+`src/shared/game`), és **a játékos saját gépén futnak**, ugyanúgy, mint a böngészőben. A szerver csak a mentést (érme, festések, karrier,
+rekordok), a boltot és a szobákat kezeli. Az átírt számítások számról számra egyeznek a JavaScript-tel (`roblox/tests`).
 
-## Mi van benne
+**Fontos:** a Roblox-oldalt (menü, kamera, HUD, jelenet, hang) nem lehetett Roblox Studióban futtatni ott, ahol készült; az Output ablak kiírja,
+ha valami elromlik – azt kell elküldeni a javításhoz.
 
-| Hely | Mit csinál |
-|---|---|
-| `src/shared/Catalog.luau` | a 100 gép-festés és a 10 pilóta-öltözet (**generált**: `python3 tools/gen_skins.py`, forrása `tools/skins_data.py` – ugyanez hajtja a böngészős játékot is) |
-| `src/shared/Config.luau` | minden hangolható szám: érmék, fegyverek, ellenség, Robux-csomagok |
-| `src/shared/JetBuilder.luau` | a gép és a pilóta felépítése kockákból (nincs mit feltölteni), a festés mintájával |
-| `src/server/` | `Main` (indítás), `World` (sziget), `Combat` (lövés, rakéta, flare, sebzés), `Enemies` (AI és hullámok), `Data` (mentés DataStore-ral), `Shop` (vásárlás, Robux) |
-| `src/client/` | `Flight` (repülés), `Hud`, `Lobby` (hangár + shop), `Main` |
+## Hova mi kerül (lépésről lépésre)
 
-## Kipróbálás Studióban
+### 1. A sziget (egyszer)
+1. Nyisd meg a `DogfightPlus.rbxlx` fájlt Studióban (ne indíts játékot).
+2. **View → Command Bar**, ide másold be és Enter: `require(game.ServerScriptService.Server.IslandBuilder).build()`
+3. Pár percig dolgozik (az Output ablakban a végén: „the island is built”). Utána **File → Save**.
 
-**A) Rojo-val** (ajánlott): `rojo serve roblox` a repó gyökeréből, Studióban a Rojo plugin „Connect”.
-**B) Rojo nélkül:** `python3 tools/build_rbxlx.py` → `roblox/build/DogfightPlus.rbxlx`, ezt nyisd meg Studióban, és nyomj Play-t.
-Studióban az ellenőrzéshez kapcsold be: Game Settings → Security → *Enable Studio Access to API Services* (különben a mentés nem működik, de a játék fut).
+### 2. A gépek (egyszer; nélkülük kockákból épített gépek repülnek)
+A `roblox/models` mappában 16 `.glb` fájl van, a böngészős játék gépei Roblox-barát (≤ 15 000 háromszögű darabokra csökkentett) változatban.
+1. Studióban: **View → Asset Manager** (ha nem látszik, a View menüben kapcsold be) → fent a **Bulk Import** gomb.
+2. A megnyíló fájlválasztóban jelöld ki az összes `.glb` fájlt a `roblox/models` mappából (Ctrl+A), **Open**.
+3. A Studio megmutatja az importálandókat – **Import**. Várd meg, amíg mind átkerül (néhány perc). Minden gép egy `Model` lesz a Workspace-ben, a fájl nevével (`f16`, `fa18` …).
+4. **View → Command Bar**, ide: `require(game.ServerScriptService.Server.Tools).adoptJets()` – ez a modelleket a `ReplicatedStorage.JetModels` mappába teszi, onnan veszi a játék.
+5. **File → Save.** (A `Tools.listJets()` kiírja, melyik gép van meg.)
+Ha egy gép hátrafelé repül: `Config.JetModelFlip = { f16 = true }`.
+Az újragenerálás: `python3 tools/make_roblox_models.py` (kell hozzá: `pip install trimesh fast-simplification scipy numpy pillow`).
 
-## A sziget és a te gépeid (hogy ugyanúgy nézzen ki, mint a böngészős játék)
+### 3. A hangok (egyszer)
+A böngésző a hangokat képletekből készíti; Roblox csak feltöltött hangfájlt játszik. A `roblox/audio/dogfight_sounds.wav` **egyetlen fájl**, benne az
+összes hang (motor, utánégető, ágyú, rakéta, robbanás, figyelmeztetések …); a `src/shared/SoundMap.luau` tudja, melyik hang hol van benne.
+1. Menj a **create.roblox.com** oldalra, jelentkezz be.
+2. Bal oldalt **Creations** (Alkotások) → fent **Development Items** (Fejlesztői elemek) → **Audio** (Hang) → **Upload** (Feltöltés).
+   (A Studióban is megy: **View → Asset Manager → Audio → Import**; az Asset Manager a sima fájlt is feltölti.)
+3. Válaszd ki a `dogfight_sounds.wav` fájlt, add neki a nevét (pl. „Dogfight hangok”), **Upload**. A Roblox pár percig ellenőrzi.
+4. Ha kész, nyisd meg a hang oldalát: az **Asset ID** egy hosszú szám (a címsorban is ott van: `.../audio/1234567890`). Másold ki.
+5. Studióban: Explorer → kattints a **ReplicatedStorage**-ra → Properties → lent az **Attributes** → **Add Attribute** → név: `SoundAssetId`, típus: **String**, érték: az Asset ID. (Vagy írd be a `src/shared/Config.luau` fájlban a `Config.SoundId = ` után.)
+6. **File → Save.** Ha az ID nincs beállítva, a játék néma.
 
-A Roblox másik motor, ezért **pixelre azonos nem lesz**, de a lényeg átvihető: ugyanaz a sziget, ugyanazok a gépmodellek.
+### 4. Indítás
+Studióban nyomj **Play**-t (vagy a Roblox-ra feltöltve a **Play** gomb). A lobbiban az **INDULÁS A PÁLYÁRÓL** felszállással kezd, az **INDULÁS A LEVEGŐBEN** a levegőből. A **Játék** fülön ugyanazok a beállítások vannak, mint a böngészős főmenüben.
 
-### 1. A sziget (egyszer, Studióban)
-A böngészős játék magasságtérképéből és szín-térképéből generált adat (`Island*.luau`) van a projektben. A terepet egyszer kell felépíteni, és a hely mentésével megmarad:
-1. Nyisd meg a `DogfightPlus.rbxlx` fájlt a Studióban (ne indíts játékot).
-2. **View → Command Bar**, és futtasd (Enter): `require(game.ServerScriptService.Server.IslandBuilder).build()`
-3. Várj pár percig (az Output ablakban látod a végén: „the island is built”). Utána **File → Save**.
-4. Ha ezt kihagyod, a játék egy egyszerű tartalék szigetet használ (és szól az Outputban).
-A méretarány 1 méter = 0,1 stud (a magasság 0,12 stud/méter, kicsit kihangsúlyozva), a 102 km-es sziget így ~10 000 stud széles. A repülőtér a játékbeli helyén van.
+## A méretarány (miért nem lehet a gép „igazi méretű”)
 
-### 2. A gépek (a te Blender-gépeid)
-A `web/assets/*.glb` fájlok (f16, fa18, f15, f22, f35, gripen, typhoon, rafale, su35, su57, mig29, mig31, j20, t38, t45, t6) a játék saját modelljei.
-1. Studióban **File → Import 3D** (vagy a **Home → Asset Manager → Bulk Import**), válaszd ki a `.glb` fájlt, nyomj **Import**-ot. A modell a Workspace-be kerül, a neve a fájl neve (pl. `f16`).
-2. Ismételd meg az összes gépre, amit használni akarsz.
-3. A Command Barban: `require(game.ServerScriptService.Server.Tools).adoptJets()` – ez a modelleket a `ReplicatedStorage.JetModels` mappába teszi, onnan veszi a játék. Mentsd a helyet.
-4. A játékban a **Hangár → Gép típusa** fülön kiválaszthatod a gépet. Az ellenségek is ezeket a modelleket használják (sötét árnyalattal).
-Megjegyzések: a modell hossza a valódi hosszra van skálázva, az orra automatikusan a haladási irányba fordul (ha mégis hátrafelé repül, a `Config.JetModelFlip = { f16 = true }`). A festés-árnyalat a modellen megjelenik, a minták (csíkok, terep stb.) viszont csak a kockákból épített gépen. A kétüléses F/A-18F-hez nincs modell, az továbbra is kockákból épül. Ezek a modellek 60–120 ezer háromszögesek: erős gépen jó, telefonon lassabb lehet.
+A játék **valódi méterekben** számol: a sziget 102 kilométer széles, a gép 15 méter hosszú. A Roblox mértékegysége a *stud*. Ha 1 méter = 1 stud lenne, a sziget
+102 000 stud széles volna – ekkora terepet a Roblox nem tud felépíteni (a legkisebb terep-kocka 4 stud, ez 650 millió kocka lenne). Ezért a **szigetet kicsinyítjük**:
+1 méter = 0,1 stud, így a sziget 10 240 stud, és kiépíthető. Csakhogy ekkor a 15 méteres gép 1,5 stud lenne – akkora, mint egy kicsi ládika, a kamera pedig
+nem is tud ilyen közel látni. Ezért a **gépeket, a rakétákat és a füstöt nagyítva rajzoljuk** (`Config.ModelScale = 8`: a gép ~12 stud), a kamera távolságát is ugyanennyivel
+nagyítva. A repülés, a sebesség és minden számítás közben a valódi méterekben történik, a HUD is méterben és km-ben mutat. A látvány különbsége: más gépek távolról nagyobbnak látszanak, mint a böngészőben.
 
 ## Szobák, csapatok, kétüléses gép
 
@@ -73,7 +79,7 @@ Kontroller és telefon (érintő-joystick + gombok) is van.
 
 ## Ismert korlátok
 
-* Nincs felszállás / leszállás: a gép a levegőből indul, a talajnak ütközés lezuhanás.
-* Nincs hang (nem akartam kitalált hangazonosítókat beírni). A `Hud`-ba és a `Combat`-ba egy-egy `Sound` könnyen beilleszthető.
+* A szobák, csapatok és a kétüléses gép leírása fent a régi, szerver-oldali változatra vonatkozik: az új, kliens-oldali játékban ezek még nincsenek átírva (a játék egyelőre egyjátékos).
+* Hiányzik: hordozó, karrier-mód, oktatás, rádió, a kabin 3D-s műszerfala (a kijelzők a képernyő alján vannak).
 * A pilóta kockákból épül (sisak, napellenző, oxigénmaszk, tömlő, hám, kesztyű), a pilótafülkében ülő pilótán és a hangár-előnézeten látszik (nincs avatar a repülés alatt).
 * PvP kikapcsolva (`Config.PvP`); a barátok együtt lőnek az ellenségre.

@@ -27,23 +27,32 @@ local function hideRest(pool)
 	end
 end
 
-function GuiCanvas.new(player: Player)
+-- player: a full screen canvas (the HUD).  With opts.container (a GuiObject) and opts.size (a Vector2): a canvas of that many pixels inside it
+-- (a cockpit display; the container scales and clips it)
+function GuiCanvas.new(player: Player, opts)
 	local self = setmetatable({}, GuiCanvas)
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "HudCanvas"
-	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = true
-	gui.DisplayOrder = 5
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.Enabled = false
-	gui.Parent = player:WaitForChild("PlayerGui")
-	self.gui = gui
 	local root = Instance.new("Frame")
 	root.Name = "Root"
 	root.BackgroundTransparency = 1
-	root.Size = UDim2.fromScale(1, 1)
 	root.Active = false
-	root.Parent = gui
+	if opts and opts.container then
+		root.Size = UDim2.fromOffset(opts.size.X, opts.size.Y)
+		root.ClipsDescendants = true
+		root.Parent = opts.container
+		self.fixed = opts.size
+	else
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "HudCanvas"
+		gui.ResetOnSpawn = false
+		gui.IgnoreGuiInset = true
+		gui.DisplayOrder = 5
+		gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		gui.Enabled = false
+		gui.Parent = player:WaitForChild("PlayerGui")
+		self.gui = gui
+		root.Size = UDim2.fromScale(1, 1)
+		root.Parent = gui
+	end
 	self.root = root
 	self.lw = 1.6
 
@@ -116,10 +125,39 @@ function GuiCanvas.new(player: Player)
 	return self
 end
 
-function GuiCanvas:setEnabled(on) self.gui.Enabled = on end
+function GuiCanvas:setEnabled(on)
+	if self.gui then self.gui.Enabled = on else self.root.Visible = on end
+end
 function GuiCanvas:size()
+	if self.fixed then return self.fixed.X, self.fixed.Y end
 	local s = self.root.AbsoluteSize
 	return s.X, s.Y
+end
+
+-- a filled convex polygon (pts = { { x, y }, ... }): horizontal strips
+function GuiCanvas:fillPoly(pts, c)
+	local minY, maxY = math.huge, -math.huge
+	for _, p in ipairs(pts) do
+		minY = math.min(minY, p[2])
+		maxY = math.max(maxY, p[2])
+	end
+	local step = math.max(2, (maxY - minY) / 14)
+	local lw = self.lw
+	self.lw = step + 0.5
+	local y = minY + step / 2
+	while y < maxY do
+		local lo, hi = math.huge, -math.huge
+		for i = 1, #pts do
+			local a, b = pts[i], pts[i % #pts + 1]
+			if (a[2] <= y and b[2] > y) or (b[2] <= y and a[2] > y) then
+				local x = a[1] + (y - a[2]) / (b[2] - a[2]) * (b[1] - a[1])
+				lo, hi = math.min(lo, x), math.max(hi, x)
+			end
+		end
+		if hi > lo then self:line(lo, y, hi, y, c) end
+		y += step
+	end
+	self.lw = lw
 end
 
 function GuiCanvas:begin()

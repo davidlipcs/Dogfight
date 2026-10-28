@@ -124,8 +124,10 @@ function Hud:update(dt, player, world, view, camCtl, game, w, h)
 		if game.raceTarget then self:raceMark(player, game.raceTarget) end
 		self:weaponSymbols(player, world, dt)
 		if not camCtl.follow then self:panels(player, world) end
-		self:radarScope(player)
-		self:rwrScope(player)
+		if not self.hideScopes then
+			self:radarScope(player)
+			self:rwrScope(player)
+		end
 		self:warnings(player, world)
 		self:missileList(player, world)
 	end

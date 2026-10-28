@@ -117,6 +117,10 @@ Config.Enemy = {
 	WaveDelay = 8,
 }
 
+-- the asset id of the uploaded sound sheet (roblox/audio/dogfight_sounds.wav): a number, or leave 0 and set the attribute SoundAssetId of
+-- ReplicatedStorage (Properties > Attributes) - see roblox/README.md.  0 = the game is silent.
+Config.SoundId = 0
+
 Config.PvP = false
 
 return Config

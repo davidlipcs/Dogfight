@@ -24,6 +24,7 @@ res = lua.execute(r'''
     local Cam = require("Camera")
     local Hud = require("Hud")
     local Ctl = require("Controls")
+    local Mfd = require("Mfd")
     local calls = 0
     local canvas = setmetatable({}, { __index = function(_, k)
         if k == "measure" then return function(_, s, size) calls = calls + 1; return #s * size * 0.6 end end
@@ -34,6 +35,8 @@ res = lua.execute(r'''
         local cam = Cam.new(terrain)
         cam:reset(m.player)
         local hud = Hud.new(canvas)
+        local mfd = Mfd.new(m.player.spec)
+        for _, d in ipairs(mfd.list) do d.g = canvas end
         hud.nav = m.nav
         local held = {}
         local input = { dx = 3, dy = -1, held = function(k) return held[k] == true end, mouse = { [0] = false, [1] = false, [2] = false } }
@@ -56,6 +59,8 @@ res = lua.execute(r'''
             cam:update(dt, m.player)
             if i % 3 == 0 then
                 for _, e in ipairs(m.events) do hud:handleEvent(e[1], e[2], m.player) end
+                mfd:update(dt * 3, m.player, m.world, m.nav)
+                if i % 600 == 0 then mfd:cycle("left"); mfd:cycle("right"); mfd:cycle("center") end
                 hud:update(dt * 3, m.player, m.world, { position = cam.position, orientation = cam.orientation, fov = cam.fov }, cam, m.state, 1280, 720)
             end
         end
