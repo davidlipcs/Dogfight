@@ -6,6 +6,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -28,6 +29,8 @@ local Sounds = require(script.Parent.Sounds)
 local MfdView = require(script.Parent.MfdView)
 local TutorialUi = require(script.Parent.TutorialUi)
 local RadioUi = require(script.Parent.RadioUi)
+local LoadingUi = require(script.Parent.LoadingUi)
+local Coords = require(Shared.Coords)
 local State = require(script.Parent.State)
 local Net = require(Shared.game.Net)
 
@@ -56,6 +59,8 @@ local sounds
 local mfdView
 local radioUi
 local wsoDead = 0
+local loadId = 0
+Game.loading = false
 local seatOpen = false
 
 function Game.init(r)
@@ -238,7 +243,7 @@ end
 
 -- ------------------------------------------------------------------ keys
 local function onKey(k)
-	if not match then return end
+	if not match or Game.loading then return end
 	if k == "Escape" then
 		if Game.paused then Game.resume() else Game.pause() end
 		return
@@ -331,6 +336,7 @@ end
 
 -- ------------------------------------------------------------------ the frame
 local function frame(dt)
+	if Game.loading then return end
 	dt = math.clamp(dt, 0, 0.1)
 	local st = match.state
 	local p = match.player
@@ -416,6 +422,71 @@ local function frame(dt)
 		if profile then profile.coins = (profile.coins or 0) + pendingEarn end
 		pendingEarn = 0
 	end
+end
+
+-- ------------------------------------------------------------------ loading: the match starts only when everything is there
+local function waitUntil(cond, timeout)
+	local t0 = os.clock()
+	while not cond() do
+		if os.clock() - t0 > timeout then return false end
+		task.wait(0.1)
+	end
+	return true
+end
+
+-- the island and the runway are in the place (the terrain arrives from the server in pieces), the aircraft exist with their meshes and
+-- textures downloaded.  The loading screen covers the world meanwhile; the frame loop does nothing until this is done.
+local function loadEverything(opts, myId)
+	LoadingUi.show("A világ betöltése…", 0.05)
+	waitUntil(function() return game:IsLoaded() end, 30)
+	if myId ~= loadId then return end
+	LoadingUi.set("A sziget és a kifutó betöltése…", 0.2)
+	local f = terrain.airfield
+	local top = Coords.pos(SimMath.V(f.x, f.y, f.elevation + 3000))
+	pcall(function() player:RequestStreamAroundAsync(Coords.pos(SimMath.V(f.x, f.y, f.elevation))) end)
+	waitUntil(function()
+		if myId ~= loadId then return true end
+		local hit = workspace:Raycast(top, Vector3.new(0, -3000 * Config.Island.StudsPerMeter - 100, 0))
+		return hit ~= nil and workspace:FindFirstChild("Runway") ~= nil
+	end, 25)
+	if myId ~= loadId then return end
+	-- the aircraft of the match get their visuals now (and the carrier is built), then their content is fetched
+	LoadingUi.set("A gépek betöltése…", 0.45)
+	view.world = match.world
+	view:setCamera(cam, match.player.pos)
+	view:update(0, match.player, false)
+	local list = { view.folder }
+	local models = ReplicatedStorage:FindFirstChild("JetModels")
+	if models then
+		local keys = { [match.player.spec.model] = true, f16 = true }
+		for _, k in ipairs(opts.enemyTypes or {}) do
+			local sp = Specs.BANDITS[k]
+			if sp then keys[sp.model] = true end
+		end
+		for _, r in ipairs((opts.mission and opts.mission.red) or {}) do
+			local sp = Specs.BANDITS[r.type]
+			if sp then keys[sp.model] = true end
+		end
+		for key in pairs(keys) do
+			local m = models:FindFirstChild(key)
+			if m then table.insert(list, m) end
+		end
+	end
+	local total, done = #list, 0
+	for _, inst in ipairs(list) do
+		if myId ~= loadId then return end
+		pcall(function() ContentProvider:PreloadAsync({ inst }) end)
+		done += 1
+		LoadingUi.set(nil, 0.45 + 0.5 * done / total)
+	end
+	if myId ~= loadId then return end
+	LoadingUi.set("Indulás…", 1)
+	task.wait(0.15)
+	if myId ~= loadId then return end
+	if cam and match then cam:reset(match.player) end
+	LoadingUi.hide()
+	Game.loading = false
+	if input then input:setEnabled(true) end
 end
 
 -- ------------------------------------------------------------------ start / stop
@@ -537,15 +608,21 @@ function Game.start(opts)
 	Env.set(opts.tod or Game.settings.tod)
 	match.env.onRestart = function() view:setWorld(match.world) end
 	missileCam, followM = false, nil
-	input:setEnabled(true)
 	match.state.paused = false
+	Game.loading = true
+	loadId += 1
 	conn = RunService:BindToRenderStep("DogfightFrame", Enum.RenderPriority.Camera.Value + 1, frame)
+	local myId = loadId
+	task.spawn(function() loadEverything(opts, myId) end)
 	return true
 end
 
 function Game.stop()
 	if not Game.active then return end
 	Game.active = false
+	Game.loading = false
+	loadId += 1
+	LoadingUi.hide()
 	pcall(function() RunService:UnbindFromRenderStep("DogfightFrame") end)
 	if pendingEarn > 0 and remotes and remotes.Earn then remotes.Earn:FireServer(pendingEarn) end
 	if profile then profile.coins = (profile.coins or 0) + pendingEarn end

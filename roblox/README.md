@@ -21,7 +21,7 @@ A `roblox/models` mappában 16 `.glb` fájl van, a böngészős játék gépei R
 1. Studióban: **Window → Asset Manager** (régebbi Studióban View → Asset Manager; vagy a Home fülön az Asset Manager gomb) → fent a **Bulk Import** gomb.
 2. A megnyíló fájlválasztóban jelöld ki az összes `.glb` fájlt a `roblox/models` mappából (Ctrl+A), **Open**.
 3. A Studio megmutatja az importálandókat – **Import**. Várd meg, amíg mind átkerül (néhány perc). Minden gép egy `Model` lesz a Workspace-ben, a fájl nevével (`f16`, `fa18` …).
-4. **File → Save.** Ennyi: a játék **induláskor magától** átteszi a Workspace-ben talált gépeket a `ReplicatedStorage.JetModels` mappába (a Window → Output kiírja: „N jet model(s) moved … (now X of 16)”). Ha kézzel akarod: **Window → Command Bar**, ide: `require(game.ServerScriptService.Server.Tools).adoptJets()`, majd Save. (A `Tools.listJets()` kiírja, melyik gép van meg.)
+4. **File → Save.** (Ha korábban már importáltál gépeket, az új import felülírja a régieket – az indításkori átrakás a frissen importált modellt veszi.) Ennyi: a játék **induláskor magától** átteszi a Workspace-ben talált gépeket a `ReplicatedStorage.JetModels` mappába (a Window → Output kiírja: „N jet model(s) moved … (now X of 16)”). Ha kézzel akarod: **Window → Command Bar**, ide: `require(game.ServerScriptService.Server.Tools).adoptJets()`, majd Save. (A `Tools.listJets()` kiírja, melyik gép van meg.)
 5. A játékban a **Hangár → Gép** fülön látszik, melyik gép van importálva; a menüben a választott géphez tartozó modell repül.
 Ha egy gép hátrafelé repül: `Config.JetModelFlip = { f16 = true }`.
 Az újragenerálás: `python3 tools/make_roblox_models.py` (kell hozzá: `pip install trimesh fast-simplification scipy numpy pillow`).
@@ -39,6 +39,8 @@ A böngésző a hangokat képletekből készíti; Roblox csak feltöltött hangf
 
 ### 4. Indítás
 Studióban nyomj **Play**-t (vagy a Roblox-ra feltöltve a **Play** gomb). A lobbiban az **INDULÁS A PÁLYÁRÓL** felszállással kezd, az **INDULÁS A LEVEGŐBEN** a levegőből. A **Játék** fülön ugyanazok a beállítások vannak, mint a böngészős főmenüben.
+
+**A betöltés:** az indítás gomb után a játék egy betöltőképernyőt mutat, és csak akkor indul, amikor a sziget, a kifutó, a gépek és a gépek hálói mind megvannak (legfeljebb 25 másodpercig vár, utána akkor is indul).
 
 ## A méretarány (miért nem lehet a gép „igazi méretű”)
 

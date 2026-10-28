@@ -304,11 +304,17 @@ local function fromImported(src: Instance, key: string, skin, enemy: boolean?): 
 		p.Massless = true
 		weld(body, p)
 		local isGlass = p.Transparency > 0.05 or string.find(string.lower(p.Name), "glass") ~= nil
-		if tint and not isGlass and p:IsA("MeshPart") then
+		-- the paint scheme tints the painted parts only (the ones with a colour texture); the dark intakes, nozzles, screens, lamps and the
+		-- landing gear keep the colours of the model
+		local sa = p:FindFirstChildOfClass("SurfaceAppearance")
+		local painted = sa ~= nil and sa.ColorMap ~= ""
+		if tint and not isGlass and p:IsA("MeshPart") and painted then
 			p.Color = tint
-			local sa = p:FindFirstChildOfClass("SurfaceAppearance")
-			if sa then pcall(function() sa.Color = tint end) end
+			pcall(function() sa.Color = tint end)
 		end
+		-- the landing gear and its doors are only shown with the gear down (View.luau)
+		local lname = string.lower(p.Name)
+		if string.sub(lname, 1, 5) == "gear_" or string.sub(lname, 1, 5) == "door_" then p:SetAttribute("Gear", true) end
 	end
 	-- the afterburner flame and a generous hit box
 	local k = length / 15

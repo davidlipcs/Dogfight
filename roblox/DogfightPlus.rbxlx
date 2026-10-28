@@ -815,11 +815,17 @@ local function fromImported(src: Instance, key: string, skin, enemy: boolean?): 
 		p.Massless = true
 		weld(body, p)
 		local isGlass = p.Transparency > 0.05 or string.find(string.lower(p.Name), "glass") ~= nil
-		if tint and not isGlass and p:IsA("MeshPart") then
+		-- the paint scheme tints the painted parts only (the ones with a colour texture); the dark intakes, nozzles, screens, lamps and the
+		-- landing gear keep the colours of the model
+		local sa = p:FindFirstChildOfClass("SurfaceAppearance")
+		local painted = sa ~= nil and sa.ColorMap ~= ""
+		if tint and not isGlass and p:IsA("MeshPart") and painted then
 			p.Color = tint
-			local sa = p:FindFirstChildOfClass("SurfaceAppearance")
-			if sa then pcall(function() sa.Color = tint end) end
+			pcall(function() sa.Color = tint end)
 		end
+		-- the landing gear and its doors are only shown with the gear down (View.luau)
+		local lname = string.lower(p.Name)
+		if string.sub(lname, 1, 5) == "gear_" or string.sub(lname, 1, 5) == "door_" then p:SetAttribute("Gear", true) end
 	end
 	-- the afterburner flame and a generous hit box
 	local k = length / 15
@@ -14940,7 +14946,9 @@ function Tools.adoptJets()
 	end
 	for i, c in ipairs(found) do
 		local key = keys[i]
-		if not folder:FindFirstChild(key) and c.Parent then
+		if c.Parent and not c:IsDescendantOf(folder) and not (found[i - 1] and c:IsDescendantOf(found[i - 1])) then
+			local old = folder:FindFirstChild(key)
+			if old then old:Destroy() end                                   -- a fresh import replaces the old model of the same jet
 			if c:IsA("MeshPart") then
 				local m = Instance.new("Model")
 				m.Name = key
@@ -15075,7 +15083,7 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX91"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX90"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX89"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX70"><Properties><string name="Name">DailyUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="StarterPlayer" referent="RBX92"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX91"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX90"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX70"><Properties><string name="Name">DailyUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The "Napi" tab of the lobby: the daily reward, the three daily missions and the top list (server/Daily.luau).
 local Ui = require(script.Parent.Ui)
 
@@ -15518,6 +15526,7 @@ return Fx
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -15540,6 +15549,8 @@ local Sounds = require(script.Parent.Sounds)
 local MfdView = require(script.Parent.MfdView)
 local TutorialUi = require(script.Parent.TutorialUi)
 local RadioUi = require(script.Parent.RadioUi)
+local LoadingUi = require(script.Parent.LoadingUi)
+local Coords = require(Shared.Coords)
 local State = require(script.Parent.State)
 local Net = require(Shared.game.Net)
 
@@ -15568,6 +15579,8 @@ local sounds
 local mfdView
 local radioUi
 local wsoDead = 0
+local loadId = 0
+Game.loading = false
 local seatOpen = false
 
 function Game.init(r)
@@ -15750,7 +15763,7 @@ end
 
 -- ------------------------------------------------------------------ keys
 local function onKey(k)
-	if not match then return end
+	if not match or Game.loading then return end
 	if k == "Escape" then
 		if Game.paused then Game.resume() else Game.pause() end
 		return
@@ -15843,6 +15856,7 @@ end
 
 -- ------------------------------------------------------------------ the frame
 local function frame(dt)
+	if Game.loading then return end
 	dt = math.clamp(dt, 0, 0.1)
 	local st = match.state
 	local p = match.player
@@ -15928,6 +15942,71 @@ local function frame(dt)
 		if profile then profile.coins = (profile.coins or 0) + pendingEarn end
 		pendingEarn = 0
 	end
+end
+
+-- ------------------------------------------------------------------ loading: the match starts only when everything is there
+local function waitUntil(cond, timeout)
+	local t0 = os.clock()
+	while not cond() do
+		if os.clock() - t0 > timeout then return false end
+		task.wait(0.1)
+	end
+	return true
+end
+
+-- the island and the runway are in the place (the terrain arrives from the server in pieces), the aircraft exist with their meshes and
+-- textures downloaded.  The loading screen covers the world meanwhile; the frame loop does nothing until this is done.
+local function loadEverything(opts, myId)
+	LoadingUi.show("A világ betöltése…", 0.05)
+	waitUntil(function() return game:IsLoaded() end, 30)
+	if myId ~= loadId then return end
+	LoadingUi.set("A sziget és a kifutó betöltése…", 0.2)
+	local f = terrain.airfield
+	local top = Coords.pos(SimMath.V(f.x, f.y, f.elevation + 3000))
+	pcall(function() player:RequestStreamAroundAsync(Coords.pos(SimMath.V(f.x, f.y, f.elevation))) end)
+	waitUntil(function()
+		if myId ~= loadId then return true end
+		local hit = workspace:Raycast(top, Vector3.new(0, -3000 * Config.Island.StudsPerMeter - 100, 0))
+		return hit ~= nil and workspace:FindFirstChild("Runway") ~= nil
+	end, 25)
+	if myId ~= loadId then return end
+	-- the aircraft of the match get their visuals now (and the carrier is built), then their content is fetched
+	LoadingUi.set("A gépek betöltése…", 0.45)
+	view.world = match.world
+	view:setCamera(cam, match.player.pos)
+	view:update(0, match.player, false)
+	local list = { view.folder }
+	local models = ReplicatedStorage:FindFirstChild("JetModels")
+	if models then
+		local keys = { [match.player.spec.model] = true, f16 = true }
+		for _, k in ipairs(opts.enemyTypes or {}) do
+			local sp = Specs.BANDITS[k]
+			if sp then keys[sp.model] = true end
+		end
+		for _, r in ipairs((opts.mission and opts.mission.red) or {}) do
+			local sp = Specs.BANDITS[r.type]
+			if sp then keys[sp.model] = true end
+		end
+		for key in pairs(keys) do
+			local m = models:FindFirstChild(key)
+			if m then table.insert(list, m) end
+		end
+	end
+	local total, done = #list, 0
+	for _, inst in ipairs(list) do
+		if myId ~= loadId then return end
+		pcall(function() ContentProvider:PreloadAsync({ inst }) end)
+		done += 1
+		LoadingUi.set(nil, 0.45 + 0.5 * done / total)
+	end
+	if myId ~= loadId then return end
+	LoadingUi.set("Indulás…", 1)
+	task.wait(0.15)
+	if myId ~= loadId then return end
+	if cam and match then cam:reset(match.player) end
+	LoadingUi.hide()
+	Game.loading = false
+	if input then input:setEnabled(true) end
 end
 
 -- ------------------------------------------------------------------ start / stop
@@ -16049,15 +16128,21 @@ function Game.start(opts)
 	Env.set(opts.tod or Game.settings.tod)
 	match.env.onRestart = function() view:setWorld(match.world) end
 	missileCam, followM = false, nil
-	input:setEnabled(true)
 	match.state.paused = false
+	Game.loading = true
+	loadId += 1
 	conn = RunService:BindToRenderStep("DogfightFrame", Enum.RenderPriority.Camera.Value + 1, frame)
+	local myId = loadId
+	task.spawn(function() loadEverything(opts, myId) end)
 	return true
 end
 
 function Game.stop()
 	if not Game.active then return end
 	Game.active = false
+	Game.loading = false
+	loadId += 1
+	LoadingUi.hide()
 	pcall(function() RunService:UnbindFromRenderStep("DogfightFrame") end)
 	if pendingEarn > 0 and remotes and remotes.Earn then remotes.Earn:FireServer(pendingEarn) end
 	if profile then profile.coins = (profile.coins or 0) + pendingEarn end
@@ -16410,7 +16495,88 @@ end
 
 return GuiCanvas
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX76"><Properties><string name="Name">Lobby</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX76"><Properties><string name="Name">LoadingUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+-- The loading screen: a full screen cover with what is being loaded and a bar.  The match starts only when everything is there
+-- (the island, the runway, the aircraft and their meshes), so nothing pops in while you fly.
+local Players = game:GetService("Players")
+
+local LoadingUi = {}
+
+local gui, status, fill
+
+local function build()
+	gui = Instance.new("ScreenGui")
+	gui.Name = "DogfightLoading"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.DisplayOrder = 100
+	gui.Enabled = false
+	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local back = Instance.new("Frame")
+	back.Size = UDim2.fromScale(1, 1)
+	back.BackgroundColor3 = Color3.fromRGB(6, 12, 16)
+	back.BorderSizePixel = 0
+	back.Active = true
+	back.Parent = gui
+	local title = Instance.new("TextLabel")
+	title.AnchorPoint = Vector2.new(0.5, 0.5)
+	title.Position = UDim2.fromScale(0.5, 0.4)
+	title.Size = UDim2.fromOffset(600, 60)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.GothamBlack
+	title.TextSize = 44
+	title.TextColor3 = Color3.fromRGB(107, 255, 133)
+	title.Text = "DOGFIGHT PLUS"
+	title.Parent = back
+	status = Instance.new("TextLabel")
+	status.AnchorPoint = Vector2.new(0.5, 0.5)
+	status.Position = UDim2.fromScale(0.5, 0.52)
+	status.Size = UDim2.fromOffset(700, 28)
+	status.BackgroundTransparency = 1
+	status.Font = Enum.Font.GothamMedium
+	status.TextSize = 18
+	status.TextColor3 = Color3.fromRGB(215, 228, 220)
+	status.Text = "Betöltés…"
+	status.Parent = back
+	local track = Instance.new("Frame")
+	track.AnchorPoint = Vector2.new(0.5, 0.5)
+	track.Position = UDim2.fromScale(0.5, 0.58)
+	track.Size = UDim2.fromOffset(420, 10)
+	track.BackgroundColor3 = Color3.fromRGB(34, 44, 48)
+	track.BorderSizePixel = 0
+	track.Parent = back
+	local c1 = Instance.new("UICorner")
+	c1.CornerRadius = UDim.new(0, 5)
+	c1.Parent = track
+	fill = Instance.new("Frame")
+	fill.Size = UDim2.new(0, 0, 1, 0)
+	fill.BackgroundColor3 = Color3.fromRGB(255, 200, 64)
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	local c2 = Instance.new("UICorner")
+	c2.CornerRadius = UDim.new(0, 5)
+	c2.Parent = fill
+end
+
+function LoadingUi.show(text, frac)
+	if not gui then build() end
+	gui.Enabled = true
+	LoadingUi.set(text, frac)
+end
+
+function LoadingUi.set(text, frac)
+	if not gui then return end
+	if text then status.Text = text end
+	if frac then fill.Size = UDim2.new(math.clamp(frac, 0, 1), 0, 1, 0) end
+end
+
+function LoadingUi.hide()
+	if gui then gui.Enabled = false end
+end
+
+return LoadingUi
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX77"><Properties><string name="Name">Lobby</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The hangar screen: a turning preview of your jet and the shop (paint schemes and pilot outfits for coins,
 -- coin packs for Robux).  Trying a skin puts it on the preview jet; buying it makes it yours.
 local Players = game:GetService("Players")
@@ -16714,7 +16880,7 @@ end
 
 return Lobby
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX77"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="LocalScript" referent="RBX78"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Dogfight Plus for Roblox: the client's entry point.  The menu (hangar, shop, rooms, match options) -> a match on this machine
 -- (Game.luau) -> back to the menu.
 local Players = game:GetService("Players")
@@ -16853,7 +17019,7 @@ end)
 goLobby()
 Lobby.setRoom(nil)
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX78"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX79"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The match options of the browser game's main menu (web/index.html #menu): mission, own plane, weapons, enemy types, mode, difficulty,
 -- wingman, enemy count, mouse sensitivity, time of day.  build() makes the panel (a scrolling list of rows); opts() turns the choices
 -- into the options table of Game.start.
@@ -17106,7 +17272,7 @@ end
 
 return Menu
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX79"><Properties><string name="Name">MfdView</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX80"><Properties><string name="Name">MfdView</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The cockpit displays on the screen: in the cockpit view (V) the radar, map, stores and engine pages of shared/game/Mfd.luau are drawn
 -- on panels along the bottom of the screen (the browser game shows them on the 3D instrument panel).  J / K / L turn their pages; N makes
 -- them bigger.  Each panel is a GuiCanvas of its own pixel size inside a clipping frame that scales it.
@@ -17266,7 +17432,7 @@ end
 
 return MfdView
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX80"><Properties><string name="Name">RadioUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX81"><Properties><string name="Name">RadioUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The radio on the screen (shared/game/Radio.luau): the log of the last calls (subtitles, with who speaks) at the bottom left,
 -- and - with the I key (or the RÁDIÓ button on a phone) - the panel: type a call or pick one from the numbered list.
 local Players = game:GetService("Players")
@@ -17516,7 +17682,7 @@ end
 
 return RadioUi
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX81"><Properties><string name="Name">RoomsUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX82"><Properties><string name="Name">RoomsUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The rooms screen: your room (members, teams, slots, the open rear seats), a quick start, a new room and the list.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17738,7 +17904,7 @@ function RoomsUi.toggle() RoomsUi.show(not open) end
 
 return RoomsUi
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX82"><Properties><string name="Name">Sounds</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX83"><Properties><string name="Name">Sounds</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The sounds of the game: the port of Sounds of web/js/audio.js.  The browser makes them from formulas; here they are one sound sheet
 -- (roblox/audio/dogfight_sounds.wav, rendered from the same formulas by tools/make_roblox_sounds.py) that is uploaded to Roblox once;
 -- every sound is a region of it (shared/SoundMap.luau).  Without an asset id (Config.SoundId or the attribute SoundAssetId of
@@ -17937,7 +18103,7 @@ end
 
 return Sounds
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX83"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX84"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- What the client knows about its room (filled from the server's RoomState events), shared by the screens.
 local State = {
 	room = nil,        -- the last RoomState table, or nil when not in a room
@@ -17981,7 +18147,7 @@ end
 
 return State
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX84"><Properties><string name="Name">TutorialUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX85"><Properties><string name="Name">TutorialUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The card of the tutorial (shared/game/Tutorial.luau): the lesson's text, the task and what the game sees of it.
 local Players = game:GetService("Players")
 
@@ -18113,7 +18279,7 @@ function TutorialUi:destroy() self.gui:Destroy() end
 
 return TutorialUi
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX85"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX86"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Small helpers to build the screens in code (no hand-made GUI objects to keep in sync).
 local Ui = {}
 
@@ -18171,7 +18337,7 @@ Ui.RarityColor = {
 
 return Ui
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX86"><Properties><string name="Name">View</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX87"><Properties><string name="Name">View</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- What the match looks like: the aircraft (the game's own .glb jets when imported, otherwise built from parts), the missiles, the effects
 -- and the camera.  The port of SceneView.update / visualFor / handleEvent / aircraftEffects of web/js/render.js.  The simulation's frame is
 -- metres (x east, y north, z up); the Roblox world is Config.Island.StudsPerMeter studs per metre, and what is drawn is Config.ModelScale
@@ -18367,7 +18533,10 @@ function View:visualFor(ac)
 	if v then return v end
 	local model, info = jetModel(ac)
 	model.Parent = self.folder
-	v = { model = model, info = info, trail = 0, phase = math.random() * 1.2, flames = {}, strobes = {}, stores = {}, shown = true }
+	v = { model = model, info = info, trail = 0, phase = math.random() * 1.2, flames = {}, strobes = {}, stores = {}, shown = true, gear = {}, gearShown = true }
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") and d:GetAttribute("Gear") then table.insert(v.gear, d) end
+	end
 	-- the missiles on the stations
 	for _, st in ipairs(ac.stations) do
 		local mm = missileModel(st.spec)
@@ -18522,6 +18691,13 @@ function View:update(dt, player, cockpit)
 		if show then
 			local cf = Coords.cframe(ac.pos, ac.quat)
 			v.model:PivotTo(cf)
+			if #v.gear > 0 then
+				local out = ac.fm.gearPos > 0.15 or ac.onGround
+				if out ~= v.gearShown then
+					v.gearShown = out
+					for _, g in ipairs(v.gear) do g.Transparency = out and 0 or 1 end
+				end
+			end
 			for n, s in pairs(v.stores) do
 				local st
 				for _, x in ipairs(ac.stations) do if x.number == n then st = x end end
@@ -18634,7 +18810,7 @@ end
 
 return View
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX87"><Properties><string name="Name">Visor</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX88"><Properties><string name="Name">Visor</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The visor is real glass: from the cockpit view everything is seen through its tint (darker and coloured, with a
 -- dark rim).  Clear visors change nothing.  Never darker than 25% so that the game stays playable.
 local Lighting = game:GetService("Lighting")
@@ -18692,7 +18868,7 @@ end
 
 return Visor
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX88"><Properties><string name="Name">WarUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX89"><Properties><string name="Name">WarUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The war career on the screen: the operations room (the air forces of the four powers, the fronts, the log), the briefing of the
 -- mission, the report after it, the politics and the end of the war.  The game logic is shared/game/Campaign.luau (the port of
 -- web/js/campaign.js); the sortie itself is a Match of scenario "mission" (shared/game/Mission.luau).  The war and the pilot are saved on
@@ -19123,6 +19299,6 @@ return WarUi
 </Item>
 </Item>
 </Item>
-<Item class="Players" referent="RBX92"><Properties><string name="Name">Players</string><bool name="CharacterAutoLoads">false</bool></Properties></Item>
-<Item class="Lighting" referent="RBX93"><Properties><string name="Name">Lighting</string><double name="ClockTime">14</double></Properties></Item>
+<Item class="Players" referent="RBX93"><Properties><string name="Name">Players</string><bool name="CharacterAutoLoads">false</bool></Properties></Item>
+<Item class="Lighting" referent="RBX94"><Properties><string name="Name">Lighting</string><double name="ClockTime">14</double></Properties></Item>
 </roblox>

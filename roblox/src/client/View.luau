@@ -194,7 +194,10 @@ function View:visualFor(ac)
 	if v then return v end
 	local model, info = jetModel(ac)
 	model.Parent = self.folder
-	v = { model = model, info = info, trail = 0, phase = math.random() * 1.2, flames = {}, strobes = {}, stores = {}, shown = true }
+	v = { model = model, info = info, trail = 0, phase = math.random() * 1.2, flames = {}, strobes = {}, stores = {}, shown = true, gear = {}, gearShown = true }
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") and d:GetAttribute("Gear") then table.insert(v.gear, d) end
+	end
 	-- the missiles on the stations
 	for _, st in ipairs(ac.stations) do
 		local mm = missileModel(st.spec)
@@ -349,6 +352,13 @@ function View:update(dt, player, cockpit)
 		if show then
 			local cf = Coords.cframe(ac.pos, ac.quat)
 			v.model:PivotTo(cf)
+			if #v.gear > 0 then
+				local out = ac.fm.gearPos > 0.15 or ac.onGround
+				if out ~= v.gearShown then
+					v.gearShown = out
+					for _, g in ipairs(v.gear) do g.Transparency = out and 0 or 1 end
+				end
+			end
 			for n, s in pairs(v.stores) do
 				local st
 				for _, x in ipairs(ac.stations) do if x.number == n then st = x end end

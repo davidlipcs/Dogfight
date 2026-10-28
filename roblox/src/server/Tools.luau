@@ -50,7 +50,9 @@ function Tools.adoptJets()
 	end
 	for i, c in ipairs(found) do
 		local key = keys[i]
-		if not folder:FindFirstChild(key) and c.Parent then
+		if c.Parent and not c:IsDescendantOf(folder) and not (found[i - 1] and c:IsDescendantOf(found[i - 1])) then
+			local old = folder:FindFirstChild(key)
+			if old then old:Destroy() end                                   -- a fresh import replaces the old model of the same jet
 			if c:IsA("MeshPart") then
 				local m = Instance.new("Model")
 				m.Name = key
