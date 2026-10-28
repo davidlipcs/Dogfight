@@ -203,6 +203,16 @@ run(HELPERS + """
     State.set(nil)
 """, "rooms")
 print("rooms ok")
+run(HELPERS + """
+    clickText("Napi")
+    local before = require(M.service("ServerScriptService").Server.Data).get(M.localPlayer).coins
+    clickText("Átveszem")
+    local after = require(M.service("ServerScriptService").Server.Data).get(M.localPlayer).coins
+    print("daily reward: coins", before, "->", after)
+    assert(after > before, "the daily reward did not pay")
+    clickText("Ma már átvetted")
+""", "daily reward")
+print("daily ok")
 print('seconds', round(time.time() - t0, 1))
 w = dict(M.warnings.items()) if hasattr(M.warnings, 'items') else {}
 if w:

@@ -25,6 +25,7 @@ local function fresh()
 		jetOn = nil,                     -- the jet model (Config.JetModels key; nil = the one built from parts)
 		career = nil,                    -- the career table of the match (shared/game/Career.luau)
 		best = {},                       -- race records: race, canyon, tube, tubeLap (seconds)
+		daily = nil, missions = nil,     -- the daily reward streak and the day's missions (server/Daily.luau)
 		receipts = {},
 		version = 1,
 	}
@@ -108,6 +109,7 @@ function Data.earn(player: Player, n: any)
 	if not b then b = { tokens = 4000, t = now }; earnBudget[player] = b end
 	b.tokens = math.min(4000, b.tokens + (now - b.t) * 40)
 	b.t = now
+	if player.MembershipType == Enum.MembershipType.Premium then n = n * (1 + Config.PremiumBonus) end
 	n = math.min(math.floor(n), b.tokens)
 	if n <= 0 then return end
 	b.tokens -= n
@@ -136,6 +138,13 @@ function Data.saveCareer(player: Player, t: any)
 			end
 		end
 		c[k] = dst
+	end
+	-- the counters only ever go up (a smaller number is a stale or a forged packet)
+	local old = p.career
+	if old then
+		for _, k in CAREER_KEYS do
+			if (old[k] or 0) > (c[k] or 0) then c[k] = old[k] end
+		end
 	end
 	p.career = c
 	p.kills = c.kills or p.kills

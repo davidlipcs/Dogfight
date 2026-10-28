@@ -191,6 +191,22 @@ Config.Products = {
 -- Game Pass (Creator Dashboard > Monetization > Passes): the coins you earn count double
 Config.DoubleCoinsPass = 0
 
+-- the daily reward (a streak: every day in a row pays more, the 7th day the most; a missed day starts again) and the daily missions (three
+-- a day, picked from this list; progress comes from the career counters of the match)
+Config.Daily = { 200, 300, 400, 500, 700, 900, 1500 }
+Config.PremiumBonus = 0.25          -- Roblox Premium members earn this much more coins
+Config.Missions = {
+	{ id = "kills5", text = "Lőj le 5 ellenséget", stat = "kills", target = 5, reward = 400 },
+	{ id = "kills12", text = "Lőj le 12 ellenséget", stat = "kills", target = 12, reward = 900 },
+	{ id = "gun3", text = "Lőj le 3 ellenséget gépágyúval", stat = "gunKills", target = 3, reward = 600 },
+	{ id = "ir3", text = "Lőj le 3 ellenséget AIM-9M-mel", stat = "irKills", target = 3, reward = 500 },
+	{ id = "arh3", text = "Lőj le 3 ellenséget AIM-120A-val", stat = "arhKills", target = 3, reward = 500 },
+	{ id = "duel2", text = "Nyerj 2 párbajt", stat = "duelWins", target = 2, reward = 700 },
+	{ id = "fly10", text = "Repülj 10 percet", stat = "flightTime", target = 600, reward = 500 },
+	{ id = "fly25", text = "Repülj 25 percet", stat = "flightTime", target = 1500, reward = 1000 },
+	{ id = "crash2", text = "Csalj 2 ellenséget a földbe (manőverkill)", stat = "crashKills", target = 2, reward = 800 },
+}
+
 Config.Rooms = {
 	MaxPlayers = 20,      -- the most people in one room (hangar group)
 	NameMax = 24,
@@ -1468,6 +1484,7 @@ local FUNCTIONS = {
 	"BuyAir", "BuyPilot", "EquipAir", "EquipPilot", "EquipJet",    -- shop: (id) -> ok, message
 	"BuyProduct", "BuyPass",                            -- Robux: (index) -> ok
 	"GetProfile",
+	"ClaimDaily", "GetMissions", "ClaimMission", "GetLeaderboard",   -- the daily reward, the daily missions, the top list
 	"BuySkinRobux",                                     -- (kind "air"/"pilot", id): the Robux purchase of a skin
 	"ListRooms", "CreateRoom", "JoinRoom", "LeaveRoom", "QuickPlay", "SetTeam", "SetSlots",   -- the hangar groups
 	"JoinSeat", "LeaveSeat",                            -- the rear seat of a two-seat jet
@@ -12386,7 +12403,152 @@ return W
 </Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX65"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX64"><Properties><string name="Name">Server</string></Properties><Item class="ModuleScript" referent="RBX57"><Properties><string name="Name">Data</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ServerScriptService" referent="RBX66"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX65"><Properties><string name="Name">Server</string></Properties><Item class="ModuleScript" referent="RBX57"><Properties><string name="Name">Daily</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+-- Reasons to come back: the daily reward (a streak), three daily missions and a top list.  The missions are measured on the server from the
+-- career counters the client saves (they only ever go up), against what they were when the day's missions were given out.
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared").Config)
+local Data = require(script.Parent.Data)
+
+local Daily = {}
+
+local board = nil
+pcall(function() board = DataStoreService:GetOrderedDataStore(Config.DataStoreName .. "_best") end)
+local boardCache, boardAt = {}, 0
+local lastBoardWrite = {}
+
+local function today(): number
+	return math.floor(os.time() / 86400)
+end
+
+-- three missions a day, always the same three for the same player on the same day
+local function pick(userId: number, day: number)
+	local rng = Random.new(userId * 7919 + day)
+	local pool, out = table.clone(Config.Missions), {}
+	for _ = 1, 3 do
+		local i = rng:NextInteger(1, #pool)
+		table.insert(out, pool[i])
+		table.remove(pool, i)
+	end
+	return out
+end
+
+local function stat(p, key: string): number
+	local c = p.career
+	return c and tonumber(c[key]) or 0
+end
+
+local function missionsOf(player: Player)
+	local p = Data.get(player)
+	if not p then return nil end
+	local day = today()
+	local m = p.missions
+	if not m or m.day ~= day then
+		m = { day = day, base = {}, claimed = {} }
+		for _, d in Config.Missions do m.base[d.stat] = stat(p, d.stat) end
+		p.missions = m
+	end
+	return m
+end
+
+function Daily.missions(player: Player)
+	local p, m = Data.get(player), missionsOf(player)
+	if not p then return {} end
+	local out = {}
+	for _, d in pick(player.UserId, m.day) do
+		local progress = math.max(0, stat(p, d.stat) - (m.base[d.stat] or 0))
+		table.insert(out, { id = d.id, text = d.text, target = d.target, progress = math.min(progress, d.target), reward = d.reward, claimed = m.claimed[d.id] == true, done = progress >= d.target })
+	end
+	return out
+end
+
+function Daily.claimMission(player: Player, id: any)
+	local p, m = Data.get(player), missionsOf(player)
+	if not p or typeof(id) ~= "string" then return false, "Hiba" end
+	for _, e in Daily.missions(player) do
+		if e.id == id then
+			if e.claimed then return false, "Már átvetted" end
+			if not e.done then return false, "Ez még nincs kész" end
+			m.claimed[id] = true
+			p.coins += e.reward
+			Data.push(player)
+			task.spawn(Data.save, player)
+			return true, "+" .. e.reward .. " érme"
+		end
+	end
+	return false, "Nincs ilyen feladat"
+end
+
+-- the daily reward: once per day; the streak goes on when yesterday was claimed
+function Daily.claimDaily(player: Player)
+	local p = Data.get(player)
+	if not p then return false, "Hiba" end
+	local day = today()
+	local d = p.daily or { last = 0, streak = 0 }
+	if d.last == day then return false, "Ma már átvetted – gyere vissza holnap!" end
+	d.streak = (d.last == day - 1) and (d.streak % #Config.Daily + 1) or 1
+	d.last = day
+	p.daily = d
+	local n = Config.Daily[d.streak]
+	p.coins += n
+	Data.push(player)
+	task.spawn(Data.save, player)
+	return true, "+" .. n .. " érme (" .. d.streak .. ". nap)", d.streak
+end
+
+function Daily.dailyState(player: Player)
+	local p = Data.get(player)
+	local d = p and p.daily or { last = 0, streak = 0 }
+	local day = today()
+	return { available = d.last ~= day, streak = d.last >= day - 1 and d.streak or 0, rewards = Config.Daily }
+end
+
+-- the top list: the best score of the players, kept in an ordered DataStore (written at most once a minute per player)
+function Daily.reportScore(player: Player, score: number)
+	if not board or typeof(score) ~= "number" or score ~= score or score <= 0 or score > 1e9 then return end
+	local now = os.clock()
+	if now - (lastBoardWrite[player] or -1e9) < 60 then return end
+	local p = Data.get(player)
+	if p and p.reportedBest and score <= p.reportedBest then return end
+	lastBoardWrite[player] = now
+	if p then p.reportedBest = score end
+	task.spawn(function()
+		pcall(function() board:UpdateAsync(tostring(player.UserId), function(old) return math.max(old or 0, math.floor(score)) end) end)
+	end)
+end
+
+function Daily.leaderboard()
+	if os.clock() - boardAt < 60 and #boardCache > 0 then return boardCache end
+	boardAt = os.clock()
+	local out = {}
+	if board then
+		local ok, pages = pcall(function() return board:GetSortedAsync(false, 10) end)
+		if ok then
+			for rank, e in pages:GetCurrentPage() do
+				local name = "Pilóta"
+				pcall(function() name = Players:GetNameFromUserIdAsync(tonumber(e.key)) end)
+				table.insert(out, { rank = rank, name = name, score = e.value })
+			end
+		end
+	end
+	boardCache = out
+	return out
+end
+
+function Daily.init(remotes)
+	remotes.ClaimDaily.OnServerInvoke = function(player) return Daily.claimDaily(player) end
+	remotes.GetMissions.OnServerInvoke = function(player) return { missions = Daily.missions(player), daily = Daily.dailyState(player) } end
+	remotes.ClaimMission.OnServerInvoke = function(player, id) return Daily.claimMission(player, id) end
+	remotes.GetLeaderboard.OnServerInvoke = function() return Daily.leaderboard() end
+	Players.PlayerRemoving:Connect(function(player) lastBoardWrite[player] = nil end)
+end
+
+return Daily
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX58"><Properties><string name="Name">Data</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The save: coins, the bought skins and what is worn, kills.  A DataStore keeps it between visits; when the
 -- DataStore is not available (Studio without API access) the game still runs, the save lives for the session.
 local DataStoreService = game:GetService("DataStoreService")
@@ -12413,6 +12575,7 @@ local function fresh()
 		jetOn = nil,                     -- the jet model (Config.JetModels key; nil = the one built from parts)
 		career = nil,                    -- the career table of the match (shared/game/Career.luau)
 		best = {},                       -- race records: race, canyon, tube, tubeLap (seconds)
+		daily = nil, missions = nil,     -- the daily reward streak and the day's missions (server/Daily.luau)
 		receipts = {},
 		version = 1,
 	}
@@ -12496,6 +12659,7 @@ function Data.earn(player: Player, n: any)
 	if not b then b = { tokens = 4000, t = now }; earnBudget[player] = b end
 	b.tokens = math.min(4000, b.tokens + (now - b.t) * 40)
 	b.t = now
+	if player.MembershipType == Enum.MembershipType.Premium then n = n * (1 + Config.PremiumBonus) end
 	n = math.min(math.floor(n), b.tokens)
 	if n <= 0 then return end
 	b.tokens -= n
@@ -12524,6 +12688,13 @@ function Data.saveCareer(player: Player, t: any)
 			end
 		end
 		c[k] = dst
+	end
+	-- the counters only ever go up (a smaller number is a stale or a forged packet)
+	local old = p.career
+	if old then
+		for _, k in CAREER_KEYS do
+			if (old[k] or 0) > (c[k] or 0) then c[k] = old[k] end
+		end
 	end
 	p.career = c
 	p.kills = c.kills or p.kills
@@ -12580,7 +12751,7 @@ end
 
 return Data
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX58"><Properties><string name="Name">IslandBuilder</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX59"><Properties><string name="Name">IslandBuilder</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Builds the game's real island as Roblox terrain, from the height grid and the ground colours of the browser game
 -- (IslandData + the simulation's own SimTerrain, so what you see is what the flight model collides with).  It takes a few
 -- minutes, so do it ONCE in Studio (see roblox/README.md): the terrain is saved with the place.  In the Command Bar (View > Command Bar) run:
@@ -12701,7 +12872,7 @@ end
 
 return IslandBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="Script" referent="RBX59"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="Script" referent="RBX60"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Dogfight Plus for Roblox: the server's entry point.  The match itself runs on the player's own machine (the same simulation as the
 -- browser game, shared/game/Match.luau); the server keeps what must not be the client's word: the save (coins, skins, career, records),
 -- the shop and the Robux purchases, and the rooms.
@@ -12715,15 +12886,19 @@ local Data = require(script.Parent.Data)
 local Shop = require(script.Parent.Shop)
 local World = require(script.Parent.World)
 local Rooms = require(script.Parent.Rooms)
+local Daily = require(script.Parent.Daily)
+local Tools = require(script.Parent.Tools)
 
 Players.CharacterAutoLoads = false          -- there is no avatar: the player is the jet
 local remotes = Remotes.init()
 
 World.build()
+Tools.adoptJets()                           -- imported jets still lying in the Workspace go where the game looks for them
 Data.init(remotes)
 Data.start()
 Shop.start(remotes)
 Rooms.init(remotes)
+Daily.init(remotes)
 
 Players.PlayerAdded:Connect(function(player)
 	Data.load(player)
@@ -12737,7 +12912,11 @@ for _, player in Players:GetPlayers() do
 end
 
 remotes.Earn.OnServerEvent:Connect(function(player, n) Data.earn(player, n) end)
-remotes.SaveCareer.OnServerEvent:Connect(function(player, t) Data.saveCareer(player, t) end)
+remotes.SaveCareer.OnServerEvent:Connect(function(player, t)
+	Data.saveCareer(player, t)
+	local p = Data.get(player)
+	if p and p.career then Daily.reportScore(player, p.career.bestScore) end
+end)
 remotes.SaveBest.OnServerEvent:Connect(function(player, kind, time, lap) Data.saveBest(player, kind, time, lap) end)
 
 -- the match of a room: every message of a player goes to the others of the same room (the server only relays; each player is the
@@ -12767,7 +12946,7 @@ game:GetService("RunService").Heartbeat:Connect(function(dt) Rooms.step(dt) end)
 
 print("Dogfight Plus server ready")
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX60"><Properties><string name="Name">Rooms</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX61"><Properties><string name="Name">Rooms</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The hangar groups ("rooms"): a player opens a room, says how many more may come in (20 in all at most), and the
 -- others join from the list (or with the code of a private room).  Everybody moves themselves between the two
 -- teams of a team-fight room, in any split.  A room is a group inside the server: what happens in it (enemy waves,
@@ -13003,7 +13182,7 @@ end
 
 return Rooms
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX61"><Properties><string name="Name">Shop</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX62"><Properties><string name="Name">Shop</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The shop: skins for coins, and coin packs / the double-coins pass for Robux.
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -13170,15 +13349,38 @@ end
 
 return Shop
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX62"><Properties><string name="Name">Tools</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX63"><Properties><string name="Name">Tools</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Helpers for the Command Bar of Roblox Studio (View > Command Bar), run in edit mode.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Config = require(ReplicatedStorage:WaitForChild("Shared").Config)
 
 local Tools = {}
 
--- Moves the imported jet models (the .glb files imported with File > Import 3D, named f16, fa18, ...) from the
--- Workspace into ReplicatedStorage.JetModels, where the game looks for them.   require(game.ServerScriptService.Server.Tools).adoptJets()
+-- the jet key an imported instance belongs to: the name without ".glb", a "(1)" suffix or case ("F16.glb" -> f16)
+local function keyOf(name: string): string?
+	local n = string.lower(name)
+	n = string.gsub(n, "%.glb$", "")
+	n = string.gsub(n, "%s*%(%d+%)$", "")
+	n = string.gsub(n, "[%s_%-]+$", "")
+	for _, j in Config.JetModels do
+		if j.key == n then return j.key end
+	end
+	return nil
+end
+
+local function containsParts(inst: Instance): boolean
+	if inst:IsA("BasePart") then return true end
+	for _, d in inst:GetDescendants() do
+		if d:IsA("BasePart") then return true end
+	end
+	return false
+end
+
+-- Moves the imported jet models (the .glb files imported with Bulk Import, named f16, fa18, ...) from the Workspace (also
+-- from inside folders / the Import group) into ReplicatedStorage.JetModels, where the game looks for them.  It runs by
+-- itself when the server starts (so a forgotten step costs nothing); by hand:
+--   require(game.ServerScriptService.Server.Tools).adoptJets()
 function Tools.adoptJets()
 	local folder = ReplicatedStorage:FindFirstChild("JetModels")
 	if not folder then
@@ -13187,21 +13389,38 @@ function Tools.adoptJets()
 		folder.Parent = ReplicatedStorage
 	end
 	local n = 0
-	for _, j in Config.JetModels do
-		for _, c in workspace:GetChildren() do
-			if c.Name == j.key and (c:IsA("Model") or c:IsA("MeshPart") or c:IsA("Folder")) then
-				if c:IsA("MeshPart") then
-					local m = Instance.new("Model")
-					m.Name = j.key
-					c.Parent = m
-					c = m
-				end
-				c.Parent = folder
-				n += 1
+	local found, keys = {}, {}
+	for _, c in workspace:GetDescendants() do
+		if c:IsA("Model") or c:IsA("MeshPart") or c:IsA("Folder") then
+			local key = keyOf(c.Name)
+			if key and containsParts(c) then
+				table.insert(found, c)
+				table.insert(keys, key)
 			end
 		end
 	end
-	print(string.format("Dogfight Plus: %d jet model(s) moved to ReplicatedStorage.JetModels (now: %d). Save the place.", n, #folder:GetChildren()))
+	for i, c in ipairs(found) do
+		local key = keys[i]
+		if not folder:FindFirstChild(key) and c.Parent then
+			if c:IsA("MeshPart") then
+				local m = Instance.new("Model")
+				m.Name = key
+				m.Parent = folder
+				c.Parent = m
+			else
+				c.Name = key
+				c.Parent = folder
+			end
+			n += 1
+		end
+	end
+	local have = 0
+	for _, j in Config.JetModels do
+		if folder:FindFirstChild(j.key) then have += 1 end
+	end
+	print(string.format("Dogfight Plus: %d jet model(s) moved to ReplicatedStorage.JetModels (now %d of %d).%s", n, have, #Config.JetModels,
+		RunService:IsStudio() and not RunService:IsRunning() and " Save the place (File > Save)." or ""))
+	return have
 end
 
 -- Lists which jets are imported.
@@ -13214,7 +13433,7 @@ end
 
 return Tools
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX63"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX64"><Properties><string name="Name">World</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The playing field: a green island with hills and a runway in a wide sea, the sky and the light.
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13317,7 +13536,83 @@ return World
 ]]></ProtectedString></Properties></Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX84"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX83"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX82"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX66"><Properties><string name="Name">DeviceInput</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="StarterPlayer" referent="RBX86"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX85"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX84"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX67"><Properties><string name="Name">DailyUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+-- The "Napi" tab of the lobby: the daily reward, the three daily missions and the top list (server/Daily.luau).
+local Ui = require(script.Parent.Ui)
+
+local DailyUi = {}
+
+function DailyUi.build(parent, remotes)
+	local list = Ui.make("ScrollingFrame", {
+		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 8, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 1, 0), Visible = false, Parent = parent,
+	}, { Ui.make("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local msg = Ui.label(list, "", { Size = UDim2.new(1, -10, 0, 22), TextSize = 15, LayoutOrder = 0 })
+	local function section(title, order)
+		local f = Ui.make("Frame", { BackgroundColor3 = Color3.fromRGB(24, 34, 40), BorderSizePixel = 0, Size = UDim2.new(1, -12, 0, 10), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = order, Parent = list }, {
+			Ui.corner(8), Ui.padding(10), Ui.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
+		Ui.label(f, title, { Size = UDim2.new(1, 0, 0, 22), TextSize = 18, Font = Enum.Font.GothamBold, TextColor3 = Ui.Amber, LayoutOrder = 0 })
+		return f
+	end
+	local daily, missions, board = section("Napi jutalom", 1), section("Napi feladatok", 2), section("A legjobb pilóták", 3)
+	local function clear(f)
+		for _, c in f:GetChildren() do
+			if c:IsA("GuiObject") and c.LayoutOrder ~= 0 then c:Destroy() end
+		end
+	end
+	local function say(text, good)
+		msg.Text = text or ""
+		msg.TextColor3 = good and Ui.Green or Ui.Amber
+	end
+	local function refresh()
+		local ok, data = pcall(function() return remotes.GetMissions:InvokeServer() end)
+		if not ok or not data then return end
+		clear(daily)
+		local d = data.daily
+		local row = Ui.make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 1, Parent = daily }, {
+			Ui.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }),
+		})
+		for i, n in d.rewards do
+			local on = i <= d.streak
+			Ui.label(row, tostring(n), { Size = UDim2.new(0, 54, 0, 36), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamBold,
+				BackgroundTransparency = 0, BackgroundColor3 = on and Color3.fromRGB(60, 110, 70) or Color3.fromRGB(40, 54, 60), TextColor3 = on and Ui.Green or Color3.fromRGB(200, 215, 210) })
+		end
+		Ui.button(daily, d.available and "Átveszem a mai jutalmat" or "Ma már átvetted", { Size = UDim2.new(0, 260, 0, 36), TextSize = 15, LayoutOrder = 2,
+			BackgroundColor3 = d.available and Ui.Green or Color3.fromRGB(70, 80, 84) }, function()
+			local ok2, good, text = pcall(function() return remotes.ClaimDaily:InvokeServer() end)
+			say(ok2 and text or "Hiba", ok2 and good)
+			refresh()
+		end)
+		clear(missions)
+		for i, m in data.missions do
+			local f = Ui.make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), LayoutOrder = i, Parent = missions })
+			Ui.label(f, m.text, { Size = UDim2.new(1, -250, 0, 34), TextSize = 14, TextWrapped = true })
+			Ui.label(f, m.progress .. " / " .. m.target, { Position = UDim2.new(1, -240, 0, 0), Size = UDim2.new(0, 70, 0, 34), TextSize = 14, TextColor3 = m.done and Ui.Green or Color3.fromRGB(200, 215, 210) })
+			Ui.button(f, m.claimed and "Átvéve" or ("+" .. m.reward .. " érme"), { Position = UDim2.new(1, -160, 0, 3), Size = UDim2.new(0, 150, 0, 28), TextSize = 13,
+				BackgroundColor3 = (m.done and not m.claimed) and Ui.Amber or Color3.fromRGB(70, 80, 84) }, function()
+				if m.claimed or not m.done then return end
+				local ok2, good, text = pcall(function() return remotes.ClaimMission:InvokeServer(m.id) end)
+				say(ok2 and text or "Hiba", ok2 and good)
+				refresh()
+			end)
+		end
+		local ok3, top = pcall(function() return remotes.GetLeaderboard:InvokeServer() end)
+		clear(board)
+		if ok3 and top and #top > 0 then
+			for i, e in top do
+				Ui.label(board, string.format("%d.  %s  –  %d pont", e.rank, e.name, e.score), { Size = UDim2.new(1, 0, 0, 20), TextSize = 14, LayoutOrder = i })
+			end
+		else
+			Ui.label(board, "Még nincs eredmény.", { Size = UDim2.new(1, 0, 0, 20), TextSize = 14, LayoutOrder = 1 })
+		end
+	end
+	return { frame = list, refresh = refresh }
+end
+
+return DailyUi
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX68"><Properties><string name="Name">DeviceInput</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Keyboard, mouse and gamepad as the browser game sees them (web/js/game.js Input, Pad): keys have the browser game's names
 -- ("w", "Space", "shift", "control", "Tab" ...), the mouse is locked to the middle and gives its travel, a gamepad gives the
 -- left stick and the buttons.  Presses are handed to onPress(name); wheel notches to onWheel(direction).
@@ -13489,7 +13784,7 @@ end
 
 return DeviceInput
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX67"><Properties><string name="Name">Env</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX69"><Properties><string name="Name">Env</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The time of day (Napszak): the presets day / sunset / overcast / night of web/js/render.js (TIMES) as Roblox lighting.  The sea,
 -- sky and island are built once by the server (World.luau); this only changes the light, the haze and the clouds.
 local Lighting = game:GetService("Lighting")
@@ -13535,7 +13830,7 @@ end
 
 return Env
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX68"><Properties><string name="Name">Fx</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX70"><Properties><string name="Name">Fx</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Smoke, fire, flashes and tracer lines: the particles of web/js/render.js (Particles.spawn(pos, vel, life, size, colour, drag, rise)) made
 -- of ParticleEmitters.  An emitter makes particles where its part is when Emit is called, so every spawn takes the next part of a pool,
 -- moves it there, sets the emitter up (size / colour / speed ...) and emits one particle.  Sizes are metres of the game, drawn at the
@@ -13676,7 +13971,7 @@ function Fx:destroy() self.folder:Destroy() end
 
 return Fx
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX69"><Properties><string name="Name">Game</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX71"><Properties><string name="Name">Game</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The game on the client: the port of the Game class of web/js/game.js.  The match (shared/game/Match.luau) runs here, on the player's
 -- own machine, with the same flight model, weapons and AI as the browser game; this module feeds it the controls (Controls.luau),
 -- steers the camera (Camera.luau), draws the match (View.luau) and the HUD (GuiCanvas + Hud.luau) and handles the pause, the
@@ -14212,7 +14507,7 @@ function Game.match() return match end
 
 return Game
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX70"><Properties><string name="Name">GuiCanvas</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX72"><Properties><string name="Name">GuiCanvas</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- An immediate-mode 2D canvas made of pooled GUI objects, for the HUD (shared/game/Hud.luau draws on it exactly like the browser game
 -- draws on its <canvas>).  Call begin() before a frame's drawing and finish() after it: the objects that were not used are hidden.
 -- Colours are { r, g, b, a } (0..255, a 0..1).
@@ -14526,7 +14821,7 @@ end
 
 return GuiCanvas
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX71"><Properties><string name="Name">Lobby</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX73"><Properties><string name="Name">Lobby</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The hangar screen: a turning preview of your jet and the shop (paint schemes and pilot outfits for coins,
 -- coin packs for Robux).  Trying a skin puts it on the preview jet; buying it makes it yours.
 local Players = game:GetService("Players")
@@ -14547,7 +14842,7 @@ local remotes, hooks
 local gui, shop, listFrame, coinsLabel, msgLabel
 local profile = { coins = 0, air = {}, pilot = {} }
 local tab, rarity, onlyOwned = "play", "all", false
-local menuHolder, chipsFrame
+local menuHolder, chipsFrame, dailyUi
 local previewModel, previewFolder
 local tryAir, tryPilot = nil, nil     -- what the preview shows while you look at a skin
 local focus = "jet"                   -- "jet" or "pilot": where the camera looks
@@ -14559,6 +14854,7 @@ local gearButtons = {}
 local roomLabel = nil
 local State = require(script.Parent.State)
 local Menu = require(script.Parent.Menu)
+local DailyUi = require(script.Parent.DailyUi)
 
 local function rebuildPreview()
 	if previewModel then previewModel:Destroy() end
@@ -14651,7 +14947,7 @@ local function render()
 		if c:IsA("GuiObject") then c:Destroy() end
 	end
 	coinsLabel.Text = string.format("%d érme", profile.coins or 0)
-	if tab == "play" then return end
+	if tab == "play" or tab == "daily" then return end
 	if tab == "jet" then
 		local have = ReplicatedStorage:FindFirstChild("JetModels")
 		local any = false
@@ -14756,18 +15052,22 @@ function Lobby.init(r, h)
 	shop = Ui.make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -20, 0.5, 0), Size = UDim2.new(0, 560, 0.88, 0), BackgroundColor3 = Color3.fromRGB(14, 20, 24), BackgroundTransparency = 0.08, Visible = true, Parent = gui }, { Ui.corner(10), Ui.padding(12) })
 	local tabs = Ui.make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 38), Parent = shop }, { Ui.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
 	local function tabBtn(id, label)
-		Ui.button(tabs, label, { Size = UDim2.new(0, 108, 0, 34), TextSize = 14, BackgroundColor3 = Color3.fromRGB(40, 56, 62), TextColor3 = Color3.new(1, 1, 1) }, function()
+		Ui.button(tabs, label, { Size = UDim2.new(0, 92, 0, 34), TextSize = 13, BackgroundColor3 = Color3.fromRGB(40, 56, 62), TextColor3 = Color3.new(1, 1, 1) }, function()
 			tab = id
 			tryAir, tryPilot = nil, nil
 			focus = id == "pilot" and "pilot" or "jet"
 			local play = id == "play"
+			local day = id == "daily"
 			menuHolder.Visible = play
-			chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = not play, not play, not play
+			dailyUi.frame.Visible = day
+			if day then dailyUi.refresh() end
+			chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = not (play or day), not (play or day), not (play or day)
 			rebuildPreview()
 			render()
 		end)
 	end
 	tabBtn("play", "Játék")
+	tabBtn("daily", "Napi")
 	tabBtn("air", "Festés (" .. #Catalog.Air .. ")")
 	tabBtn("pilot", "Pilóta (" .. #Catalog.Pilot .. ")")
 	tabBtn("coins", "Érmék")
@@ -14785,6 +15085,9 @@ function Lobby.init(r, h)
 	}, { Ui.make("UIGridLayout", { CellSize = UDim2.new(0, 160, 0, 178), CellPadding = UDim2.new(0, 8, 0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
 	menuHolder = Ui.make("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 44), Size = UDim2.new(1, 0, 1, -44), Parent = shop })
 	Menu.build(menuHolder)
+	dailyUi = DailyUi.build(shop, remotes)
+	dailyUi.frame.Position = UDim2.new(0, 0, 0, 44)
+	dailyUi.frame.Size = UDim2.new(1, 0, 1, -44)
 	Menu.onPlane = function() if visible then rebuildPreview() end end
 	chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = false, false, false
 	ready = true
@@ -14821,7 +15124,7 @@ end
 
 return Lobby
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX72"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="LocalScript" referent="RBX74"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Dogfight Plus for Roblox: the client's entry point.  The menu (hangar, shop, rooms, match options) -> a match on this machine
 -- (Game.luau) -> back to the menu.
 local Players = game:GetService("Players")
@@ -14913,7 +15216,7 @@ end)
 goLobby()
 Lobby.setRoom(nil)
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX73"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX75"><Properties><string name="Name">Menu</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The match options of the browser game's main menu (web/index.html #menu): mission, own plane, weapons, enemy types, mode, difficulty,
 -- wingman, enemy count, mouse sensitivity, time of day.  build() makes the panel (a scrolling list of rows); opts() turns the choices
 -- into the options table of Game.start.
@@ -15160,7 +15463,7 @@ end
 
 return Menu
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX74"><Properties><string name="Name">MfdView</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX76"><Properties><string name="Name">MfdView</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The cockpit displays on the screen: in the cockpit view (V) the radar, map, stores and engine pages of shared/game/Mfd.luau are drawn
 -- on panels along the bottom of the screen (the browser game shows them on the 3D instrument panel).  J / K / L turn their pages; N makes
 -- them bigger.  Each panel is a GuiCanvas of its own pixel size inside a clipping frame that scales it.
@@ -15244,7 +15547,7 @@ function MfdView:destroy() self.gui:Destroy() end
 
 return MfdView
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX75"><Properties><string name="Name">RoomsUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX77"><Properties><string name="Name">RoomsUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The rooms screen: your room (members, teams, slots, the open rear seats), a quick start, a new room and the list.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15466,7 +15769,7 @@ function RoomsUi.toggle() RoomsUi.show(not open) end
 
 return RoomsUi
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX76"><Properties><string name="Name">Sounds</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX78"><Properties><string name="Name">Sounds</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The sounds of the game: the port of Sounds of web/js/audio.js.  The browser makes them from formulas; here they are one sound sheet
 -- (roblox/audio/dogfight_sounds.wav, rendered from the same formulas by tools/make_roblox_sounds.py) that is uploaded to Roblox once;
 -- every sound is a region of it (shared/SoundMap.luau).  Without an asset id (Config.SoundId or the attribute SoundAssetId of
@@ -15665,7 +15968,7 @@ end
 
 return Sounds
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX77"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX79"><Properties><string name="Name">State</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- What the client knows about its room (filled from the server's RoomState events), shared by the screens.
 local State = {
 	room = nil,        -- the last RoomState table, or nil when not in a room
@@ -15709,7 +16012,7 @@ end
 
 return State
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX78"><Properties><string name="Name">TutorialUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX80"><Properties><string name="Name">TutorialUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The card of the tutorial (shared/game/Tutorial.luau): the lesson's text, the task and what the game sees of it.
 local Players = game:GetService("Players")
 
@@ -15841,7 +16144,7 @@ function TutorialUi:destroy() self.gui:Destroy() end
 
 return TutorialUi
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX79"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX81"><Properties><string name="Name">Ui</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Small helpers to build the screens in code (no hand-made GUI objects to keep in sync).
 local Ui = {}
 
@@ -15899,7 +16202,7 @@ Ui.RarityColor = {
 
 return Ui
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX80"><Properties><string name="Name">View</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX82"><Properties><string name="Name">View</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- What the match looks like: the aircraft (the game's own .glb jets when imported, otherwise built from parts), the missiles, the effects
 -- and the camera.  The port of SceneView.update / visualFor / handleEvent / aircraftEffects of web/js/render.js.  The simulation's frame is
 -- metres (x east, y north, z up); the Roblox world is Config.Island.StudsPerMeter studs per metre, and what is drawn is Config.ModelScale
@@ -16362,7 +16665,7 @@ end
 
 return View
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX81"><Properties><string name="Name">Visor</string><ProtectedString name="Source"><![CDATA[--!nonstrict
+<Item class="ModuleScript" referent="RBX83"><Properties><string name="Name">Visor</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The visor is real glass: from the cockpit view everything is seen through its tint (darker and coloured, with a
 -- dark rim).  Clear visors change nothing.  Never darker than 25% so that the game stays playable.
 local Lighting = game:GetService("Lighting")
@@ -16423,6 +16726,6 @@ return Visor
 </Item>
 </Item>
 </Item>
-<Item class="Players" referent="RBX85"><Properties><string name="Name">Players</string><bool name="CharacterAutoLoads">false</bool></Properties></Item>
-<Item class="Lighting" referent="RBX86"><Properties><string name="Name">Lighting</string><double name="ClockTime">14</double></Properties></Item>
+<Item class="Players" referent="RBX87"><Properties><string name="Name">Players</string><bool name="CharacterAutoLoads">false</bool></Properties></Item>
+<Item class="Lighting" referent="RBX88"><Properties><string name="Name">Lighting</string><double name="ClockTime">14</double></Properties></Item>
 </roblox>

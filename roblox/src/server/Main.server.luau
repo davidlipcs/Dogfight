@@ -12,15 +12,19 @@ local Data = require(script.Parent.Data)
 local Shop = require(script.Parent.Shop)
 local World = require(script.Parent.World)
 local Rooms = require(script.Parent.Rooms)
+local Daily = require(script.Parent.Daily)
+local Tools = require(script.Parent.Tools)
 
 Players.CharacterAutoLoads = false          -- there is no avatar: the player is the jet
 local remotes = Remotes.init()
 
 World.build()
+Tools.adoptJets()                           -- imported jets still lying in the Workspace go where the game looks for them
 Data.init(remotes)
 Data.start()
 Shop.start(remotes)
 Rooms.init(remotes)
+Daily.init(remotes)
 
 Players.PlayerAdded:Connect(function(player)
 	Data.load(player)
@@ -34,7 +38,11 @@ for _, player in Players:GetPlayers() do
 end
 
 remotes.Earn.OnServerEvent:Connect(function(player, n) Data.earn(player, n) end)
-remotes.SaveCareer.OnServerEvent:Connect(function(player, t) Data.saveCareer(player, t) end)
+remotes.SaveCareer.OnServerEvent:Connect(function(player, t)
+	Data.saveCareer(player, t)
+	local p = Data.get(player)
+	if p and p.career then Daily.reportScore(player, p.career.bestScore) end
+end)
 remotes.SaveBest.OnServerEvent:Connect(function(player, kind, time, lap) Data.saveBest(player, kind, time, lap) end)
 
 -- the match of a room: every message of a player goes to the others of the same room (the server only relays; each player is the

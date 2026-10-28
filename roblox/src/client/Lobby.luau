@@ -19,7 +19,7 @@ local remotes, hooks
 local gui, shop, listFrame, coinsLabel, msgLabel
 local profile = { coins = 0, air = {}, pilot = {} }
 local tab, rarity, onlyOwned = "play", "all", false
-local menuHolder, chipsFrame
+local menuHolder, chipsFrame, dailyUi
 local previewModel, previewFolder
 local tryAir, tryPilot = nil, nil     -- what the preview shows while you look at a skin
 local focus = "jet"                   -- "jet" or "pilot": where the camera looks
@@ -31,6 +31,7 @@ local gearButtons = {}
 local roomLabel = nil
 local State = require(script.Parent.State)
 local Menu = require(script.Parent.Menu)
+local DailyUi = require(script.Parent.DailyUi)
 
 local function rebuildPreview()
 	if previewModel then previewModel:Destroy() end
@@ -123,7 +124,7 @@ local function render()
 		if c:IsA("GuiObject") then c:Destroy() end
 	end
 	coinsLabel.Text = string.format("%d érme", profile.coins or 0)
-	if tab == "play" then return end
+	if tab == "play" or tab == "daily" then return end
 	if tab == "jet" then
 		local have = ReplicatedStorage:FindFirstChild("JetModels")
 		local any = false
@@ -228,18 +229,22 @@ function Lobby.init(r, h)
 	shop = Ui.make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -20, 0.5, 0), Size = UDim2.new(0, 560, 0.88, 0), BackgroundColor3 = Color3.fromRGB(14, 20, 24), BackgroundTransparency = 0.08, Visible = true, Parent = gui }, { Ui.corner(10), Ui.padding(12) })
 	local tabs = Ui.make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 38), Parent = shop }, { Ui.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
 	local function tabBtn(id, label)
-		Ui.button(tabs, label, { Size = UDim2.new(0, 108, 0, 34), TextSize = 14, BackgroundColor3 = Color3.fromRGB(40, 56, 62), TextColor3 = Color3.new(1, 1, 1) }, function()
+		Ui.button(tabs, label, { Size = UDim2.new(0, 92, 0, 34), TextSize = 13, BackgroundColor3 = Color3.fromRGB(40, 56, 62), TextColor3 = Color3.new(1, 1, 1) }, function()
 			tab = id
 			tryAir, tryPilot = nil, nil
 			focus = id == "pilot" and "pilot" or "jet"
 			local play = id == "play"
+			local day = id == "daily"
 			menuHolder.Visible = play
-			chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = not play, not play, not play
+			dailyUi.frame.Visible = day
+			if day then dailyUi.refresh() end
+			chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = not (play or day), not (play or day), not (play or day)
 			rebuildPreview()
 			render()
 		end)
 	end
 	tabBtn("play", "Játék")
+	tabBtn("daily", "Napi")
 	tabBtn("air", "Festés (" .. #Catalog.Air .. ")")
 	tabBtn("pilot", "Pilóta (" .. #Catalog.Pilot .. ")")
 	tabBtn("coins", "Érmék")
@@ -257,6 +262,9 @@ function Lobby.init(r, h)
 	}, { Ui.make("UIGridLayout", { CellSize = UDim2.new(0, 160, 0, 178), CellPadding = UDim2.new(0, 8, 0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
 	menuHolder = Ui.make("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 44), Size = UDim2.new(1, 0, 1, -44), Parent = shop })
 	Menu.build(menuHolder)
+	dailyUi = DailyUi.build(shop, remotes)
+	dailyUi.frame.Position = UDim2.new(0, 0, 0, 44)
+	dailyUi.frame.Size = UDim2.new(1, 0, 1, -44)
 	Menu.onPlane = function() if visible then rebuildPreview() end end
 	chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = false, false, false
 	ready = true

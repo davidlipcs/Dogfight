@@ -30,6 +30,7 @@ local FUNCTIONS = {
 	"BuyAir", "BuyPilot", "EquipAir", "EquipPilot", "EquipJet",    -- shop: (id) -> ok, message
 	"BuyProduct", "BuyPass",                            -- Robux: (index) -> ok
 	"GetProfile",
+	"ClaimDaily", "GetMissions", "ClaimMission", "GetLeaderboard",   -- the daily reward, the daily missions, the top list
 	"BuySkinRobux",                                     -- (kind "air"/"pilot", id): the Robux purchase of a skin
 	"ListRooms", "CreateRoom", "JoinRoom", "LeaveRoom", "QuickPlay", "SetTeam", "SetSlots",   -- the hangar groups
 	"JoinSeat", "LeaveSeat",                            -- the rear seat of a two-seat jet

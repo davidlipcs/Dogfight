@@ -159,6 +159,7 @@ bit32 = bit32 or {
 math.clamp = function(x, lo, hi) if x < lo then return lo elseif x > hi then return hi end return x end
 math.sign = function(x) return x > 0 and 1 or x < 0 and -1 or 0 end
 math.atan2 = function(y, x) return math.atan(y, x) end
+table.clone = function(t) local o = {}; for k, v in pairs(t) do o[k] = v end return o end
 table.find = function(t, v) for i, x in ipairs(t) do if x == v then return i end end return nil end
 string.split = function(s, sep) local out = {}; for p in (s .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do out[#out + 1] = p end return out end
 local lua_tostring = tostring
@@ -345,6 +346,7 @@ methods.UnbindFromRenderStep = function(o, name) M.renderSteps[name] = nil end
 methods.IsClient = function() return true end
 methods.IsServer = function() return false end
 methods.IsStudio = function() return true end
+methods.IsRunning = function() return true end
 M.renderSteps = {}
 
 Instance = { new = function(class)

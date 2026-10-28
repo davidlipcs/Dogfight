@@ -21,8 +21,8 @@ A `roblox/models` mappában 16 `.glb` fájl van, a böngészős játék gépei R
 1. Studióban: **Window → Asset Manager** (régebbi Studióban View → Asset Manager; vagy a Home fülön az Asset Manager gomb) → fent a **Bulk Import** gomb.
 2. A megnyíló fájlválasztóban jelöld ki az összes `.glb` fájlt a `roblox/models` mappából (Ctrl+A), **Open**.
 3. A Studio megmutatja az importálandókat – **Import**. Várd meg, amíg mind átkerül (néhány perc). Minden gép egy `Model` lesz a Workspace-ben, a fájl nevével (`f16`, `fa18` …).
-4. **Window → Command Bar**, ide: `require(game.ServerScriptService.Server.Tools).adoptJets()` – ez a modelleket a `ReplicatedStorage.JetModels` mappába teszi, onnan veszi a játék.
-5. **File → Save.** (A `Tools.listJets()` kiírja, melyik gép van meg.)
+4. **File → Save.** Ennyi: a játék **induláskor magától** átteszi a Workspace-ben talált gépeket a `ReplicatedStorage.JetModels` mappába (a Window → Output kiírja: „N jet model(s) moved … (now X of 16)”). Ha kézzel akarod: **Window → Command Bar**, ide: `require(game.ServerScriptService.Server.Tools).adoptJets()`, majd Save. (A `Tools.listJets()` kiírja, melyik gép van meg.)
+5. A játékban a **Hangár → Gép** fülön látszik, melyik gép van importálva; a menüben a választott géphez tartozó modell repül.
 Ha egy gép hátrafelé repül: `Config.JetModelFlip = { f16 = true }`.
 Az újragenerálás: `python3 tools/make_roblox_models.py` (kell hozzá: `pip install trimesh fast-simplification scipy numpy pillow`).
 

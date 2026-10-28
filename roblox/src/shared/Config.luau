@@ -34,6 +34,22 @@ Config.Products = {
 -- Game Pass (Creator Dashboard > Monetization > Passes): the coins you earn count double
 Config.DoubleCoinsPass = 0
 
+-- the daily reward (a streak: every day in a row pays more, the 7th day the most; a missed day starts again) and the daily missions (three
+-- a day, picked from this list; progress comes from the career counters of the match)
+Config.Daily = { 200, 300, 400, 500, 700, 900, 1500 }
+Config.PremiumBonus = 0.25          -- Roblox Premium members earn this much more coins
+Config.Missions = {
+	{ id = "kills5", text = "Lőj le 5 ellenséget", stat = "kills", target = 5, reward = 400 },
+	{ id = "kills12", text = "Lőj le 12 ellenséget", stat = "kills", target = 12, reward = 900 },
+	{ id = "gun3", text = "Lőj le 3 ellenséget gépágyúval", stat = "gunKills", target = 3, reward = 600 },
+	{ id = "ir3", text = "Lőj le 3 ellenséget AIM-9M-mel", stat = "irKills", target = 3, reward = 500 },
+	{ id = "arh3", text = "Lőj le 3 ellenséget AIM-120A-val", stat = "arhKills", target = 3, reward = 500 },
+	{ id = "duel2", text = "Nyerj 2 párbajt", stat = "duelWins", target = 2, reward = 700 },
+	{ id = "fly10", text = "Repülj 10 percet", stat = "flightTime", target = 600, reward = 500 },
+	{ id = "fly25", text = "Repülj 25 percet", stat = "flightTime", target = 1500, reward = 1000 },
+	{ id = "crash2", text = "Csalj 2 ellenséget a földbe (manőverkill)", stat = "crashKills", target = 2, reward = 800 },
+}
+
 Config.Rooms = {
 	MaxPlayers = 20,      -- the most people in one room (hangar group)
 	NameMax = 24,
