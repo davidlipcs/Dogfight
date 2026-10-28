@@ -3,6 +3,7 @@ import { THREE, V, add, mul, xform, b64ToArray, DEG, clamp, rng, copy } from './
 import { RUNWAY_LENGTH, RUNWAY_WIDTH, TAXIWAY_OFFSET, TAXIWAY_WIDTH, APRON } from './terrain.js';
 import { buildProc, procInfo, DESIGNS } from './proc.js';
 import { GoogleTiles } from './gtiles.js';
+import { patterned } from './skinart.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.55, 0.70).normalize();
 const HORIZON = new THREE.Color(0.72, 0.81, 0.90);
@@ -253,6 +254,14 @@ export class Models {
       if (!m.map || m.transparent) return m;
       const c = m.clone();
       c.color.setHex(skin.color); c.emissive.setHex(skin.emissive);
+      if (skin.pattern && m.map && m.map.image) {              // pattern over the factory paint texture (skinart.js)
+        try {
+          const t = new THREE.CanvasTexture(patterned(m.map.image, skin));
+          t.flipY = m.map.flipY; t.wrapS = m.map.wrapS; t.wrapT = m.map.wrapT; t.anisotropy = m.map.anisotropy;
+          if ('colorSpace' in m.map) t.colorSpace = m.map.colorSpace; else t.encoding = m.map.encoding;
+          c.map = t;
+        } catch (e) { /* a texture that cannot be drawn keeps the plain tint */ }
+      }
       if (skin.metal !== null) { c.metalness = skin.metal; c.metalnessMap = null; c.envMapIntensity = 0.35 + skin.metal; }
       if (skin.rough !== null) { c.roughness = skin.rough; c.roughnessMap = null; }
       return c;

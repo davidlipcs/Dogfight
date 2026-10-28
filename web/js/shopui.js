@@ -1,10 +1,12 @@
 // The hangar screen: jets, paint, engine-room upgrades, mods, intel on the enemy types and the save file.
-import { SKINS, UPGRADES, MODS, PLANES, exportSave, importSave } from './hangar.js';
+import { SKINS, PILOT_SKINS, UPGRADES, MODS, PLANES, exportSave, importSave } from './hangar.js';
+import { RARITY } from './skins.js';
+import { swatch, pilotSvg } from './skinart.js';
 import { AIRCRAFT, BANDITS, TRAINERS, PLANE_GROUPS } from './specs.js';
 
 const $ = (id) => document.getElementById(id);
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
-const TABS = [['planes', 'Gépek'], ['skins', 'Festések'], ['upgrades', 'Fejlesztések'], ['mods', 'Módok'], ['intel', 'Hírszerzés'], ['save', 'Mentés']];
+const TABS = [['planes', 'Gépek'], ['skins', 'Festések'], ['pilots', 'Pilóta'], ['upgrades', 'Fejlesztések'], ['mods', 'Módok'], ['intel', 'Hírszerzés'], ['save', 'Mentés']];
 
 // what to know about each enemy type, worked out from its numbers (the "reverse engineering" of the intel cards)
 const TIPS = {
@@ -26,7 +28,7 @@ const TIPS = {
 
 export class HangarUI {
   constructor(hangar, career, onChange) {
-    this.h = hangar; this.career = career; this.onChange = onChange; this.tab = 'planes';
+    this.h = hangar; this.career = career; this.onChange = onChange; this.tab = 'planes'; this.flt = { skins: 'all', pilots: 'all' }; this.own = { skins: false, pilots: false };
     $('hangar-close').addEventListener('click', () => this.close());
     $('hangar').addEventListener('keydown', (e) => { if (e.key === 'Escape') this.close(); });
     hangar.onChange(() => this.render());
@@ -55,6 +57,10 @@ export class HangarUI {
     $('hangar-msg').textContent = '';
     if (kind === 'buy-skin') { if (!h.buySkin(id)) fail(); }
     else if (kind === 'equip-skin') h.equipSkin(id);
+    else if (kind === 'buy-pilot') { if (!h.buyPilot(id)) fail(); }
+    else if (kind === 'equip-pilot') h.equipPilot(id === '-' ? null : id);
+    else if (kind === 'flt') { const [t, v] = id.split(':'); this.flt[t] = v; }
+    else if (kind === 'own') { this.own[id] = !this.own[id]; }
     else if (kind === 'buy-up') { if (!h.buyUpgrade(id)) fail(); }
     else if (kind === 'buy-mod') { if (!h.buyMod(id)) fail(); }
     else if (kind === 'toggle-mod') h.toggleMod(id);
@@ -69,14 +75,31 @@ export class HangarUI {
       PLANE_GROUPS.map(([g, keys]) => keys.map((k) => { const s = all[k];
         return `<div class="item"><b>${s.name}</b><span>${g} · ${s.engines} hajtómű, ${Math.round(s.thrustAb / 1000)} kN · ${s.gMax} G · ${Math.round(s.emptyMass).toLocaleString('hu-HU')} kg</span>${this.price(0, true)}</div>`; }).join('')).join('') + '</div>';
   }
+  // the filter row of the skins and pilot outfits: by rarity, and "only what I own"
+  filters(tab, list, owned) {
+    const total = list.length, have = list.filter((x) => owned[x.id]).length;
+    const chip = (v, label) => `<button type="button" class="small${this.flt[tab] === v ? ' primary' : ''}" data-act="flt" data-id="${tab}:${v}">${label}</button>`;
+    return `<div class="buttons" style="margin:6px 0">${chip('all', `Mind (${total})`)}${Object.keys(RARITY).map((k) => chip(k, `${RARITY[k]} (${list.filter((x) => x.rarity === k).length})`)).join('')}`
+      + `<button type="button" class="small${this.own[tab] ? ' primary' : ''}" data-act="own" data-id="${tab}">Megvan: ${have}</button></div>`;
+  }
   skins() {
-    const d = this.h.data;
-    return `<p class="hint">A festés a te gépedre kerül (minden típusra). Az ellenség marad gyári szürke.</p><div class="grid">` + SKINS.map((s) => {
+    const d = this.h.data, list = SKINS.filter((s) => (this.flt.skins === 'all' || s.rarity === this.flt.skins) && (!this.own.skins || d.skins[s.id]));
+    return `<p class="hint">A festés a te gépedre kerül (minden típusra). Az ellenség marad gyári szürke. ${SKINS.length} festés van.</p>` + this.filters('skins', SKINS, d.skins) + '<div class="grid">' + list.map((s) => {
       const own = !!d.skins[s.id], on = d.skin === s.id;
-      const sw = `<i class="swatch" style="background:linear-gradient(135deg, ${hex(s.color)}, #5b6670 140%);${s.metal > 0.7 ? 'box-shadow:inset 0 0 8px #fff8' : ''}"></i>`;
+      const sw = `<img class="swatch" alt="" src="${swatch(s)}" style="width:56px;height:56px;border-radius:6px;object-fit:cover">`;
       const btn = on ? '<em>felszerelve</em>' : own ? `<button type="button" class="small" data-act="equip-skin" data-id="${s.id}">Felszerelem</button>`
         : `<button type="button" class="small primary" data-act="buy-skin" data-id="${s.id}">Megveszem</button>`;
-      return `<div class="item${on ? ' sel' : ''}">${sw}<b>${s.name}</b>${this.price(s.price, own)}${btn}</div>`;
+      return `<div class="item${on ? ' sel' : ''}">${sw}<b>${s.name}</b>${s.rarity ? `<span class="rar rar-${s.rarity}">${RARITY[s.rarity]}</span>` : ''}${this.price(s.price, own)}${btn}</div>`;
+    }).join('') + '</div>';
+  }
+  pilots() {
+    const d = this.h.data, list = PILOT_SKINS.filter((s) => (this.flt.pilots === 'all' || s.rarity === this.flt.pilots) && (!this.own.pilots || d.pilots[s.id]));
+    const none = `<div class="item${d.pilot ? '' : ' sel'}"><b>Alap egyenruha</b>${d.pilot ? '<button type="button" class="small" data-act="equip-pilot" data-id="-">Felszerelem</button>' : '<em>felszerelve</em>'}</div>`;
+    return `<p class="hint">A pilótád: sisak, ruha, napellenző. A rádió portréján és a katapultált pilótán látszik. ${PILOT_SKINS.length} öltözet van.</p>` + this.filters('pilots', PILOT_SKINS, d.pilots) + '<div class="grid">' + none + list.map((s) => {
+      const own = !!d.pilots[s.id], on = d.pilot === s.id;
+      const btn = on ? '<em>felszerelve</em>' : own ? `<button type="button" class="small" data-act="equip-pilot" data-id="${s.id}">Felszerelem</button>`
+        : `<button type="button" class="small primary" data-act="buy-pilot" data-id="${s.id}">Megveszem</button>`;
+      return `<div class="item${on ? ' sel' : ''}"><img alt="" src="${pilotSvg(s)}" style="width:64px;height:75px;border-radius:6px"><b>${s.name}</b><span class="rar rar-${s.rarity}">${RARITY[s.rarity]}</span>${this.price(s.price, own)}${btn}</div>`;
     }).join('') + '</div>';
   }
   upgrades() {

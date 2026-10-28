@@ -4,6 +4,7 @@
 // same kind of object the Blender models give (moving parts, gear legs, reference points), in the game's
 // frame: +Y forward, +Z up, +X right, the origin at the centre of gravity.
 import { THREE, V } from './util.js';
+import { drawPattern } from './skinart.js';
 
 const DEG = Math.PI / 180;
 
@@ -316,6 +317,14 @@ function topUV(g, scale = 0.12) {
 }
 
 const cache = {};
+// a hangar scheme's pattern as a texture (white ground, the pattern over it): the paint tint multiplies it
+function skinTex(skin) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 512;
+  const ctx = cv.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 512, 512);
+  drawPattern(ctx, 512, 512, skin.pattern, skin.pcolor, skin.id.length * 7919);
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
 // build one jet.  skin: a hangar paint scheme (tint) for the player, or null
 export function buildProc(key, env, skin = null) {
   const d = DESIGNS[key];
@@ -327,7 +336,7 @@ export function buildProc(key, env, skin = null) {
     const common = { side: THREE.DoubleSide, envMap: env, envMapIntensity: 0.4 };
     const metal = skin && skin.metal !== null && skin.id !== 'factory' ? skin.metal : 0.25, rough = skin && skin.rough !== null && skin.id !== 'factory' ? skin.rough : 0.55;
     const paint = new THREE.MeshStandardMaterial({ ...common, color: paintCol, metalness: metal, roughness: rough,
-      map: d.camo && (!skin || skin.id === 'factory') ? camoTex(d.paint, d.accent) : null, emissive: skin ? skin.emissive : 0 });
+      map: d.camo && (!skin || skin.id === 'factory') ? camoTex(d.paint, d.accent) : skin && skin.pattern ? skinTex(skin) : null, emissive: skin ? skin.emissive : 0 });
     return {
       paint, accent: new THREE.MeshStandardMaterial({ ...common, color: accentCol, metalness: metal, roughness: rough }),
       dark: new THREE.MeshStandardMaterial({ ...common, color: 0x1d2024, metalness: 0.2, roughness: 0.8 }),

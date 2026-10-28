@@ -21,6 +21,7 @@ import { keyEditor, buildMap } from './keys.js';
 import { Race, fmtTime } from './race.js';
 import { CanyonRun, LIMIT as CANYON_LIMIT } from './canyon.js';
 import { TubeRun } from './tube.js';
+import { pilotSvg } from './skinart.js';
 import { link, NetPilot, snapshot } from './net.js';
 import { Carrier, DECK_Z } from './carrier.js';
 import { buildWorld, PLACES } from './world.js';
@@ -59,10 +60,10 @@ const $ = (id) => document.getElementById(id);
 // the ejection seat and the parachute: a short rocket ride up, the drogue, then the canopy opens and the pilot
 // comes down at ~6 m/s, drifting with the wind; on the ground the canopy collapses
 class Parachute {
-  constructor(scene, pos, vel, up) {
+  constructor(scene, pos, vel, up, outfit = null) {
     this.scene = scene; this.pos = pos.clone(); this.vel = vel.clone().addScaledVector(up, 45); this.t = 0; this.landed = false;
     const g = this.group = new THREE.Group();
-    const canopyMat = new THREE.MeshStandardMaterial({ color: 0xd8742c, roughness: 0.8, side: THREE.DoubleSide });
+    const canopyMat = new THREE.MeshStandardMaterial({ color: outfit ? outfit.accent : 0xd8742c, roughness: 0.8, side: THREE.DoubleSide });
     const white = new THREE.MeshStandardMaterial({ color: 0xe9e6dc, roughness: 0.8, side: THREE.DoubleSide });
     const canopy = this.canopy = new THREE.Group();
     for (let k = 0; k < 12; k++) {                     // gores in two colours
@@ -75,9 +76,9 @@ class Parachute {
     lines.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
     canopy.userData.lines = new THREE.LineSegments(lines, new THREE.LineBasicMaterial({ color: 0x333333 }));
     const body = new THREE.Mesh(new THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.25, 1.1, 4, 8) : new THREE.CylinderGeometry(0.25, 0.25, 1.4, 8),
-      new THREE.MeshStandardMaterial({ color: 0x4a5236, roughness: 0.9 }));
+      new THREE.MeshStandardMaterial({ color: outfit ? outfit.suit : 0x4a5236, roughness: 0.9 }));
     body.rotation.x = Math.PI / 2; body.position.z = 0.1;
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), new THREE.MeshStandardMaterial({ color: 0x55595c, roughness: 0.4 }));
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8), new THREE.MeshStandardMaterial({ color: outfit ? outfit.helmet : 0x55595c, roughness: 0.4 }));
     helmet.position.z = 0.95;
     g.add(body, helmet, canopy, canopy.userData.lines);
     canopy.visible = false; canopy.userData.lines.visible = false;
@@ -456,7 +457,9 @@ class Game {
     // the radio: everything open in free play; the career gives only the calls taught so far
     this.radio.unlocked = this.opts.radioUnlocked || null;
     this.radio.callsign = this.opts.callsign || 'VIPER 1-1';
-    this.radio.portraits = this.opts.portraits || {};
+    this.radio.portraits = { ...(this.opts.portraits || {}) };
+    const ps = this.hangar.pilotSkin;
+    if (ps) this.radio.portraits.you = pilotSvg(ps);                  // the bought flight outfit shows on the radio portrait
     this.radio.cleared = { taxi: false, takeoff: false, land: false };
     this.nav.zone = { ...ZONE, engage: ZONE.r + ENGAGE_MARGIN }; this.state.missionLine = '';
     if (this.player) this.player.autopilot = null;
@@ -920,7 +923,7 @@ class Game {
     p.pilot = { think() {}, fly() { p.controls.pitch = 0.05; p.controls.roll = 0; p.controls.yaw = 0; } };
     p.trigger = false;
     if (this.chute) this.chute.dispose();
-    this.chute = new Parachute(this.view.scene, p.pos, p.vel, p.fm.up);
+    this.chute = new Parachute(this.view.scene, p.pos, p.vel, p.fm.up, this.hangar.pilotSkin);
     const st = this.state;
     st.banner = 'KATAPULTÁLTÁL!';
     st.subBanner = `A pilóta életben van – a ${p.spec.short} elveszett  ·  ${this.touchOn() ? 'Koppints' : 'Enter'}: új gép`;

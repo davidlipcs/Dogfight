@@ -88,6 +88,11 @@ A főmenüben a **Küldetés** sorban a **Kanyonfutam**: alacsony repülés egy 
 - **Barátommal** sor a főmenüben: szerver nélkül, böngészőből böngészőbe (WebRTC). Az egyik játékos **Szobát nyit** és elküldi a kapott kódot (Messenger, Discord…), a másik **Csatlakozik**: beilleszti, és visszaküld egy válaszkódot; ezt a házigazda beilleszti, és összekapcsol titeket. Utána bármelyikőtök indítja a gyűrű-, kanyon-, alagútfutamot vagy a közös repülést, a másiknál ugyanaz indul el (ugyanazon a térképen). Egymást ghost-gépként látjátok, távolsággal („BARÁT 53 m”), a futamokban látod a barátod állását, a célban pedig az eredmény-összehasonlítást.
 - Egyelőre nincs közös harc (lövés, rakéta): mindenki a saját fizikáját repüli, és csak a pozíciók mennek át. Ha az internet mögött szigorú tűzfal / mobilháló van, a kapcsolat nem mindig jön létre.
 
+## 200 skin és Roblox változat
+
+- A **Hangár → Festések** fülön 110 festés (100 új: terepminták, fémek, neon, zászlók, állatok, szezonális, sci-fi, ritkaságok szerint szűrhető), a **Pilóta** fülön 100 öltözet (sisak, ruha, napellenző, matrica). A minták a gép saját festéstextúrájára kerülnek; a pilóta a rádió portréján és a katapultált pilótán látszik. A katalógus forrása: `tools/skins_data.py` → `python3 tools/gen_skins.py`.
+- **Roblox:** a `roblox/` mappában egy Rojo-kompatibilis Luau-projekt (hullámos légiharc, barátokkal, érmék, shop Robux-csomagokkal). Lásd `roblox/README.md`: kipróbálás Studióban, Robux-termékek, feltöltés (Open Cloud).
+
 ## Légtérrendészet: nem mindig ugyanaz a feladat
 
 A hadnagyi Baltikum-bevetések változatosak. Az AWACS csak „ismeretlen gépet” jelent, hogy mi van valójában, az azonosítás után derül ki:

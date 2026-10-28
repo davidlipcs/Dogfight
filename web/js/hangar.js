@@ -1,6 +1,7 @@
 // Hangar: credits earned in the air (1 point = 1 credit) and what they buy - a new jet, paint schemes,
 // engine-room upgrades and mods.  Kept in this browser like the career; the whole save (settings, menu,
 // career, hangar) can be downloaded to a file and loaded back on another device.
+import { AIR_SKINS, PILOT_SKINS } from './skins.js';
 const KEY = 'dogfight-hangar';
 export const START_CREDITS = 500;
 
@@ -16,7 +17,10 @@ export const SKINS = [
   { id: 'purple', name: 'Lila villám', price: 800, color: 0xb490f0, emissive: 0x0c0418, metal: null, rough: 0.45 },
   { id: 'gold', name: 'Arany ász', price: 2500, color: 0xf0c860, emissive: 0x2a1800, metal: 0.85, rough: 0.28 },
   { id: 'chrome', name: 'Króm', price: 3000, color: 0xe8eef4, emissive: 0x101418, metal: 1.0, rough: 0.12 },
+  ...AIR_SKINS,                                    // 100 more (skins.js): patterns, metals, neon, flags, animals ...
 ];
+// the pilot's flight outfits (helmet, suit, visor): 100 of them (skins.js); the default is no outfit at all
+export { PILOT_SKINS };
 
 // engine room: each level costs more; what a level gives is in `per`
 export const UPGRADES = [
@@ -38,13 +42,14 @@ export const MODS = [
 // every jet is free now (the F-15 ACTIVE used to cost 3000: who bought it gets the credits back)
 export const PLANES = [];
 
-const FRESH = () => ({ credits: START_CREDITS, earned: 0, skins: { factory: true }, skin: 'factory', upgrades: {}, mods: {}, modsOn: {}, planes: {} });
+const FRESH = () => ({ credits: START_CREDITS, earned: 0, skins: { factory: true }, skin: 'factory', pilots: {}, pilot: null, upgrades: {}, mods: {}, modsOn: {}, planes: {} });
 
 export class Hangar {
   constructor() {
     this.data = FRESH();
     try { Object.assign(this.data, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* private mode */ }
     this.listeners = [];
+    if (!this.data.pilots) this.data.pilots = {};
     if (this.data.planes && this.data.planes.f15a && !this.data.refunded) { this.data.credits += 3000; this.data.refunded = true; this.save(); }
   }
   save() {
@@ -63,6 +68,13 @@ export class Hangar {
     if (!s || this.data.skins[id] || !this.spend(s.price)) return false;
     this.data.skins[id] = true; this.data.skin = id; this.save(); return true;
   }
+  buyPilot(id) {
+    const s = PILOT_SKINS.find((x) => x.id === id);
+    if (!s || this.data.pilots[id] || !this.spend(s.price)) return false;
+    this.data.pilots[id] = true; this.data.pilot = id; this.save(); return true;
+  }
+  equipPilot(id) { if (id === null || this.data.pilots[id]) { this.data.pilot = id; this.save(); } }
+  get pilotSkin() { return PILOT_SKINS.find((s) => s.id === this.data.pilot) || null; }
   equipSkin(id) { if (this.data.skins[id]) { this.data.skin = id; this.save(); } }
   level(id) { return this.data.upgrades[id] || 0; }
   buyUpgrade(id) {
