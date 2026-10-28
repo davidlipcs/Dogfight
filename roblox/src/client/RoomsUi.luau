@@ -105,7 +105,7 @@ local function myRoomSection()
 			Ui.button(rw, "Beülök", { Size = UDim2.new(0, 110, 0, 28), TextSize = 14, BackgroundColor3 = Ui.Green }, function()
 				local ok, m2 = remotes.JoinSeat:InvokeServer(st.userId)
 				say(m2, ok)
-				if ok and onSeat then onSeat() end
+				if ok and onSeat then onSeat(m2, st.userId) end
 			end)
 		end
 	end

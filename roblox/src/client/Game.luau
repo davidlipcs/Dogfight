@@ -55,6 +55,8 @@ local tutUi
 local sounds
 local mfdView
 local radioUi
+local wsoDead = 0
+local seatOpen = false
 
 function Game.init(r)
 	remotes = r
@@ -248,6 +250,7 @@ local function onKey(k)
 	if k == "h" or k == "F1" then Game.toggleHelp(); return end
 	if Game.paused then return end
 	local p = match.player
+	if k == "Enter" and match.wso then return end
 	if k == "Enter" then
 		if match.tutorial then match.tutorial:enter() else match:respawn(); if cam then cam:reset(match.player) end end
 		return
@@ -275,12 +278,14 @@ local function onKey(k)
 		hud:message("Bullet time: a Hangárban vehető meg (mod)", "info", 2, "bt")
 		return
 	end
+	if k == "t" and match.wso then match:wsoKey("t", SimMath.fwdOf(cam.orientation)); return end
 	if k == "t" then
 		-- lock the enemy closest to where you are looking (mouse aim, or free look)
 		local fwd = SimMath.fwdOf(cam.orientation)
 		match:onKey("t", fwd)
 		return
 	end
+	if match.wso then match:wsoKey(k, SimMath.fwdOf(cam.orientation)); return end
 	match:onKey(k)
 end
 
@@ -332,7 +337,9 @@ local function frame(dt)
 	local dx, dy = 0, 0
 	if not Game.paused then
 		dx, dy = input:takeDelta()
-		if p.alive and not p.ejected then
+		if match.wso then
+			cam:mouseDelta(dx, dy)                          -- the rear seat only looks round
+		elseif p.alive and not p.ejected then
 			Controls.apply(match, cam, input:snapshot(dx, dy), dt)
 		end
 	end
@@ -345,6 +352,13 @@ local function frame(dt)
 			netTimer = 1 / 20
 			remotes.Net:FireServer(netQueue)
 			netQueue = {}
+		end
+	end
+	if match.wso and session then
+		wsoDead = p.alive and 0 or wsoDead + dt
+		if session.pilotGone or wsoDead > 4 then
+			if hud then hud:message(session.pilotGone and "A pilóta kilépett" or "A gépet lelőtték", "warn", 3) end
+			task.defer(Game.stop)
 		end
 	end
 	for _, e in ipairs(events) do
@@ -408,6 +422,7 @@ end
 -- opts: as the menu of the browser game builds them (scenario, difficulty, enemies, enemyTypes, aircraft, loadout, mode, wingman, airStart)
 function Game.start(opts)
 	if Game.active or not terrainReady then return false end
+	if opts and opts.wsoOf and not (State.room and #State.room.members > 0) then return false end
 	Game.active = true
 	Game.paused = false
 	opts = opts or {}
@@ -415,6 +430,8 @@ function Game.start(opts)
 	local s = Game.settings
 	cam.sensitivity, cam.stickSens, cam.invertY, cam.baseFov = Camera.SENS_BASE * s.aim / 100, s.stick / 100, s.invert, s.fov
 	cam.fov = s.fov
+	if opts.wsoOf then cam.cockpit, cam.freeLook = true, true end
+	wsoDead = 0
 	if not canvas then canvas = GuiCanvas.new(player) end
 	canvas:setEnabled(true)
 	hud = HudLogic.new(canvas)
@@ -452,6 +469,7 @@ function Game.start(opts)
 			if ac.isPlayer then
 				local info = JetInfo[spec.model] or JetInfo.f16
 				cam.eye = V(info.eye[1], info.eye[2], info.eye[3])
+				if opts.wsoOf then cam.eye = V(info.eye[1], info.eye[2] - 1.3, info.eye[3] + 0.2) end      -- the rear seat
 				cam.panel = V(info.panel[1], info.panel[2], info.panel[3])
 				cam.panelFov = info.panelFov
 				cam:reset(ac)
@@ -464,6 +482,7 @@ function Game.start(opts)
 	local room = State.room
 	local myId = player.UserId
 	local inRoom = room ~= nil and #room.members > 0
+	local wso = opts.wsoOf ~= nil
 	if inRoom then
 		local team, slot = "A", 0
 		for i, m in ipairs(room.members) do
@@ -471,8 +490,13 @@ function Game.start(opts)
 		end
 		local pvp = room.mode == "pvp"
 		opts.scenario = pvp and "pvp" or "waves"
-		opts.netGuest = (not pvp) and room.host ~= myId
+		opts.netGuest = wso or ((not pvp) and room.host ~= myId)
 		opts.wingman = 0
+		if wso then
+			for _, m in ipairs(room.members) do
+				if m.userId == opts.wsoOf then team = m.team end
+			end
+		end
 		env.netTeam = pvp and (team == "A" and "blue" or "red") or "blue"
 		env.netSlot = slot
 	end
@@ -481,11 +505,19 @@ function Game.start(opts)
 		netQueue, netTimer = {}, 0
 		local bus = {
 			userId = myId, name = player.DisplayName, team = env.netTeam, clock = os.clock,
-			isHost = function() return State.room == nil or State.room.host == myId end,
+			isHost = function() return (not wso) and (State.room == nil or State.room.host == myId) end,
+			outfit = profile and profile.pilotOn or nil,
 			send = function(m) table.insert(netQueue, m) end,
 		}
 		session = Net.new(match, bus)
 		env.teamScore = function() return session.score end
+		env.wsoSend = function(a, k, tg) session:wsoSend(a, k, tg) end
+		if opts.twoSeat and not wso then
+			local pairsOut = {}
+			for n, key in pairs(opts.loadout or {}) do table.insert(pairsOut, { n, key }) end
+			seatOpen = true
+			task.spawn(function() remotes.OpenSeat:InvokeServer(true, opts.aircraft, pairsOut) end)
+		end
 		netConn = remotes.Net.OnClientEvent:Connect(function(from, batch)
 			if not session or typeof(batch) ~= "table" then return end
 			for _, m in batch do
@@ -520,6 +552,11 @@ function Game.stop()
 	if Game.wasInside and Game.onCockpit then Game.onCockpit(false) end
 	Game.wasInside = false
 	if view then view:destroy() end
+	if seatOpen then
+		seatOpen = false
+		task.spawn(function() remotes.OpenSeat:InvokeServer(false) end)
+	end
+	if match and match.wso then task.spawn(function() remotes.LeaveSeat:InvokeServer() end) end
 	if session then
 		session:leave()
 		if #netQueue > 0 then remotes.Net:FireServer(netQueue) end

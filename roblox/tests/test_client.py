@@ -241,6 +241,39 @@ run(HELPERS + """
     Game.stop()
 """, "radio")
 print("radio ok")
+run(HELPERS + """
+    -- the rear seat of a team mate's jet, then our own two-seat jet with the seat open
+    local C = M.service("StarterPlayer").StarterPlayerScripts.Client
+    local State = require(C.State)
+    local Game = require(C.Game)
+    local Menu = require(C.Menu)
+    local Rooms = require(M.service("ServerScriptService").Server.Rooms)
+    State.set({ id = 1, name = "t", mode = "coop", max = 4, host = 77, members = { { userId = 4242, name = "Teszt", team = "A" }, { userId = 77, name = "Pilóta", team = "A", host = true } }, seats = {} })
+    assert(Game.start({ wsoOf = 77, aircraft = "fa18", loadout = "default", scenario = "waves", enemies = 0, wingman = 0, airStart = true, mode = "arcade", difficulty = "normal", enemyTypes = { "f16" } }))
+    local net = M.service("ReplicatedStorage").Remotes.Net
+    local snap = { t = "s", p = { 100, 100, 4000 }, v = { 200, 0, 0 }, q = { 0, 0, 0, 1 }, c = { 0, 0, 0 }, e = 0.9, g = 0, hp = 100, al = 1, bn = 0, cr = 0, gn = 0, ej = 0, fl = 30, ld = "111111" }
+    for i = 1, 30 do net.__sig.OnClientEvent:Fire(77, { snap }); frames(6) end
+    local m = Game.match()
+    assert(m.wso and m.player.slave)
+    press("T", true); press("T", false); press("Space", true); press("Space", false); press("X", true); press("X", false)
+    press("One", true); press("One", false); press("Y", true); press("Y", false)
+    frames(60)
+    Game.stop()
+    State.set(nil)
+    -- the pilot side
+    State.set({ id = 2, name = "t", mode = "coop", max = 4, host = 4242, members = { { userId = 4242, name = "Teszt", team = "A", host = true } }, seats = {} })
+    Menu.state.two = true
+    clickText("INDULÁS A LEVEGŐBEN")
+    frames(120)
+    net.__sig.OnClientEvent:Fire(77, { { t = "wsohello", to = 4242, n = "Hátsó" } })
+    frames(30)
+    net.__sig.OnClientEvent:Fire(77, { { t = "wso", to = 4242, a = "flare" } })
+    frames(120)
+    Game.stop()
+    State.set(nil)
+    Menu.state.two = false
+""", "two-seat")
+print("two-seat ok")
 print('seconds', round(time.time() - t0, 1))
 w = dict(M.warnings.items()) if hasattr(M.warnings, 'items') else {}
 if w:

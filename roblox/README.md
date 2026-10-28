@@ -48,12 +48,12 @@ A játék **valódi méterekben** számol: a sziget 102 kilométer széles, a g�
 nem is tud ilyen közel látni. Ezért a **gépeket, a rakétákat és a füstöt nagyítva rajzoljuk** (`Config.ModelScale = 8`: a gép ~12 stud), a kamera távolságát is ugyanennyivel
 nagyítva. A repülés, a sebesség és minden számítás közben a valódi méterekben történik, a HUD is méterben és km-ben mutat. A látvány különbsége: más gépek távolról nagyobbnak látszanak, mint a böngészőben.
 
-## Szobák, csapatok, kétüléses gép
+## Szobák, csapatok, kétüléses gép, rádió
 
-* **Hangár-csoportok (szobák):** a lobbiban a *Szobák / Csapat* gombbal. Aki szobát nyit, megadja a nevét, a módját, és hogy **hányan jöhetnek még be** (összesen legfeljebb **20** fő, `Config.Rooms.MaxPlayers`); lehet **privát** is (4 jegyű kóddal lehet belépni, a listán nem látszik). A szobák egy szerveren belül élnek: mindenki csak a saját szobája gépeit, ellenségeit és rakétáit látja, és csak azok hatnak rá.
-* **Két mód:** *Együtt (AI)*: a szoba saját ellenség-hullámai ellen, közösen; *Csapatharc*: kék és piros csapat egymás ellen. A csapatot **mindenki maga váltja** (az „Átlépek ide” gombbal, repülés közben nem), **bármilyen eloszlásban** (akár 15 a 3 ellen). A pontot a kilőtt ellenfelek adják.
-* **Kétüléses F/A-18F:** a lobbiban az *Indulás* előtt válaszd a *Kétüléses* gépet. A csapattársak a szobák képernyőn a *Beülök* gombbal beülnek a **hátsó ülésre**: ott nem repülnek, hanem a gép rakétáit lövik (széles szögben), flare-t dobnak, és a **T**-vel jelölik a célpontot a pilótának (a pilóta zárása a jelöltet választja). A gép tulajdonosa repül és a gépágyút kezeli; a lelövésből a hátsó ülés fele annyi érmét kap. Ha a gépet lelövik, mindketten kiesnek. A két pilóta a saját öltözetét viseli, és a fülkében marad (senki sem lóg ki a gépből).
-* **Készség a Roblox oldalán:** a szerver játékos-létszámát (Max Players) a Creator Dashboardon állítsd 20-nál nagyobbra, ha több szoba is menjen egyszerre; a Roblox saját privát szerverei (VIP) is használhatók.
+* **Hangár-csoportok (szobák):** a lobbiban a *Szobák / Csapat* gombbal. Szobát nyitva megadod a nevét, a módját és hogy hányan jöhetnek még (összesen legfeljebb **20** fő); lehet **privát** is (4 jegyű kód). Mindenki a saját gépén repül, a többieket "szellemként" látja; a szoba nyitója futtatja az ellenséget.
+* **Két mód:** *Együtt (AI)* és *Csapatharc* (kék/piros, bármilyen eloszlásban; a csapatot mindenki maga váltja).
+* **Kétüléses gép:** a menüben az *Ülések* sorban válaszd a *Kétüléses (szobában)* lehetőséget, és indulj szobából. A csapattársak a Szobák képernyőn a *Beülök* gombbal ülnek a **hátsó ülésre**: nem repülnek, hanem **T** = célpont jelölése (a pilótának is látszik, az ő T-je előbb a jelöltre zár), **Y** = következő ellenség, **Space** = rakétaindítás a pilóta gépéről (széles szögben, zár nélkül), **X** = flare, **1/2** = fegyverválasztás, egérrel körülnéz. A hátsó ülés fele annyi érmét kap a lelövésért. A pilóta és a hátsó ülés is kiléphet; ha a pilótát lelövik, a hátsó ülés véget ér. *Nincs* külön hátsó-ülés modell az importált gépeken (a pilóta nem látja a hátsó ülésen ülőt).
+* **Rádió:** **I** = megnyílik a rádió-panel: írd be angolul a hívást (pl. `FOX TWO`, `SPLASH`, `BINGO`, `REQUEST PICTURE`, `COVER ME`), vagy kattints / nyomd meg a számot a listán. A másik oldal (torony, kísérő, AWACS) feliratban válaszol, a kísérő végrehajtja a parancsokat. Beszédfelismerés és beszédhang nincs (a Roblox nem tud).
 
 ## A napellenző üvege
 
@@ -80,7 +80,6 @@ Kontroller és telefon (érintő-joystick + gombok) is van.
 
 ## Ismert korlátok
 
-* A szobák, csapatok és a kétüléses gép leírása fent a régi, szerver-oldali változatra vonatkozik: az új, kliens-oldali játékban ezek még nincsenek átírva (a játék egyelőre egyjátékos).
-* Hiányzik: hordozó, karrier-mód, oktatás, rádió, a kabin 3D-s műszerfala (a kijelzők a képernyő alján vannak).
-* A pilóta kockákból épül (sisak, napellenző, oxigénmaszk, tömlő, hám, kesztyű), a pilótafülkében ülő pilótán és a hangár-előnézeten látszik (nincs avatar a repülés alatt).
-* PvP kikapcsolva (`Config.PvP`); a barátok együtt lőnek az ellenségre.
+* Még nincs: a karrier mód (helyette napi jutalom, napi küldetések és ranglista van), a kabin 3D-s műszerfala (a kijelzők a képernyő alján vannak).
+* A Roblox-oldalt (menü, kamera, HUD, hang, részecskék) nem lehetett valódi Studióban kipróbálni, csak egy utánzott Roblox-környezetben; az Output ablak kiírja a hibákat.
+* A pilóta kockákból épül, a pilótafülkében ülő pilótán és a hangár-előnézeten látszik.

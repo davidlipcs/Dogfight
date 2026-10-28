@@ -58,7 +58,23 @@ local function play(airStart, tutorial)
 end
 
 Lobby.init(remotes, { onPlay = play, onRooms = function() RoomsUi.toggle() end })
-RoomsUi.init(remotes, { onSeat = function() end })
+RoomsUi.init(remotes, { onSeat = function(seat, pilotId)
+	-- the rear seat of a team mate's jet: a match in which only the weapons are yours
+	if inMatch or typeof(seat) ~= "table" then return end
+	local layout = {}
+	for _, pair in ipairs(seat.lo or {}) do layout[pair[1]] = pair[2] end
+	local s = Menu.settings()
+	for k, v in pairs(s) do Game.settings[k] = v end
+	if profile then Game.setProfile(profile) end
+	RoomsUi.show(false)
+	Lobby.show(false)
+	inMatch = true
+	if not Game.start({ wsoOf = pilotId, aircraft = seat.a, loadout = next(layout) and layout or "default", scenario = "waves", enemies = 0, wingman = 0, airStart = true, mode = "arcade", difficulty = "normal", enemyTypes = { "f16" } }) then
+		inMatch = false
+		Lobby.show(true)
+		remotes.LeaveSeat:InvokeServer()
+	end
+end })
 Visor.init()
 
 remotes.RoomState.OnClientEvent:Connect(function(room)

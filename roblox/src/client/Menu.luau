@@ -14,7 +14,7 @@ for k, v in pairs(Specs.AIRCRAFT) do ALL[k] = v end
 for k, v in pairs(Specs.TRAINERS) do ALL[k] = v end
 
 Menu.state = {
-	scen = "waves", plane = "f16", arms = {}, foes = { f16 = true }, mode = "arcade", diff = "normal", wing = 0, enemies = 2,
+	scen = "waves", plane = "f16", arms = {}, foes = { f16 = true }, mode = "arcade", diff = "normal", wing = 0, two = false, enemies = 2,
 	aim = 60, stick = 60, invert = false, fov = 70, tod = "day", quality = "high",
 }
 local S = Menu.state
@@ -203,6 +203,9 @@ function Menu.build(parent)
 	body = nextRow("Kísérő")
 	choice(body, { { 0, "Nincs" }, { 1, "1 kísérőgép" } }, function(id) return S.wing == id end, function(id) S.wing = id end, 120)
 
+	body = nextRow("Ülések")
+	choice(body, { { false, "Együléses" }, { true, "Kétüléses (szobában)" } }, function(id) return S.two == id end, function(id) S.two = id end, 170)
+
 	body = nextRow("Ellenség")
 	stepper(body, function() return S.enemies end, function(v) S.enemies = v end, 1, 4, 1, function(v) return v .. " az első hullámban" end)
 
@@ -236,7 +239,7 @@ function Menu.opts(airStart)
 	if #foes == 0 then foes = { "f16" } end
 	return {
 		airStart = airStart == true, carrierStart = airStart == "carrier", difficulty = S.diff, enemies = S.enemies, mode = S.mode, aircraft = S.plane, enemyTypes = foes, loadout = layout,
-		tutorial = false, scenario = S.scen, wingman = S.wing,
+		tutorial = false, scenario = S.scen, wingman = S.wing, twoSeat = S.two == true,
 	}
 end
 function Menu.settings()
