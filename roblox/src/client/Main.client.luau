@@ -14,9 +14,11 @@ local RoomsUi = require(script.Parent.RoomsUi)
 local State = require(script.Parent.State)
 local Visibility = require(script.Parent.Visibility)
 local Wso = require(script.Parent.Wso)
+local Visor = require(script.Parent.Visor)
 
 local player = Players.LocalPlayer
 local remotes = Remotes.get()
+local profile = nil
 local state = "lobby"          -- lobby, launching, flying (pilot), wso (rear seat), dead
 
 local function goLobby()
@@ -75,6 +77,8 @@ end)
 Lobby.init(remotes, { onPlay = play, onRooms = function() RoomsUi.toggle() end })
 RoomsUi.init(remotes, { onSeat = function() end })
 Visibility.init()
+Visor.init()
+Flight.onCockpit = function(on) Visor.set(profile and profile.pilotOn, on) end
 
 remotes.Seat.OnClientEvent:Connect(onSeat)
 remotes.RoomState.OnClientEvent:Connect(function(room)
@@ -83,6 +87,7 @@ remotes.RoomState.OnClientEvent:Connect(function(room)
 end)
 remotes.Hud.OnClientEvent:Connect(function(d) Flight.markUid = d.markUid or 0 end)
 remotes.Profile.OnClientEvent:Connect(function(p)
+	profile = p
 	Hud.setProfile(p)
 	Lobby.setProfile(p)
 end)
@@ -102,6 +107,7 @@ task.spawn(function()
 		p = remotes.GetProfile:InvokeServer()
 		if not p then task.wait(0.5) end
 	until p
+	profile = p
 	Hud.setProfile(p)
 	Lobby.setProfile(p)
 end)

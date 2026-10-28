@@ -242,7 +242,7 @@ function Flight.init(r)
 		elseif k == Enum.KeyCode.M then mouseSteer = not mouseSteer
 		elseif k == Enum.KeyCode.X or k == Enum.KeyCode.ButtonX then fireMissile()
 		elseif k == Enum.KeyCode.G or k == Enum.KeyCode.ButtonB then remotes.Flare:FireServer()
-		elseif k == Enum.KeyCode.V or k == Enum.KeyCode.ButtonY then cockpit = not cockpit
+		elseif k == Enum.KeyCode.V or k == Enum.KeyCode.ButtonY then cockpit = not cockpit; if Flight.onCockpit then Flight.onCockpit(cockpit) end
 		elseif k == Enum.KeyCode.I then invertPitch = not invertPitch end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
@@ -271,12 +271,14 @@ end
 function Flight.stop()
 	active = false
 	firing = false
+	if cockpit and Flight.onCockpit then Flight.onCockpit(false) end
+	cockpit = false
 end
 
 function Flight.fireMissile() fireMissile() end
 function Flight.setFiring(v: boolean) firing = v end
 function Flight.flare() remotes.Flare:FireServer() end
-function Flight.toggleCockpit() cockpit = not cockpit end
+function Flight.toggleCockpit() cockpit = not cockpit; if Flight.onCockpit then Flight.onCockpit(cockpit) end end
 function Flight.isActive(): boolean return active end
 
 return Flight

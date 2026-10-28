@@ -147,7 +147,15 @@ function JetBuilder.addPilot(model: Model, outfitId: string?, seat: number, twoS
 	local skinTone = Color3.fromRGB(199, 154, 118)
 	local webbing = Color3.fromRGB(38, 41, 45)
 	local rubber = Color3.fromRGB(40, 46, 42)
-	local sunVisor = (visor.R * 0.299 + visor.G * 0.587 + visor.B * 0.114) < 0.27
+	-- the visor is real glass: how much light it lets through (visorT) decides how opaque it looks and, from the
+	-- cockpit view, how dark the world is (Visor.luau); mirror = a reflective coating
+	local T = outfit and outfit.visorT or 0.97
+	local sunVisor = T <= 0.5
+	local mirror = outfit and outfit.mirror == true
+	local pressure = outfit and outfit.pressure == true
+	local helmet2 = outfit and color(outfit.helmet2) or helmet
+	local suit2 = outfit and color(outfit.suit2) or suit
+	local glove = outfit and color(outfit.glove) or Color3.fromRGB(30, 31, 34)
 	local px = 0
 	local pz = not twoSeat and -2.75 or (seat == 1 and -3.85 or -0.95)       -- the seat
 	local function piece(name: string, size: Vector3, cf: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?)
@@ -160,20 +168,47 @@ function JetBuilder.addPilot(model: Model, outfitId: string?, seat: number, twoS
 	piece("PilotTorso", Vector3.new(1.0, 1.15, 0.78), CFrame.new(px, 0.95, pz) * CFrame.Angles(0, 0, math.rad(90)), suit, Enum.Material.Fabric, Enum.PartType.Cylinder)
 	piece("PilotShoulders", Vector3.new(1.45, 0.62, 0.7), CFrame.new(px, 1.34, pz), suit, Enum.Material.Fabric, Enum.PartType.Ball)
 	piece("PilotNeck", Vector3.new(0.4, 0.36, 0.36), CFrame.new(px, 1.6, pz - 0.05) * CFrame.Angles(0, 0, math.rad(90)), skinTone, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-	piece("PilotHelmet", Vector3.new(0.86, 0.94, 0.98), CFrame.new(px, 1.93, pz - 0.08), helmet, Enum.Material.SmoothPlastic, Enum.PartType.Ball).Reflectance = 0.12
+	local hs = pressure and 1.18 or 1
+	piece("PilotHelmet", Vector3.new(0.86 * hs, 0.94 * hs, 0.98 * hs), CFrame.new(px, 1.93, pz - 0.08), helmet, Enum.Material.SmoothPlastic, Enum.PartType.Ball).Reflectance = 0.12
+	if pressure then
+		local ring = piece("PilotNeckRing", Vector3.new(0.14, 0.78, 0.78), CFrame.new(px, 1.6, pz - 0.05) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(170, 178, 186), Enum.Material.Metal, Enum.PartType.Cylinder)
+		ring.Reflectance = 0.3
+	end
+	-- the helmet's livery: thin parts over the shell in the second colour
+	local pat = outfit and outfit.pattern
+	local top = 2.42 * (pressure and 1.04 or 1)
+	if pat == "stripes" or pat == "tricolor" or pat == "trim" or pat == "wolf" then
+		piece("LiveryStripe", Vector3.new(0.14, 0.05, 0.86 * hs), CFrame.new(px, top, pz - 0.08), pat == "tricolor" and Color3.fromRGB(205, 42, 62) or helmet2, Enum.Material.SmoothPlastic)
+		if pat == "tricolor" then
+			piece("LiveryStripe", Vector3.new(0.14, 0.05, 0.86), CFrame.new(px + 0.14, top - 0.02, pz - 0.08), Color3.fromRGB(46, 138, 74), Enum.Material.SmoothPlastic)
+			piece("LiveryStripe", Vector3.new(0.14, 0.05, 0.86), CFrame.new(px - 0.14, top - 0.02, pz - 0.08), Color3.fromRGB(244, 244, 240), Enum.Material.SmoothPlastic)
+		elseif pat == "wolf" then
+			for _, s in { -1, 1 } do piece("LiveryStripe", Vector3.new(0.1, 0.05, 0.8), CFrame.new(px + s * 0.2, top - 0.05, pz - 0.08) * CFrame.Angles(0, 0, s * math.rad(-14)), helmet2, Enum.Material.SmoothPlastic) end
+		end
+	elseif pat == "chevron" then
+		for k = 0, 2 do
+			for _, s in { -1, 1 } do piece("LiveryV", Vector3.new(0.5, 0.05, 0.1), CFrame.new(px + s * 0.22, top - 0.07 - k * 0.0, pz - 0.38 + k * 0.22) * CFrame.Angles(0, s * math.rad(35), 0), helmet2, Enum.Material.SmoothPlastic) end
+		end
+	elseif pat == "camo" or pat == "circuit" then
+		local rnd = Random.new(7)
+		for _ = 1, 7 do
+			piece("LiveryBlot", Vector3.new(0.18 + rnd:NextNumber() * 0.2, 0.05, 0.18 + rnd:NextNumber() * 0.2), CFrame.new(px + rnd:NextNumber(-0.3, 0.3), top - 0.06, pz - 0.08 + rnd:NextNumber(-0.35, 0.35)) * CFrame.Angles(0, rnd:NextNumber() * 3, 0), helmet2, pat == "circuit" and Enum.Material.Neon or Enum.Material.SmoothPlastic)
+		end
+	end
 	if not sunVisor then
 		piece("PilotFace", Vector3.new(0.58, 0.42, 0.4), CFrame.new(px, 1.88, pz - 0.5), skinTone, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	end
-	local lens = piece("PilotVisor", Vector3.new(0.78, 0.5, 0.52), CFrame.new(px, 1.93, pz - 0.42), visor, sunVisor and Enum.Material.Glass or Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	lens.Transparency = sunVisor and 0 or 0.45
-	lens.Reflectance = 0.25
+	local lens = piece("PilotVisor", Vector3.new(0.78 * hs, 0.5 * hs, 0.52 * hs), CFrame.new(px, 1.93, pz - 0.42 * hs), visor, Enum.Material.Glass, Enum.PartType.Ball)
+	lens.Transparency = math.clamp(T - 0.05, 0, 0.9)               -- clear glass: see-through, dark glass: opaque
+	lens.Reflectance = mirror and 0.65 or 0.2
 	piece("PilotMask", Vector3.new(0.46, 0.34, 0.34), CFrame.new(px, 1.74, pz - 0.58), rubber, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	piece("PilotHose", Vector3.new(0.1, 0.1, 1.0), CFrame.new(px - 0.28, 1.38, pz - 0.5) * CFrame.Angles(math.rad(-48), math.rad(14), 0), rubber, Enum.Material.SmoothPlastic)
 	for _, s in { -1, 1 } do
 		piece("PilotEar", Vector3.new(0.14, 0.4, 0.4), CFrame.new(px + s * 0.43, 1.9, pz - 0.05), Color3.fromRGB(44, 48, 54), Enum.Material.Metal, Enum.PartType.Cylinder)
+		piece("PilotYoke", Vector3.new(0.42, 0.1, 0.5), CFrame.new(px + s * 0.4, 1.3, pz) * CFrame.Angles(0, 0, s * math.rad(-25)), suit2, Enum.Material.Fabric)
 		piece("PilotStrap", Vector3.new(0.22, 1.0, 0.05), CFrame.new(px + s * 0.34, 1.05, pz - 0.38) * CFrame.Angles(0, 0, s * math.rad(-10)), webbing, Enum.Material.Fabric)
 		piece("PilotArm", Vector3.new(0.3, 0.3, 1.05), CFrame.new(px + s * 0.6, 0.85, pz - 0.5) * CFrame.Angles(math.rad(-25), s * math.rad(-6), 0), suit, Enum.Material.Fabric)
-		piece("PilotGlove", Vector3.new(0.34, 0.34, 0.34), CFrame.new(px + s * 0.56, 0.7, pz - 1.0), Color3.fromRGB(30, 31, 34), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		piece("PilotGlove", Vector3.new(0.34, 0.34, 0.34), CFrame.new(px + s * 0.56, 0.7, pz - 1.0), glove, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	end
 	piece("PilotBuckle", Vector3.new(0.26, 0.2, 0.06), CFrame.new(px, 1.0, pz - 0.4), Color3.fromRGB(176, 182, 190), Enum.Material.Metal)
 	piece("PilotChestStrap", Vector3.new(0.9, 0.1, 0.05), CFrame.new(px, 1.0, pz - 0.39), webbing, Enum.Material.Fabric)

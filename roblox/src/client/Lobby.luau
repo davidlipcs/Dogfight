@@ -77,7 +77,8 @@ local function card(skin, isPilot: boolean)
 	local f = Ui.make("Frame", { BackgroundColor3 = Ui.Panel, BorderSizePixel = 0, Parent = listFrame }, { Ui.corner(8), Ui.make("UIStroke", { Color = Ui.RarityColor[skin.rarity], Thickness = worn(isPilot, id) and 3 or 1 }) })
 	swatchFor(skin, isPilot, f)
 	Ui.label(f, skin.name, { Position = UDim2.new(0, 8, 0, 68), Size = UDim2.new(1, -16, 0, 18), TextSize = 14, Font = Enum.Font.GothamBold })
-	Ui.label(f, Catalog.Rarity[skin.rarity], { Position = UDim2.new(0, 8, 0, 86), Size = UDim2.new(1, -16, 0, 14), TextSize = 12, TextColor3 = Ui.RarityColor[skin.rarity] })
+	local extra = isPilot and string.format(" · üveg %d%%%s", math.floor((skin.visorT or 1) * 100), skin.mirror and " tükör" or "") or ""
+	Ui.label(f, Catalog.Rarity[skin.rarity] .. extra, { Position = UDim2.new(0, 8, 0, 86), Size = UDim2.new(1, -16, 0, 14), TextSize = 12, TextColor3 = Ui.RarityColor[skin.rarity] })
 	local isOwned = owned(isPilot, id)
 	local label = worn(isPilot, id) and "Viseled" or isOwned and "Felszerel" or (tostring(skin.price) .. " érme")
 	local b = Ui.button(f, label, { Position = UDim2.new(0, 8, 0, 106), Size = UDim2.new(1, -16, 0, 30), TextSize = 14,

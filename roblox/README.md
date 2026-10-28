@@ -1,7 +1,7 @@
 # Dogfight Plus – Roblox változat
 
 A böngészős játék Roblox-os testvére: **hullámokban támadó ellenséges vadászok**, gépágyú, rakéta, flare, **barátokkal közös égbolt**
-(a Roblox saját szerverein, bárki csatlakozhat), érmék és egy **shop 100 gép-festéssel és 100 pilóta-öltözettel**.
+(a Roblox saját szerverein, bárki csatlakozhat), érmék és egy **shop 100 gép-festéssel és 10 kidolgozott pilóta-öltözettel**.
 A kód Luau, Rojo-kompatibilis. **Fontos:** ebben a környezetben nincs Roblox Studio, ezért a kódot itt nem lehetett lefuttatni, csak a
 szintaxisát ellenőriztem; az első Studio-s próbán várhatók apróbb hibák (a Studio Output ablaka kiírja őket).
 
@@ -9,7 +9,7 @@ szintaxisát ellenőriztem; az első Studio-s próbán várhatók apróbb hibák
 
 | Hely | Mit csinál |
 |---|---|
-| `src/shared/Catalog.luau` | a 100 + 100 skin (**generált**: `python3 tools/gen_skins.py`, forrása `tools/skins_data.py` – ugyanez hajtja a böngészős játékot is) |
+| `src/shared/Catalog.luau` | a 100 gép-festés és a 10 pilóta-öltözet (**generált**: `python3 tools/gen_skins.py`, forrása `tools/skins_data.py` – ugyanez hajtja a böngészős játékot is) |
 | `src/shared/Config.luau` | minden hangolható szám: érmék, fegyverek, ellenség, Robux-csomagok |
 | `src/shared/JetBuilder.luau` | a gép és a pilóta felépítése kockákból (nincs mit feltölteni), a festés mintájával |
 | `src/server/` | `Main` (indítás), `World` (sziget), `Combat` (lövés, rakéta, flare, sebzés), `Enemies` (AI és hullámok), `Data` (mentés DataStore-ral), `Shop` (vásárlás, Robux) |
@@ -27,6 +27,10 @@ Studióban az ellenőrzéshez kapcsold be: Game Settings → Security → *Enabl
 * **Két mód:** *Együtt (AI)*: a szoba saját ellenség-hullámai ellen, közösen; *Csapatharc*: kék és piros csapat egymás ellen. A csapatot **mindenki maga váltja** (az „Átlépek ide” gombbal, repülés közben nem), **bármilyen eloszlásban** (akár 15 a 3 ellen). A pontot a kilőtt ellenfelek adják.
 * **Kétüléses F/A-18F:** a lobbiban az *Indulás* előtt válaszd a *Kétüléses* gépet. A csapattársak a szobák képernyőn a *Beülök* gombbal beülnek a **hátsó ülésre**: ott nem repülnek, hanem a gép rakétáit lövik (széles szögben), flare-t dobnak, és a **T**-vel jelölik a célpontot a pilótának (a pilóta zárása a jelöltet választja). A gép tulajdonosa repül és a gépágyút kezeli; a lelövésből a hátsó ülés fele annyi érmét kap. Ha a gépet lelövik, mindketten kiesnek. A két pilóta a saját öltözetét viseli, és a fülkében marad (senki sem lóg ki a gépből).
 * **Készség a Roblox oldalán:** a szerver játékos-létszámát (Max Players) a Creator Dashboardon állítsd 20-nál nagyobbra, ha több szoba is menjen egyszerre; a Roblox saját privát szerverei (VIP) is használhatók.
+
+## A napellenző üvege
+
+A pilóta-öltözetek napellenzője valódi üveg (`visorT` = fényáteresztés, `visor` = árnyalat, `mirror` = tükörbevonat). Pilótafülke-nézetben (V) a `Visor.luau` a színével és sötétségével befolyásolja a képet (színkorrekció + sötét perem); a tiszta üveg nem változtat semmin, a legsötétebb is csak 75%-ig sötétít.
 
 ## Irányítás
 

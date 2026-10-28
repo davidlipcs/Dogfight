@@ -1008,7 +1008,7 @@ export class SceneView {
     this.scene.add(root);
     v = { root, outside, stores, flames, strobes, lamps, type, trail: 0, phase: Math.random() * 1.2, layer: 0 };
     if (ac.isPlayer && type.eye) {                     // the pilot sits under the canopy (seen from outside)
-      v.pilot = buildPilot(ac.outfit);
+      v.pilot = buildPilot(ac.outfit, { env: this.models.env });
       v.pilot.position.copy(type.eye).add(type.cockpit === 'legacy' ? V(0, 1.12, -0.12) : V(0, -0.03, -0.04));      // the old F-16 model's eye is a little behind its seat
       root.add(v.pilot);
     }

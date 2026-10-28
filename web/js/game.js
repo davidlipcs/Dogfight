@@ -21,7 +21,7 @@ import { keyEditor, buildMap } from './keys.js';
 import { Race, fmtTime } from './race.js';
 import { CanyonRun, LIMIT as CANYON_LIMIT } from './canyon.js';
 import { TubeRun } from './tube.js';
-import { pilotSvg } from './skinart.js';
+import { pilotSvg, visorEffect } from './skinart.js';
 import { buildPilot } from './pilotmodel.js';
 import { link, NetPilot, snapshot } from './net.js';
 import { Carrier, DECK_Z } from './carrier.js';
@@ -992,6 +992,7 @@ class Game {
     this.updateFollow(sdt);
     this.cam.update(sdt, this.player);
     this.view.cockpitView = this.cam.cockpit && this.player.alive && !this.cam.follow;
+    this.updateVisor();
     this.view.update(sdt, this.player);
     // the cockpit displays of the player's jet (drawn only while they can be seen)
     const nav = this.nav;
@@ -1227,6 +1228,20 @@ class Game {
     if (this.scenario === 'duel') return `PÁRBAJ · győzelem ${st.duelWins} · vereség ${st.duelLosses}${st.duelStreak > 1 ? ` · ${st.duelStreak} egymás után` : ''}`;
     if (this.scenario === 'survival') return `TÚLÉLÉS · egy életed van · rekord: ${this.career.data.bestSurvival || 0}. hullám`;
     return this.wingman ? `KÍSÉRŐ: ${this.wingman.alive ? 'a levegőben' : 'lelőtték, a következő hullámmal visszajön'}` : '';
+  }
+  // the visor of the bought flight outfit is real glass: from the cockpit everything is seen through its tint
+  // (darker, coloured, with a dark rim); a clear visor changes nothing
+  updateVisor() {
+    const el = this.visorEl || (this.visorEl = document.getElementById('visorfx'));
+    if (!el) return;
+    const eff = this.view.cockpitView && !this.walking ? visorEffect(this.hangar.pilotSkin) : null;
+    const key = eff ? this.hangar.data.pilot : '';
+    if (key === this._visorKey) return;
+    this._visorKey = key;
+    if (!eff) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.backgroundColor = eff.mul;
+    el.style.backgroundImage = `radial-gradient(ellipse at 50% 46%, transparent 52%, rgba(0,0,0,${eff.rim}) 100%)`;
   }
   touchOn() { return this.touchMode === 'on' || (this.touchMode === 'auto' && touchDevice()); }
   touchTap(act) {

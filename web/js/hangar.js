@@ -50,6 +50,11 @@ export class Hangar {
     try { Object.assign(this.data, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* private mode */ }
     this.listeners = [];
     if (!this.data.pilots) this.data.pilots = {};
+    // the pilot outfits were reduced to ten: whoever had one of the old ones gets credits for it
+    for (const id of Object.keys(this.data.pilots)) {
+      if (!PILOT_SKINS.some((s) => s.id === id)) { delete this.data.pilots[id]; this.data.credits += 1000; this.data.pilotRefund = true; }
+    }
+    if (this.data.pilot && !PILOT_SKINS.some((s) => s.id === this.data.pilot)) this.data.pilot = null;
     if (this.data.planes && this.data.planes.f15a && !this.data.refunded) { this.data.credits += 3000; this.data.refunded = true; this.save(); }
   }
   save() {

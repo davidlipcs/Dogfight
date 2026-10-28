@@ -90,7 +90,7 @@ A főmenüben a **Küldetés** sorban a **Kanyonfutam**: alacsony repülés egy 
 
 ## 200 skin és Roblox változat
 
-- A **Hangár → Festések** fülön 110 festés (100 új: terepminták, fémek, neon, zászlók, állatok, szezonális, sci-fi, ritkaságok szerint szűrhető), a **Pilóta** fülön 100 öltözet (sisak, ruha, napellenző, matrica). A minták a gép saját festéstextúrájára kerülnek; a pilóta a rádió portréján és a katapultált pilótán látszik. A katalógus forrása: `tools/skins_data.py` → `python3 tools/gen_skins.py`.
+- A **Hangár → Festések** fülön 110 festés (100 új: terepminták, fémek, neon, zászlók, állatok, szezonális, sci-fi, ritkaságok szerint szűrhető), a **Pilóta** fülön **10 kidolgozott öltözet** (sisak-festés, ruha, jelvények, hám, maszk). A napellenző **valódi üveg**: az árnyalata és a fényáteresztése a pilótafülke-nézetben (V) befolyásolja, mit látsz (a tiszta üveg semmit, a sötét/tükör/színes üveg elsötétíti és színezi a világot, sötét peremmel; legfeljebb 75%-ig, hogy játszható maradjon). A minták a gép saját festéstextúrájára kerülnek; a pilóta a rádió portréján, a fülkében és a katapultált pilótán látszik. A katalógus forrása: `tools/skins_data.py` → `python3 tools/gen_skins.py`.
 - **Roblox:** a `roblox/` mappában egy Rojo-kompatibilis Luau-projekt (hullámos légiharc, barátokkal, érmék, shop Robux-csomagokkal). Lásd `roblox/README.md`: kipróbálás Studióban, Robux-termékek, feltöltés (Open Cloud).
 
 ## Légtérrendészet: nem mindig ugyanaz a feladat

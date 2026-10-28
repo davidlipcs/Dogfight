@@ -94,12 +94,13 @@ export class HangarUI {
   }
   pilots() {
     const d = this.h.data, list = PILOT_SKINS.filter((s) => (this.flt.pilots === 'all' || s.rarity === this.flt.pilots) && (!this.own.pilots || d.pilots[s.id]));
-    const none = `<div class="item${d.pilot ? '' : ' sel'}"><b>Alap egyenruha</b>${d.pilot ? '<button type="button" class="small" data-act="equip-pilot" data-id="-">Felszerelem</button>' : '<em>felszerelve</em>'}</div>`;
-    return `<p class="hint">A pilótád: sisak, ruha, napellenző. A rádió portréján és a katapultált pilótán látszik. ${PILOT_SKINS.length} öltözet van.</p>` + this.filters('pilots', PILOT_SKINS, d.pilots) + '<div class="grid">' + none + list.map((s) => {
+    const none = `<div class="item${d.pilot ? '' : ' sel'}"><b>Alap egyenruha</b><span>Átlátszó napellenző, nincs színezés.</span>${d.pilot ? '<button type="button" class="small" data-act="equip-pilot" data-id="-">Felszerelem</button>' : '<em>felszerelve</em>'}</div>`;
+    const glass = (s) => `${s.mirror ? 'tükörbevonatú ' : ''}üveg · fényáteresztés ${Math.round(s.visorT * 100)}%`;
+    return `<p class="hint">Tíz kidolgozott repülő-öltözet. A napellenző valódi üveg: a pilótafülke-nézetben (V) a színe és sötétsége befolyásolja, mit látsz. A rádió portréján és a katapultált pilótán is látszik. Ha a megvett öltözeted: ${PILOT_SKINS.length} van.</p>` + this.filters('pilots', PILOT_SKINS, d.pilots) + '<div class="grid">' + none + list.map((s) => {
       const own = !!d.pilots[s.id], on = d.pilot === s.id;
       const btn = on ? '<em>felszerelve</em>' : own ? `<button type="button" class="small" data-act="equip-pilot" data-id="${s.id}">Felszerelem</button>`
         : `<button type="button" class="small primary" data-act="buy-pilot" data-id="${s.id}">Megveszem</button>`;
-      return `<div class="item${on ? ' sel' : ''}"><img alt="" src="${pilotSvg(s)}" style="width:64px;height:75px;border-radius:6px"><b>${s.name}</b><span class="rar rar-${s.rarity}">${RARITY[s.rarity]}</span>${this.price(s.price, own)}${btn}</div>`;
+      return `<div class="item big${on ? ' sel' : ''}" style="display:grid;grid-template-columns:120px 1fr;gap:6px 12px"><img alt="" src="${pilotSvg(s)}" style="width:120px;height:140px;border-radius:8px;grid-row:span 4"><div><b>${s.name}</b> <span class="rar rar-${s.rarity}">${RARITY[s.rarity]}</span></div><span>${s.desc}</span><span style="display:flex;align-items:center;gap:8px"><i style="width:18px;height:18px;border-radius:50%;background:${hex(s.visor)};border:1px solid #fff6;display:inline-block"></i>${glass(s)}</span><div>${this.price(s.price, own)} ${btn}</div></div>`;
     }).join('') + '</div>';
   }
   upgrades() {
