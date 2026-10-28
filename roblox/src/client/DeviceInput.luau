@@ -148,7 +148,7 @@ end
 
 -- the mouse travel since the last call, in pixels
 function DeviceInput:takeDelta()
-	if not self.enabled then return 0, 0 end
+	if not self.enabled or not self.listening then return 0, 0 end
 	local d = UserInputService:GetMouseDelta()
 	return d.X, d.Y
 end

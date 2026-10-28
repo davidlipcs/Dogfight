@@ -261,6 +261,8 @@ M.IMT.__newindex = function(t, k, v)
 	if not KNOWN[k] and not EVENTS[k] and string.sub(k, 1, 2) ~= "__" then warn_("unknown property " .. tostring(k) .. " set on " .. t.__class) end
 	if k == "CFrame" and t.__class ~= "Camera" then t.__p.Position = v.Position end
 	t.__p[k] = v
+	local chg = rawget(t, '__chg')
+	if chg and chg[k] then chg[k]:Fire() end
 end
 M.IMT.__tostring = function(t) return t.__class .. ":" .. tostring(t.__p.Name or "") end
 
@@ -306,6 +308,9 @@ methods.IsKeyDown = function() return false end
 methods.GetMouseLocation = function() return v2(640, 360) end
 methods.SetCoreGuiEnabled = function() end
 methods.Clear = function() end
+methods.GetPropertyChangedSignal = function(o, k) local c = rawget(o, '__chg'); if not c then c = {}; rawset(o, '__chg', c) end; if not c[k] then c[k] = newSignal() end return c[k] end
+methods.CaptureFocus = function(o) o.__focused = true end
+methods.ReleaseFocus = function(o) o.__focused = false end
 methods.FillCylinder = function() end
 methods.FillBall = function() end
 methods.FillBlock = function() end

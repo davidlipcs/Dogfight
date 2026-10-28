@@ -11,6 +11,7 @@ local Race = require(script.Parent.Race)
 local Career = require(script.Parent.Career)
 local Tutorial = require(script.Parent.Tutorial)
 local CarrierLib = require(script.Parent.Carrier)
+local Radio = require(script.Parent.Radio)
 local V, add, sub, mul, len, norm, copy, clamp, DEG = M.V, M.add, M.sub, M.mul, M.len, M.norm, M.copy, M.clamp, M.DEG
 local atan2, rng = M.atan2, M.rng
 local abs = math.abs
@@ -60,7 +61,7 @@ function G.new(opts, env)
 	self.hangar = env.hangar or { pilotSkin = nil, skin = nil, modOn = function() return false end, upgraded = function(_, s) return s end, earn = noop }
 	self.hud = env.hud or { message = noop, popup = noop, showMedal = noop }
 	self.sounds = env.sounds or { play = noop }
-	self.radio = env.radio or { say = noop, event = noop }
+	self.radio = env.radio or Radio.new(self)
 	self.clock = env.clock or os.clock
 	self.state = G.freshState()
 	self.threats, self.hitBy = {}, {}
@@ -102,6 +103,7 @@ end
 -- ---------------------------------------------------------------- spawning
 function Match:spawnPlayer()
 	local w, terrain = self.world, self.terrain
+	if self.radio.reset then self.radio:reset() end
 	if self.player then
 		local keep = {}
 		for _, a in ipairs(w.aircraft) do if a ~= self.player then keep[#keep + 1] = a end end
@@ -439,6 +441,7 @@ function Match:ejectHandle()
 	st.subBanner = "A pilóta életben van – a " .. p.spec.short .. " elveszett  ·  Enter: új gép"
 	self.sounds:play("eject")
 	self.radio:say("you", (self.opts.callsign or "VIPER 1-1") .. ", EJECTING, EJECTING!")
+	self.radio:say("awacs", (self.opts.callsign or "VIPER 1-1") .. ", Magic copies, good chute. Rescue is on the way.", 4.5)
 	self.career.data.ejections = (self.career.data.ejections or 0) + 1
 	if self.env.onEject then self.env.onEject(p) end
 end
@@ -491,6 +494,7 @@ function Match:update(dt)
 		for _, m in ipairs(self.player.rwr.incoming) do self.threats[m.missile] = true end
 		if self.tutorial then self.tutorial:update(dt) end
 		self:gameFlow(dt)
+		if self.radio.update then self.radio:update(dt) end
 	end
 	local events = self.world:drainEvents()
 	for _, e in ipairs(events) do

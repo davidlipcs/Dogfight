@@ -27,6 +27,7 @@ local Env = require(script.Parent.Env)
 local Sounds = require(script.Parent.Sounds)
 local MfdView = require(script.Parent.MfdView)
 local TutorialUi = require(script.Parent.TutorialUi)
+local RadioUi = require(script.Parent.RadioUi)
 local State = require(script.Parent.State)
 local Net = require(Shared.game.Net)
 
@@ -53,6 +54,7 @@ local session, netQueue, netConn, netTimer
 local tutUi
 local sounds
 local mfdView
+local radioUi
 
 function Game.init(r)
 	remotes = r
@@ -250,6 +252,7 @@ local function onKey(k)
 		if match.tutorial then match.tutorial:enter() else match:respawn(); if cam then cam:reset(match.player) end end
 		return
 	end
+	if k == "i" then if radioUi then radioUi:toggle() end; return end
 	if k == "m" then hud.markers = not hud.markers; return end
 	if k == "eject" then match:ejectHandle(); return end
 	if k == "u" then
@@ -385,6 +388,7 @@ local function frame(dt)
 		tutUi:destroy()
 		tutUi = nil
 	end
+	if radioUi then radioUi:update(match.radio, Game.paused) end
 	st.raceTarget = match.race and match.race.target and match.race.target.c or nil
 	local meatball = nil
 	hud:update(dt, match.player, match.world, { position = cam.position, orientation = cam.orientation, fov = cam.fov }, cam, st, w, h)
@@ -415,6 +419,8 @@ function Game.start(opts)
 	canvas:setEnabled(true)
 	hud = HudLogic.new(canvas)
 	input = input or DeviceInput.new()
+	input.listening = true
+	radioUi = RadioUi.new(input)
 	input.onPress = onKey
 	input.onWheel = function(dir) if match and not Game.paused then match:cycleWeapon(dir) end end
 	local hangar = makeHangar()
@@ -523,6 +529,7 @@ function Game.stop()
 	if sounds then sounds:stopAll(); sounds:destroy(); sounds = nil end
 	if mfdView then mfdView:destroy(); mfdView = nil end
 	if tutUi then tutUi:destroy(); tutUi = nil end
+	if radioUi then radioUi:destroy(); radioUi = nil end
 	match, view, hud, cam = nil, nil, nil, nil
 	local c = workspace.CurrentCamera
 	c.CameraType = Enum.CameraType.Scriptable

@@ -213,6 +213,34 @@ run(HELPERS + """
     clickText("Ma már átvetted")
 """, "daily reward")
 print("daily ok")
+run(HELPERS + """
+    -- the radio: the I key opens the panel, a typed call goes out, the wingman answers
+    local Game = require(M.service("StarterPlayer").StarterPlayerScripts.Client.Game)
+    clickText("INDULÁS A LEVEGŐBEN")
+    frames(200)
+    local m = Game.match()
+    local gui = M.localPlayer.PlayerGui.RadioGui
+    assert(not gui.Panel.Visible)
+    press("I", true); press("I", false)
+    frames(5)
+    assert(gui.Panel.Visible, "the radio panel did not open")
+    assert(gui.Panel.Input.__focused, "the box has no focus")
+    gui.Panel.Input.Text = "tower, radio check"
+    gui.Panel.Input.__sig.FocusLost:Fire(true)
+    assert(not gui.Panel.Visible)
+    frames(240)
+    local text = gui.Log.Text
+    assert(string.find(text, "loud and clear", 1, true), "no answer in the log: " .. text)
+    -- a digit picks from the list
+    press("I", true); press("I", false); frames(3)
+    assert(gui.Panel.Visible, "the panel did not open the second time")
+    gui.Panel.Input.Text = "3"
+    assert(not gui.Panel.Visible, "the digit did not pick a call")
+    frames(240)
+    print(gui.Log.Text)
+    Game.stop()
+""", "radio")
+print("radio ok")
 print('seconds', round(time.time() - t0, 1))
 w = dict(M.warnings.items()) if hasattr(M.warnings, 'items') else {}
 if w:
