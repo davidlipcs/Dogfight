@@ -91,6 +91,10 @@ Config.Missile = { Damage = 60, Speed = 520, TurnRate = 1.9, Life = 9, Range = 3
 -- drawn bigger than that scale (Config.Scale), or they would be a stud or two long.
 Config.Island = { StudsPerMeter = 0.1, HeightScale = 0.1, Voxel = 4 }
 
+-- The aircraft, the missiles and their effects are drawn this many times bigger than the island's scale (a 15 m jet is 1.5 studs at
+-- 0.1 stud per metre): 8 times makes the F-16 12 studs long.  The chase camera and the distances in the HUD keep the true metres.
+Config.ModelScale = 8
+
 Config.World = {
 	Half = 5120,          -- the playing field is +-Half studs (the whole island: 102.4 km * 0.1)
 	SpawnHeight = 520,    -- above the air base

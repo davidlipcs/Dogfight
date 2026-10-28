@@ -23,6 +23,8 @@ local function fresh()
 		air = {}, pilot = {},            -- owned: [id] = true
 		airOn = nil, pilotOn = nil,      -- worn (nil = the factory paint / the plain flight suit)
 		jetOn = nil,                     -- the jet model (Config.JetModels key; nil = the one built from parts)
+		career = nil,                    -- the career table of the match (shared/game/Career.luau)
+		best = {},                       -- race records: race, canyon, tube, tubeLap (seconds)
 		receipts = {},
 		version = 1,
 	}
@@ -48,7 +50,7 @@ end
 function Data.view(player: Player)
 	local p = profiles[player]
 	if not p then return nil end
-	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true }
+	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true, career = p.career, best = p.best }
 end
 
 function Data.push(player: Player)
@@ -68,6 +70,7 @@ function Data.load(player: Player)
 	p.air = p.air or {}
 	p.pilot = p.pilot or {}
 	p.receipts = p.receipts or {}
+	p.best = p.best or {}
 	profiles[player] = p
 	loaded[player] = true
 	Data.push(player)
@@ -95,6 +98,61 @@ function Data.addCoins(player: Player, n: number)
 	Data.push(player)
 end
 
+-- coins earned in the match (the client plays the match, so the rate is limited: at most ~40 coins a second on average, 4000 at once)
+local earnBudget = {}      -- [Player] = { tokens, t }
+function Data.earn(player: Player, n: any)
+	local p = profiles[player]
+	if not p or typeof(n) ~= "number" or n ~= n or n <= 0 then return end
+	local now = os.clock()
+	local b = earnBudget[player]
+	if not b then b = { tokens = 4000, t = now }; earnBudget[player] = b end
+	b.tokens = math.min(4000, b.tokens + (now - b.t) * 40)
+	b.t = now
+	n = math.min(math.floor(n), b.tokens)
+	if n <= 0 then return end
+	b.tokens -= n
+	Data.addCoins(player, n)
+end
+
+local CAREER_KEYS = { "matches", "kills", "deaths", "gunKills", "irKills", "arhKills", "crashKills", "missilesFired", "flightTime", "bestScore", "bestWave",
+	"bestStreak", "bestSurvival", "duelWins", "ejections" }
+-- the career table, checked: numbers for the counters, a table of ids and times for the medals, a table of counts per plane / victim
+function Data.saveCareer(player: Player, t: any)
+	local p = profiles[player]
+	if not p or typeof(t) ~= "table" then return end
+	local c = {}
+	for _, k in CAREER_KEYS do
+		local v = t[k]
+		if typeof(v) == "number" and v == v and v >= 0 and v < 1e9 then c[k] = v end
+	end
+	for _, k in { "medals", "perPlane", "victims" } do
+		local src, dst = t[k], {}
+		if typeof(src) == "table" then
+			local n = 0
+			for id, v in src do
+				n += 1
+				if n > 80 then break end
+				if typeof(id) == "string" and #id < 24 and typeof(v) == "number" and v == v then dst[id] = v end
+			end
+		end
+		c[k] = dst
+	end
+	p.career = c
+	p.kills = c.kills or p.kills
+	p.best = p.best or {}
+end
+
+function Data.saveBest(player: Player, kind: any, time: any, lap: any)
+	local p = profiles[player]
+	if not p or typeof(time) ~= "number" or time ~= time or time <= 3 or time > 36000 then return end
+	if kind ~= "race" and kind ~= "canyon" and kind ~= "tube" then return end
+	p.best = p.best or {}
+	if p.best[kind] == nil or time < p.best[kind] then p.best[kind] = time end
+	if kind == "tube" and typeof(lap) == "number" and lap > 3 and lap < 36000 then
+		if p.best.tubeLap == nil or lap < p.best.tubeLap then p.best.tubeLap = lap end
+	end
+end
+
 function Data.spend(player: Player, price: number): boolean
 	local p = profiles[player]
 	if not p or p.coins < price then return false end
@@ -110,6 +168,7 @@ end
 
 function Data.start()
 	Players.PlayerRemoving:Connect(function(player)
+		earnBudget[player] = nil
 		Data.save(player)
 		profiles[player] = nil
 		loaded[player] = nil

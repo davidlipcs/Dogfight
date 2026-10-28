@@ -8,7 +8,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Catalog = require(Shared.Catalog)
 local Data = require(script.Parent.Data)
-local Combat = require(script.Parent.Combat)
 
 local Shop = {}
 
@@ -28,6 +27,7 @@ function Shop.onLoaded(player: Player)
 end
 
 function Shop.start(remotes)
+	Shop.remotes = remotes
 	remotes.GetProfile.OnServerInvoke = function(player)
 		return Data.view(player)
 	end
@@ -140,7 +140,7 @@ function Shop.start(remotes)
 				if pend and pend.rarity == rarity then
 					(pend.kind == "air" and p.air or p.pilot)[pend.id] = true
 					if pend.kind == "air" then p.airOn = pend.id else p.pilotOn = pend.id end
-					Combat.toast(player, "Megvetted: " .. pend.id, "good")
+					if Shop.remotes then Shop.remotes.Toast:FireClient(player, "Megvetted: " .. pend.id, "good") end
 				else
 					p.coins += Config.TierCoins[rarity]       -- the pick was lost (a restart): the same value in coins
 				end

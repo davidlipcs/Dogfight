@@ -45,8 +45,11 @@ def script_item(path, fname):
 def folder_item(name, directory):
     kids = ""
     for fname in sorted(os.listdir(directory)):
+        full = os.path.join(directory, fname)
         if fname.endswith(".luau"):
-            kids += script_item(os.path.join(directory, fname), fname)
+            kids += script_item(full, fname)
+        elif os.path.isdir(full):
+            kids += folder_item(fname, full)               # sim/, game/ ...
     return item("Folder", name, "", kids)
 
 

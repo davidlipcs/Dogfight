@@ -21,9 +21,22 @@ res = lua.execute(r'''
             clock = function() return os.clock() end }
         return env, msgs
     end
+    local Cam = require("Camera")
+    local Hud = require("Hud")
+    local Ctl = require("Controls")
+    local calls = 0
+    local canvas = setmetatable({}, { __index = function(_, k)
+        if k == "measure" then return function(_, s, size) calls = calls + 1; return #s * size * 0.6 end end
+        return function() calls = calls + 1 end end })
     local function run(name, opts, seconds, seed, autoplay)
         local env, msgs = mkenv(seed)
         local m = G.new(opts, env)
+        local cam = Cam.new(terrain)
+        cam:reset(m.player)
+        local hud = Hud.new(canvas)
+        hud.nav = m.nav
+        local held = {}
+        local input = { dx = 3, dy = -1, held = function(k) return held[k] == true end, mouse = { [0] = false, [1] = false, [2] = false } }
         if autoplay then
             local ai = AI.newAIPilot(m.player, "hard", nil)      -- the player's jet flown by an AI pilot
         end
@@ -38,10 +51,17 @@ res = lua.execute(r'''
                 end
             end
             m:update(dt)
+            cam.cockpit = (i // 1200) % 2 == 1
+            if i % 7 == 0 and not autoplay and m.player.alive then held.shift = (i % 14 == 0); Ctl.apply(m, cam, input, dt * 7) end
+            cam:update(dt, m.player)
+            if i % 3 == 0 then
+                for _, e in ipairs(m.events) do hud:handleEvent(e[1], e[2], m.player) end
+                hud:update(dt * 3, m.player, m.world, { position = cam.position, orientation = cam.orientation, fov = cam.fov }, cam, m.state, 1280, 720)
+            end
         end
         local st = m.state
         return { name = name, t = m.world.time, wave = st.wave, kills = st.kills, deaths = st.deaths, score = st.score, alive = m.player.alive,
-            nac = #m.world.aircraft, msgs = #msgs, last = msgs[#msgs] or "", mode = st.modeLine, race = m.race and m.race.next or -1, banner = st.banner }
+            nac = #m.world.aircraft, msgs = #msgs, calls = calls, last = msgs[#msgs] or "", mode = st.modeLine, race = m.race and m.race.next or -1, banner = st.banner }
     end
     log[#log + 1] = run("waves-air", { scenario = "waves", enemies = 2, difficulty = "normal", airStart = true, enemyTypes = { "f16", "su35" } }, 240, 7, true)
     log[#log + 1] = run("survival", { scenario = "survival", enemies = 3, difficulty = "hard", airStart = true, wingman = true }, 240, 8, true)

@@ -18,7 +18,8 @@ local camera = workspace.CurrentCamera
 local remotes, hooks
 local gui, shop, listFrame, coinsLabel, msgLabel
 local profile = { coins = 0, air = {}, pilot = {} }
-local tab, rarity, onlyOwned = "air", "all", false
+local tab, rarity, onlyOwned = "play", "all", false
+local menuHolder, chipsFrame
 local previewModel, previewFolder
 local tryAir, tryPilot = nil, nil     -- what the preview shows while you look at a skin
 local focus = "jet"                   -- "jet" or "pilot": where the camera looks
@@ -29,6 +30,7 @@ local gear = "single"               -- "single" or "twoseat" (the F/A-18F with a
 local gearButtons = {}
 local roomLabel = nil
 local State = require(script.Parent.State)
+local Menu = require(script.Parent.Menu)
 
 local function rebuildPreview()
 	if previewModel then previewModel:Destroy() end
@@ -36,7 +38,9 @@ local function rebuildPreview()
 	local pilot = tryPilot ~= nil and tryPilot or profile.pilotOn
 	if air == "" then air = nil end
 	if pilot == "" then pilot = nil end
-	previewModel = JetBuilder.build(air, pilot, false, gear == "twoseat", nil, profile.jetOn)
+	local Specs = require(Shared.sim.Specs)
+	local spec = Specs.AIRCRAFT[Menu.state.plane] or Specs.TRAINERS[Menu.state.plane] or Specs.AIRCRAFT.f16
+	previewModel = JetBuilder.build(air, pilot, false, false, nil, spec.model)
 	previewModel.PrimaryPart.Anchored = true
 	previewModel:PivotTo(CFrame.new(ORIGIN))
 	JetBuilder.setFlame(previewModel, 0.4)
@@ -118,6 +122,7 @@ local function render()
 		if c:IsA("GuiObject") then c:Destroy() end
 	end
 	coinsLabel.Text = string.format("%d érme", profile.coins or 0)
+	if tab == "play" then return end
 	if tab == "jet" then
 		local have = ReplicatedStorage:FindFirstChild("JetModels")
 		local any = false
@@ -171,6 +176,8 @@ local function render()
 	end
 end
 
+function Lobby.say(text, good) if msgLabel then say(text, good) end end
+
 function Lobby.paintGear()
 	for id, b in gearButtons do
 		b.BackgroundColor3 = id == gear and Ui.Amber or Color3.fromRGB(70, 86, 92)
@@ -207,17 +214,10 @@ function Lobby.init(r, h)
 	Ui.label(gui, "Légiharc a barátaiddal – lődd le a hullámokat, gyűjts érméket, öltöztesd a gépedet és a pilótádat.", { Position = UDim2.new(0, 30, 0, 78), Size = UDim2.new(0, 520, 0, 40), TextSize = 16, TextWrapped = true, TextColor3 = Color3.fromRGB(200, 215, 210) })
 	coinsLabel = Ui.label(gui, "", { Position = UDim2.new(0, 30, 0, 126), Size = UDim2.new(0, 300, 0, 30), TextSize = 24, TextColor3 = Ui.Amber, Font = Enum.Font.GothamBold })
 	roomLabel = Ui.label(gui, "", { Position = UDim2.new(0, 30, 0, 156), Size = UDim2.new(0, 520, 0, 20), TextSize = 15, TextColor3 = Color3.fromRGB(190, 210, 205) })
-	Ui.button(gui, "▶ INDULÁS", { Position = UDim2.new(0, 30, 0, 184), Size = UDim2.new(0, 220, 0, 56), TextSize = 24, BackgroundColor3 = Ui.Green }, function() hooks.onPlay(gear) end)
-	local function gearBtn(id, label, x)
-		local b = Ui.button(gui, label, { Position = UDim2.new(0, x, 0, 248), Size = UDim2.new(0, 150, 0, 34), TextSize = 14 })
-		gearButtons[id] = b
-		b.Activated:Connect(function() gear = id; Lobby.paintGear(); rebuildPreview() end)
-	end
-	gearBtn("single", "Együléses", 30)
-	gearBtn("twoseat", "Kétüléses (F/A-18F)", 186)
-	Lobby.paintGear()
-	Ui.button(gui, "👥 Szobák / Csapat", { Position = UDim2.new(0, 30, 0, 290), Size = UDim2.new(0, 220, 0, 44), TextSize = 18, BackgroundColor3 = Color3.fromRGB(150, 210, 255) }, function() hooks.onRooms() end)
-	local hang = Ui.button(gui, "🛒 Hangár / Shop", { Position = UDim2.new(0, 30, 0, 342), Size = UDim2.new(0, 220, 0, 44), TextSize = 18 }, function() shop.Visible = not shop.Visible end)
+	Ui.button(gui, "▶ INDULÁS A PÁLYÁRÓL", { Position = UDim2.new(0, 30, 0, 184), Size = UDim2.new(0, 280, 0, 52), TextSize = 21, BackgroundColor3 = Ui.Green }, function() hooks.onPlay(false) end)
+	Ui.button(gui, "✈ INDULÁS A LEVEGŐBEN", { Position = UDim2.new(0, 30, 0, 242), Size = UDim2.new(0, 280, 0, 44), TextSize = 17, BackgroundColor3 = Ui.Amber }, function() hooks.onPlay(true) end)
+	Ui.button(gui, "👥 Szobák / Csapat", { Position = UDim2.new(0, 30, 0, 296), Size = UDim2.new(0, 280, 0, 44), TextSize = 18, BackgroundColor3 = Color3.fromRGB(150, 210, 255) }, function() hooks.onRooms() end)
+	local hang = Ui.button(gui, "🛒 Hangár / Shop", { Position = UDim2.new(0, 30, 0, 348), Size = UDim2.new(0, 280, 0, 44), TextSize = 18 }, function() shop.Visible = not shop.Visible end)
 	hang.Name = "HangarButton"
 	Ui.label(gui, "Irányítás: egér + W/S/A/D · Szóköz tűz · X rakéta · G flare · H súgó (repülés közben)", { Position = UDim2.new(0, 30, 1, -40), Size = UDim2.new(0, 700, 0, 24), TextSize = 14, TextColor3 = Color3.fromRGB(170, 190, 185) })
 
@@ -225,22 +225,26 @@ function Lobby.init(r, h)
 	shop = Ui.make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -20, 0.5, 0), Size = UDim2.new(0, 560, 0.88, 0), BackgroundColor3 = Color3.fromRGB(14, 20, 24), BackgroundTransparency = 0.08, Visible = true, Parent = gui }, { Ui.corner(10), Ui.padding(12) })
 	local tabs = Ui.make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 38), Parent = shop }, { Ui.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }) })
 	local function tabBtn(id, label)
-		Ui.button(tabs, label, { Size = UDim2.new(0, 150, 0, 34), TextSize = 15, BackgroundColor3 = Color3.fromRGB(40, 56, 62), TextColor3 = Color3.new(1, 1, 1) }, function()
+		Ui.button(tabs, label, { Size = UDim2.new(0, 108, 0, 34), TextSize = 14, BackgroundColor3 = Color3.fromRGB(40, 56, 62), TextColor3 = Color3.new(1, 1, 1) }, function()
 			tab = id
 			tryAir, tryPilot = nil, nil
 			focus = id == "pilot" and "pilot" or "jet"
+			local play = id == "play"
+			menuHolder.Visible = play
+			chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = not play, not play, not play
 			rebuildPreview()
 			render()
 		end)
 	end
-	tabBtn("air", "Gép festése (" .. #Catalog.Air .. ")")
+	tabBtn("play", "Játék")
+	tabBtn("air", "Festés (" .. #Catalog.Air .. ")")
 	tabBtn("pilot", "Pilóta (" .. #Catalog.Pilot .. ")")
-	tabBtn("jet", "Gép típusa")
 	tabBtn("coins", "Érmék")
 	local chips = Ui.make("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 44), Size = UDim2.new(1, 0, 0, 30), Parent = shop }, { Ui.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }) })
 	local function chip(id, label)
 		Ui.button(chips, label, { Size = UDim2.new(0, 92, 0, 28), TextSize = 13, BackgroundColor3 = Ui.RarityColor[id] or Color3.fromRGB(200, 210, 215) }, function() rarity = id; render() end)
 	end
+	chipsFrame = chips
 	chip("all", "Mind"); chip("C", "Gyakori"); chip("R", "Ritka"); chip("E", "Epikus"); chip("L", "Legendás")
 	Ui.button(chips, "Csak a megvettek", { Size = UDim2.new(0, 120, 0, 28), TextSize = 13, BackgroundColor3 = Color3.fromRGB(80, 96, 100), TextColor3 = Color3.new(1, 1, 1) }, function() onlyOwned = not onlyOwned; render() end)
 	msgLabel = Ui.label(shop, "", { Position = UDim2.new(0, 0, 0, 78), Size = UDim2.new(1, 0, 0, 20), TextSize = 15 })
@@ -248,6 +252,10 @@ function Lobby.init(r, h)
 		Position = UDim2.new(0, 0, 0, 102), Size = UDim2.new(1, 0, 1, -102), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 8,
 		CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = shop,
 	}, { Ui.make("UIGridLayout", { CellSize = UDim2.new(0, 160, 0, 178), CellPadding = UDim2.new(0, 8, 0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	menuHolder = Ui.make("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 44), Size = UDim2.new(1, 0, 1, -44), Parent = shop })
+	Menu.build(menuHolder)
+	Menu.onPlane = function() if visible then rebuildPreview() end end
+	chipsFrame.Visible, msgLabel.Visible, listFrame.Visible = false, false, false
 	ready = true
 
 	-- the camera circles the preview jet while the lobby is up

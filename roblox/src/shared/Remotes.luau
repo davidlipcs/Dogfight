@@ -21,6 +21,9 @@ local EVENTS = {
 	"MissileAlert",   -- server -> client: true / false, a missile is coming at you
 	"Died",           -- server -> client: the jet is gone (reason)
 	"Profile",        -- server -> client: the coins, the owned and the equipped things
+	"Earn",           -- client -> server: coins earned in the match (the server limits the rate)
+	"SaveCareer",     -- client -> server: the career table (kills, medals ...)
+	"SaveBest",       -- client -> server: a race record (kind "race" / "canyon" / "tube", time, best lap)
 }
 local FUNCTIONS = {
 	"BuyAir", "BuyPilot", "EquipAir", "EquipPilot", "EquipJet",    -- shop: (id) -> ok, message
