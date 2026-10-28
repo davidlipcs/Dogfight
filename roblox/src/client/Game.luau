@@ -390,7 +390,7 @@ local function frame(dt)
 	-- the HUD
 	local w, h = canvas:size()
 	local showMfd = inside == true and not Game.paused
-	if mfdView then mfdView:update(dt, match.player, match.world, match.nav, showMfd, w, h, cam.panelLook) end
+	if mfdView then mfdView:update(dt, match.player, match.world, match.nav, showMfd, w, h, cam.panelLook, cam.eye, cam.panel) end
 	hud.hideScopes = showMfd
 	canvas:begin()
 	if match.race or match:scenario() == "free" then hud.nav = nil else hud.nav = match.nav end
@@ -447,6 +447,11 @@ function Game.start(opts)
 		career = career or Career.new(nil, nil),
 		hangar = hangar, hud = hud, cam = cam,
 		onTutorialEnd = function() task.defer(Game.stop) end,
+		onTeleport = function() if cam and match then cam:reset(match.player) end end,
+		onMissionEnd = function(result, m)
+			Game.lastMission = { result = result, mission = m }
+			task.defer(Game.stop)
+		end,
 		onKick = function(k) if cam then cam.kick = math.max(cam.kick or 0, k) end end,
 		onCatapultTow = function() if cam and match then cam:reset(match.player) end end,
 		onCatapultOff = function()
@@ -474,14 +479,14 @@ function Game.start(opts)
 				cam.panelFov = info.panelFov
 				cam:reset(ac)
 				if mfdView then mfdView:destroy() end
-				mfdView = MfdView.new(spec)
+				mfdView = MfdView.new(spec, Game.settings.panel3d ~= false)
 			end
 		end,
 	}
 	-- in a room: the others fly in the same sky (Net.luau)
 	local room = State.room
 	local myId = player.UserId
-	local inRoom = room ~= nil and #room.members > 0
+	local inRoom = room ~= nil and #room.members > 0 and not opts.mission
 	local wso = opts.wsoOf ~= nil
 	if inRoom then
 		local team, slot = "A", 0
@@ -501,6 +506,7 @@ function Game.start(opts)
 		env.netSlot = slot
 	end
 	match = Match.new(opts, env)
+	if opts.mission then cam:reset(match.player) end
 	if inRoom then
 		netQueue, netTimer = {}, 0
 		local bus = {
@@ -528,7 +534,7 @@ function Game.start(opts)
 	view = View.new(match.world)
 	view:buildCarrier(match.carrier)
 	view.quality = Game.settings.quality or "high"
-	Env.set(Game.settings.tod)
+	Env.set(opts.tod or Game.settings.tod)
 	match.env.onRestart = function() view:setWorld(match.world) end
 	missileCam, followM = false, nil
 	input:setEnabled(true)

@@ -15,7 +15,7 @@ for k, v in pairs(Specs.TRAINERS) do ALL[k] = v end
 
 Menu.state = {
 	scen = "waves", plane = "f16", arms = {}, foes = { f16 = true }, mode = "arcade", diff = "normal", wing = 0, two = false, enemies = 2,
-	aim = 60, stick = 60, invert = false, fov = 70, tod = "day", quality = "high",
+	aim = 60, stick = 60, invert = false, fov = 70, tod = "day", quality = "high", panel3d = true,
 }
 local S = Menu.state
 
@@ -206,6 +206,9 @@ function Menu.build(parent)
 	body = nextRow("Ülések")
 	choice(body, { { false, "Együléses" }, { true, "Kétüléses (szobában)" } }, function(id) return S.two == id end, function(id) S.two = id end, 170)
 
+	body = nextRow("Kabin kijelzők")
+	choice(body, { { true, "3D műszerfal" }, { false, "A képernyő alján" } }, function(id) return S.panel3d == id end, function(id) S.panel3d = id end, 150)
+
 	body = nextRow("Ellenség")
 	stepper(body, function() return S.enemies end, function(v) S.enemies = v end, 1, 4, 1, function(v) return v .. " az első hullámban" end)
 
@@ -243,7 +246,7 @@ function Menu.opts(airStart)
 	}
 end
 function Menu.settings()
-	return { aim = S.aim, stick = S.stick, invert = S.invert, fov = S.fov, tod = S.tod, quality = S.quality }
+	return { aim = S.aim, stick = S.stick, invert = S.invert, fov = S.fov, tod = S.tod, quality = S.quality, panel3d = S.panel3d }
 end
 
 return Menu

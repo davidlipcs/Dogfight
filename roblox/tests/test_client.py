@@ -274,6 +274,45 @@ run(HELPERS + """
     Menu.state.two = false
 """, "two-seat")
 print("two-seat ok")
+run(HELPERS + """
+    -- the war career: sign up, the briefing, a sortie that ends at once, the report, the politics
+    local C = M.service("StarterPlayer").StarterPlayerScripts.Client
+    local Game = require(C.Game)
+    local WarUi = require(C.WarUi)
+    local gui = M.localPlayer.PlayerGui
+    clickText("HÁBORÚ")
+    assert(gui.DogfightWar.Enabled)
+    clickText("Aláírom")
+    clickText("Parancs és eligazítás")
+    clickText("Indulás a bevetésre")
+    frames(120)
+    local m = Game.match()
+    assert(m and m.mission, "no mission started")
+    frames(300)
+    local t0 = os.clock()
+    while os.clock() - t0 < 0.4 do end                     -- (the server takes a save every 0.3 s at most)
+    m.mission:finish(true)
+    press("Return", true); press("Return", false)
+    for i = 1, 10 do M.pump(1 / 60) end
+    assert(not Game.active, "the match did not end")
+    assert(gui.DogfightWar.Enabled, "no report screen")
+    clickText("Vissza a központba")
+    local Data = require(M.service("ServerScriptService").Server.Data)
+    -- the war is saved on the server
+    local prof = Data.get(M.localPlayer)
+    assert(prof.warSave and prof.warSave.war.day >= 2, "the war was not saved")
+    -- rank 5: the politics
+    WarUi.show(true)
+    WarUi.screens.politics()
+    clickText("Szövetség ajánlása")
+    WarUi.screens.quick("baltic")
+    clickText("4 gép")
+    prof.warSave.war.over = { day = 5, player = true }
+    WarUi.screens.warEnd()
+    prof.warSave.war.over = false
+    WarUi.show(false)
+""", "war career")
+print("war career ok")
 print('seconds', round(time.time() - t0, 1))
 w = dict(M.warnings.items()) if hasattr(M.warnings, 'items') else {}
 if w:

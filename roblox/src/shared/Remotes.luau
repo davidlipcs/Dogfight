@@ -25,6 +25,7 @@ local EVENTS = {
 	"SaveCareer",     -- client -> server: the career table (kills, medals ...)
 	"Net",            -- both ways: a batch of messages of the match (shared/game/Net.luau); the server hands it to the others of the room
 	"SaveBest",       -- client -> server: a race record (kind "race" / "canyon" / "tube", time, best lap)
+	"SaveWar",        -- client -> server: the war career ({ war, pilot }, shared/game/Campaign.luau)
 }
 local FUNCTIONS = {
 	"BuyAir", "BuyPilot", "EquipAir", "EquipPilot", "EquipJet",    -- shop: (id) -> ok, message

@@ -14,6 +14,7 @@ local Menu = require(script.Parent.Menu)
 local RoomsUi = require(script.Parent.RoomsUi)
 local State = require(script.Parent.State)
 local Visor = require(script.Parent.Visor)
+local WarUi = require(script.Parent.WarUi)
 
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)      -- Tab is a flying key
@@ -30,6 +31,13 @@ Game.preload()
 
 local function goLobby()
 	inMatch = false
+	local done = Game.lastMission
+	Game.lastMission = nil
+	if done then
+		-- a sortie of the war career is over: the report
+		WarUi.afterMission(done.result, done.mission)
+		return
+	end
 	Lobby.show(true)
 end
 Game.onEnd = goLobby
@@ -57,7 +65,28 @@ local function play(airStart, tutorial)
 	end
 end
 
-Lobby.init(remotes, { onPlay = play, onRooms = function() RoomsUi.toggle() end })
+-- a sortie of the war career (WarUi): a match of scenario "mission"
+local function playMission(opts)
+	if inMatch then return end
+	if not Game.ready() then
+		Lobby.say("A sziget adatai még töltődnek…", false)
+		return
+	end
+	local s = Menu.settings()
+	for k, v in pairs(s) do Game.settings[k] = v end
+	if profile then Game.setProfile(profile) end
+	WarUi.show(false)
+	RoomsUi.show(false)
+	Lobby.show(false)
+	inMatch = true
+	if not Game.start(opts) then
+		inMatch = false
+		WarUi.show(true)
+	end
+end
+
+Lobby.init(remotes, { onPlay = play, onRooms = function() RoomsUi.toggle() end, onWar = function() WarUi.show(true) end })
+WarUi.init(remotes, { onFly = playMission })
 RoomsUi.init(remotes, { onSeat = function(seat, pilotId)
 	-- the rear seat of a team mate's jet: a match in which only the weapons are yours
 	if inMatch or typeof(seat) ~= "table" then return end
@@ -89,6 +118,7 @@ remotes.Profile.OnClientEvent:Connect(function(p)
 	profile = p
 	Game.setProfile(p)
 	Lobby.setProfile(p)
+	WarUi.setProfile(p)
 end)
 
 -- the profile (coins, skins): asked until the server has it
@@ -101,6 +131,7 @@ task.spawn(function()
 	profile = p
 	Game.setProfile(p)
 	Lobby.setProfile(p)
+	WarUi.setProfile(p)
 end)
 
 goLobby()

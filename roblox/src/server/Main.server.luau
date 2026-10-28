@@ -44,6 +44,13 @@ remotes.SaveCareer.OnServerEvent:Connect(function(player, t)
 	if p and p.career then Daily.reportScore(player, p.career.bestScore) end
 end)
 remotes.SaveBest.OnServerEvent:Connect(function(player, kind, time, lap) Data.saveBest(player, kind, time, lap) end)
+local warSaved = {}
+remotes.SaveWar.OnServerEvent:Connect(function(player, t)
+	local now = os.clock()
+	if warSaved[player] and now - warSaved[player] < 0.3 then return end
+	warSaved[player] = now
+	Data.saveWar(player, t)
+end)
 
 -- the match of a room: every message of a player goes to the others of the same room (the server only relays; each player is the
 -- authority of their own jet, the room's host of the enemies)
@@ -66,7 +73,7 @@ remotes.Net.OnServerEvent:Connect(function(player, batch)
 		if p ~= player then remotes.Net:FireClient(p, player.UserId, batch) end
 	end
 end)
-Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil end)
+Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil; warSaved[player] = nil end)
 
 game:GetService("RunService").Heartbeat:Connect(function(dt) Rooms.step(dt) end)
 

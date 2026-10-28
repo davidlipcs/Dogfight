@@ -221,6 +221,7 @@ function Lobby.init(r, h)
 	Ui.button(gui, "⚓ INDULÁS A HORDOZÓRÓL", { Position = UDim2.new(0, 30, 0, 292), Size = UDim2.new(0, 280, 0, 36), TextSize = 16, BackgroundColor3 = Color3.fromRGB(150, 210, 255) }, function() hooks.onPlay("carrier") end)
 	Ui.button(gui, "🎓 OKTATÁS", { Position = UDim2.new(0, 30, 0, 334), Size = UDim2.new(0, 280, 0, 36), TextSize = 17, BackgroundColor3 = Color3.fromRGB(190, 230, 255) }, function() hooks.onPlay(true, true) end)
 	Ui.button(gui, "👥 Szobák / Csapat", { Position = UDim2.new(0, 30, 0, 376), Size = UDim2.new(0, 280, 0, 40), TextSize = 18, BackgroundColor3 = Color3.fromRGB(150, 210, 255) }, function() hooks.onRooms() end)
+	Ui.button(gui, "🎖 HÁBORÚ (karrier)", { Position = UDim2.new(0, 30, 0, 472), Size = UDim2.new(0, 280, 0, 40), TextSize = 18, BackgroundColor3 = Color3.fromRGB(255, 150, 90) }, function() if hooks.onWar then hooks.onWar() end end)
 	local hang = Ui.button(gui, "🛒 Hangár / Shop", { Position = UDim2.new(0, 30, 0, 422), Size = UDim2.new(0, 280, 0, 44), TextSize = 18 }, function() shop.Visible = not shop.Visible end)
 	hang.Name = "HangarButton"
 	Ui.label(gui, "Irányítás: egér + W/S/A/D · Szóköz tűz · X rakéta · G flare · H súgó (repülés közben)", { Position = UDim2.new(0, 30, 1, -40), Size = UDim2.new(0, 700, 0, 24), TextSize = 14, TextColor3 = Color3.fromRGB(170, 190, 185) })

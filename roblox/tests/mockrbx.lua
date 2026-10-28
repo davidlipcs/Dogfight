@@ -308,6 +308,14 @@ methods.IsKeyDown = function() return false end
 methods.GetMouseLocation = function() return v2(640, 360) end
 methods.SetCoreGuiEnabled = function() end
 methods.Clear = function() end
+methods.JSONEncode = function(o, t)
+	local function enc(v, depth)
+		if depth > 12 then error('too deep') end
+		if type(v) == 'table' then local out = {}; for k, x in pairs(v) do out[#out + 1] = tostring(k) .. ':' .. enc(x, depth + 1) end; return '{' .. table.concat(out, ',') .. '}' end
+		return tostring(v)
+	end
+	return enc(t, 0)
+end
 methods.GetPropertyChangedSignal = function(o, k) local c = rawget(o, '__chg'); if not c then c = {}; rawset(o, '__chg', c) end; if not c[k] then c[k] = newSignal() end return c[k] end
 methods.CaptureFocus = function(o) o.__focused = true end
 methods.ReleaseFocus = function(o) o.__focused = false end

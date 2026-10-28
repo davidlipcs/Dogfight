@@ -13,6 +13,7 @@ local Tutorial = require(script.Parent.Tutorial)
 local CarrierLib = require(script.Parent.Carrier)
 local Radio = require(script.Parent.Radio)
 local Net = require(script.Parent.Net)
+local Mission = require(script.Parent.Mission)
 local V, add, sub, mul, len, norm, copy, clamp, DEG = M.V, M.add, M.sub, M.mul, M.len, M.norm, M.copy, M.clamp, M.DEG
 local atan2, rng = M.atan2, M.rng
 local abs = math.abs
@@ -81,6 +82,7 @@ function G.new(opts, env)
 	self.nav.carrier = { x = self.carrier.x, y = self.carrier.y }
 	self.wasOnDeck, self.catState, self.trapped, self.towTimer = false, nil, false, 0
 	self:spawnPlayer()
+	if self.opts.mission then self.mission = Mission.new(self, self.opts.mission) end
 	if self.opts.tutorial then self.tutorial = Tutorial.new(self, env.cam) end
 	return self
 end
@@ -543,6 +545,7 @@ function Match:ejectHandle()
 end
 
 function Match:respawn()
+	if self.mission and (self.mission.over or (self.player and not self.player.alive)) then self.mission:leave() return end
 	if self.player and self.player.ejected then
 		self.state.banner, self.state.subBanner = "", ""
 		if self.env.onRespawn then self.env.onRespawn() end
@@ -586,6 +589,7 @@ function Match:update(dt)
 		self.world:update(wdt)
 		if self.race and self.player.alive then self:raceStep(wdt) end
 		if self.player.alive and not self.player.ejected and self.carrier.active and not self.wso then self:carrierStep(dt) end
+		if self.mission then self.mission:update(dt) end
 		if self.wsoFlare > 0 then self.wsoFlare = self.wsoFlare - dt end
 		if self.wsoMark then
 			if self.wsoMarkT then self.wsoMarkT = self.wsoMarkT - dt end
@@ -699,6 +703,7 @@ function Match:onEvent(kind, d)
 		if kind == "launch" and d.missile and d.missile.shooter == self.wingman then self.radio:event("wing_fox") end
 		if kind == "kill" and d.killer == self.wingman then self.radio:event("wing_splash") end
 	end
+	if self.mission then self.mission:onEvent(kind, d) end
 	if kind ~= "kill" then return end
 	local st, p, scen = self.state, self.player, self:scenario()
 	if d.victim == p and p.ejected then
@@ -846,6 +851,7 @@ function Match:modeLine()
 	if self.opts.tutorial then return "" end
 	local fmt = Race.fmtTime
 	local friend = self.env.friendLine and self.env.friendLine() or ""
+	if self.mission then return self.mission:line() end
 	if self.wso then return "HÁTSÓ ÜLÉS · te jelölsz és lősz, a pilóta repül" end
 	if sc == "race" and self.race then
 		local r = self.race
@@ -890,7 +896,7 @@ function Match:gameFlow(dt)
 		self.hud:message("SIKERES FELSZÁLLÁS - húzd be a futóművet (G)", "good", 4)
 	end
 	local sc = self:scenario()
-	if sc == "race" or sc == "canyon" or sc == "tube" or sc == "free" or sc == "pvp" then return end
+	if sc == "race" or sc == "canyon" or sc == "tube" or sc == "free" or sc == "pvp" or sc == "mission" then return end
 	local runsWaves = not self.guest                        -- the host's machine runs the enemies
 	-- reinforcements: the rest of a big wave comes in groups, when the first ones are thinned out (or after a while)
 	if runsWaves and not self.opts.tutorial and st.waveActive and st.reserve > 0 then

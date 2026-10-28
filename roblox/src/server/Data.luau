@@ -25,6 +25,7 @@ local function fresh()
 		jetOn = nil,                     -- the jet model (Config.JetModels key; nil = the one built from parts)
 		career = nil,                    -- the career table of the match (shared/game/Career.luau)
 		best = {},                       -- race records: race, canyon, tube, tubeLap (seconds)
+		warSave = nil,                   -- the war career: { war, pilot } (shared/game/Campaign.luau)
 		daily = nil, missions = nil,     -- the daily reward streak and the day's missions (server/Daily.luau)
 		receipts = {},
 		version = 1,
@@ -51,7 +52,7 @@ end
 function Data.view(player: Player)
 	local p = profiles[player]
 	if not p then return nil end
-	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true, career = p.career, best = p.best }
+	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true, career = p.career, best = p.best, warSave = p.warSave }
 end
 
 function Data.push(player: Player)
@@ -149,6 +150,22 @@ function Data.saveCareer(player: Player, t: any)
 	p.career = c
 	p.kills = c.kills or p.kills
 	p.best = p.best or {}
+end
+
+-- the war career (a table the size of a few KB): kept if it looks like one
+function Data.saveWar(player: Player, t: any)
+	local p = profiles[player]
+	if not p or typeof(t) ~= "table" or typeof(t.war) ~= "table" or typeof(t.pilot) ~= "table" then return end
+	local w, pl = t.war, t.pilot
+	if typeof(w.day) ~= "number" or typeof(w.powers) ~= "table" or typeof(pl.rank) ~= "number" or pl.rank < 0 or pl.rank > 6 then return end
+	local ok, json = pcall(function() return game:GetService("HttpService"):JSONEncode(t) end)
+	if not ok or #json > 60000 then return end
+	-- the pilot's counters only go up inside a war (a smaller number is a stale or forged packet), unless it is a fresh war
+	local old = p.warSave
+	if old and old.war and old.war.day and w.day >= old.war.day and typeof(old.pilot) == "table" then
+		if (pl.sorties or 0) < (old.pilot.sorties or 0) or (pl.kills or 0) < (old.pilot.kills or 0) or pl.rank < (old.pilot.rank or 0) then return end
+	end
+	p.warSave = t
 end
 
 function Data.saveBest(player: Player, kind: any, time: any, lap: any)

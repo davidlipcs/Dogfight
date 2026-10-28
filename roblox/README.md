@@ -55,6 +55,14 @@ nagyítva. A repülés, a sebesség és minden számítás közben a valódi mé
 * **Kétüléses gép:** a menüben az *Ülések* sorban válaszd a *Kétüléses (szobában)* lehetőséget, és indulj szobából. A csapattársak a Szobák képernyőn a *Beülök* gombbal ülnek a **hátsó ülésre**: nem repülnek, hanem **T** = célpont jelölése (a pilótának is látszik, az ő T-je előbb a jelöltre zár), **Y** = következő ellenség, **Space** = rakétaindítás a pilóta gépéről (széles szögben, zár nélkül), **X** = flare, **1/2** = fegyverválasztás, egérrel körülnéz. A hátsó ülés fele annyi érmét kap a lelövésért. A pilóta és a hátsó ülés is kiléphet; ha a pilótát lelövik, a hátsó ülés véget ér. *Nincs* külön hátsó-ülés modell az importált gépeken (a pilóta nem látja a hátsó ülésen ülőt).
 * **Rádió:** **I** = megnyílik a rádió-panel: írd be angolul a hívást (pl. `FOX TWO`, `SPLASH`, `BINGO`, `REQUEST PICTURE`, `COVER ME`), vagy kattints / nyomd meg a számot a listán. A másik oldal (torony, kísérő, AWACS) feliratban válaszol, a kísérő végrehajtja a parancsokat. Beszédfelismerés és beszédhang nincs (a Roblox nem tud).
 
+## Háborús karrier (HÁBORÚ gomb a lobbiban)
+
+A böngészős karrier 3. világháborús része, a `campaign.js` számról számra egyező átirata (150 napnyi háború ugyanazt adja, mint a JavaScript): négy nagyhatalom (USA, Európa, Oroszország, Kína) valódi vadászgép-számokkal, havi gyártással és költségvetéssel, 12 front valódi helyeken, bizalom, szövetségek, tűzszünetek, gyárbombázás, a többiek légierejéről csak becslés (hírszerzés). Te hadnagyként kezded: kapsz egy parancsot (front, feladat, ellenség a front valódi gépeiből), **bevetésre indulsz a levegőben** (légtérfölény vagy légtérvédelmi járőr, AI vezér vagy AI kísérő, szövetséges és ellenséges gépek, erősítés), és ami a bevetésben történt (lelőtt és elveszett gépek, bizalom), hat a háborúra. Előléptetésekkel nő a döntési jogod: százados = feladat és időpont, őrnagy = front és gép, alezredes = MI-kötelékek kiküldése, ezredes = politika (szövetség, tűzszünet, gyárbombázás, gyártási sorrend). A háború és a pilóta a szerveren mentődik. Nincs benne (a böngészősben van): a pilótaiskola (rádióórák, T-6, T-38/T-45, BFM), a légtérrendészeti bevetések, a gyalogos bázis, a pilótalista (roster) és a világtérkép.
+
+## Kabin: 3D műszerfal
+
+Kabinnézetben (V) a kijelzők (radar, térkép, fegyverek, hajtómű, DED, RWR) valódi képernyők egy műszerfalon a pilóta előtt (`MfdView.luau`, SurfaceGui). **J/K/L** lapoz, **N** a kijelzők felé néz. A modellek belső terét a játék nem rajzolja ki (a sajátgép kabinnézetben rejtett), ezért a műszerfal lebegő képernyőkből áll. Ha rosszul néz ki, a menüben a *Kabin kijelzők* sorban átkapcsolható „A képernyő alján" változatra.
+
 ## A napellenző üvege
 
 A pilóta-öltözetek napellenzője valódi üveg (`visorT` = fényáteresztés, `visor` = árnyalat, `mirror` = tükörbevonat). Pilótafülke-nézetben (V) a `Visor.luau` a színével és sötétségével befolyásolja a képet (színkorrekció + sötét perem); a tiszta üveg nem változtat semmin, a legsötétebb is csak 75%-ig sötétít.
@@ -80,6 +88,6 @@ Kontroller és telefon (érintő-joystick + gombok) is van.
 
 ## Ismert korlátok
 
-* Még nincs: a karrier mód (helyette napi jutalom, napi küldetések és ranglista van), a kabin 3D-s műszerfala (a kijelzők a képernyő alján vannak).
-* A Roblox-oldalt (menü, kamera, HUD, hang, részecskék) nem lehetett valódi Studióban kipróbálni, csak egy utánzott Roblox-környezetben; az Output ablak kiírja a hibákat.
+* A Roblox-oldalt (menü, kamera, HUD, hang, részecskék, műszerfal) nem lehetett valódi Studióban kipróbálni, csak egy utánzott Roblox-környezetben; az Output ablak kiírja a hibákat.
+* A karrierből hiányzik a pilótaiskola, a légtérrendészet, a gyalogos bázis, a pilótalista és a világtérkép (lásd fent).
 * A pilóta kockákból épül, a pilótafülkében ülő pilótán és a hangár-előnézeten látszik.
