@@ -248,7 +248,7 @@ export class Models {
   // missiles' places store_N.
   // a paint scheme (hangar.js SKINS) on the painted (textured) materials of a model; glass, lamps and details stay
   skinMats(key, skin) {
-    if (!skin || skin.id === 'factory') return this.glbMat[key];
+    if (!skin || skin.id === 'factory' || (skin.jets && !skin.jets.includes(key))) return this.glbMat[key];     // a real livery only on its own jets
     const ck = `${key}:${skin.id}`;
     if (this.skinCache[ck]) return this.skinCache[ck];
     return (this.skinCache[ck] = this.glbMat[key].map((m) => {

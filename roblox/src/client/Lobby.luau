@@ -82,6 +82,7 @@ local function card(skin, isPilot: boolean)
 	swatchFor(skin, isPilot, f)
 	Ui.label(f, skin.name, { Position = UDim2.new(0, 8, 0, 68), Size = UDim2.new(1, -16, 0, 18), TextSize = 14, Font = Enum.Font.GothamBold })
 	local extra = isPilot and string.format(" · üveg %d%%%s", math.floor((skin.visorT or 1) * 100), skin.mirror and " tükör" or "") or ""
+	if skin.real then extra = " · valódi: " .. table.concat(skin.jets, "/") end
 	Ui.label(f, Catalog.Rarity[skin.rarity] .. extra, { Position = UDim2.new(0, 8, 0, 86), Size = UDim2.new(1, -16, 0, 14), TextSize = 12, TextColor3 = Ui.RarityColor[skin.rarity] })
 	local isOwned = owned(isPilot, id)
 	local label = worn(isPilot, id) and "Viseled" or isOwned and "Felszerel" or (tostring(skin.price) .. " érme")
@@ -172,7 +173,7 @@ local function render()
 	local isPilot = tab == "pilot"
 	local list = isPilot and Catalog.Pilot or Catalog.Air
 	for _, skin in list do
-		if (rarity == "all" or skin.rarity == rarity) and (not onlyOwned or owned(isPilot, skin.id)) then card(skin, isPilot) end
+		if (rarity == "all" or (rarity == "real" and skin.real) or skin.rarity == rarity) and (not onlyOwned or owned(isPilot, skin.id)) then card(skin, isPilot) end
 	end
 end
 
@@ -245,7 +246,7 @@ function Lobby.init(r, h)
 		Ui.button(chips, label, { Size = UDim2.new(0, 92, 0, 28), TextSize = 13, BackgroundColor3 = Ui.RarityColor[id] or Color3.fromRGB(200, 210, 215) }, function() rarity = id; render() end)
 	end
 	chipsFrame = chips
-	chip("all", "Mind"); chip("C", "Gyakori"); chip("R", "Ritka"); chip("E", "Epikus"); chip("L", "Legendás")
+	chip("all", "Mind"); chip("C", "Gyakori"); chip("R", "Ritka"); chip("E", "Epikus"); chip("L", "Legendás"); chip("real", "Valódi")
 	Ui.button(chips, "Csak a megvettek", { Size = UDim2.new(0, 120, 0, 28), TextSize = 13, BackgroundColor3 = Color3.fromRGB(80, 96, 100), TextColor3 = Color3.new(1, 1, 1) }, function() onlyOwned = not onlyOwned; render() end)
 	msgLabel = Ui.label(shop, "", { Position = UDim2.new(0, 0, 0, 78), Size = UDim2.new(1, 0, 0, 20), TextSize = 15 })
 	listFrame = Ui.make("ScrollingFrame", {

@@ -127,6 +127,28 @@ AIR = [
 # The pilot's flight outfits: ten, each one drawn in detail.  The visor is real glass: its tint (visor, a colour) and
 # its transmission (visorT, 1 = clear glass, 0.3 = dark) darken and colour what you see from the cockpit; mirror = a
 # reflective coating.  pattern: the livery of the helmet (stripes chevron camo wolf circuit tricolor trim).
+# Paint schemes that exist on real aircraft (approximated by tint + pattern: the units' badges cannot be drawn).
+# REAL rows: (id, name, jets, tint, pattern, pattern colour, second pattern colour, metal, rough, glow, rarity, note)
+# jets: the models (Config.JetModels keys) the scheme is worn on; on any other jet the factory paint stays.
+REAL = [
+    ('thunderbirds', 'USAF Thunderbirds', ['f16'], 0xf2f4f6, 'tricolor', 0xc8102e, 0x1c3f94, N, 0.35, 0x000000, 'E', 'az amerikai légierő műrepülő csapata: fehér gép, piros-kék sávok'),
+    ('blueangels', 'US Navy Blue Angels', ['fa18'], 0x0b2d7a, 'tricolor', 0xffcb05, 0x0b2d7a, N, 0.3, 0x000000, 'E', 'az amerikai haditengerészet műrepülő csapata: kék gép, sárga díszítéssel'),
+    ('soloturk', 'SoloTürk', ['f16'], 0xd62828, 'tricolor', 0xffffff, 0xd62828, N, 0.35, 0x000000, 'E', 'a török légierő bemutató F-16-osa: piros-fehér, félholddal'),
+    ('flanker64', '64th Aggressor "Flanker"', ['f16'], 0x9fb0c2, 'splinter', 0x4f6785, 0, N, N, 0x000000, 'R', 'az amerikai ellenfél-gyakorló század kék-szürke szilánkterepe (a Szu-27-et utánozza)'),
+    ('jasdf_aggr', 'JASDF Aggressor', ['f15'], 0xa4aebb, 'splinter', 0x4a5d73, 0, N, N, 0x000000, 'R', 'a japán légierő ellenfél-gyakorló F-15-ösének szilánkterepe'),
+    ('strizhi', 'Strizhi (Sarlósfecskék)', ['mig29'], 0xf2f6fa, 'tricolor', 0x1d5fc2, 0xd02020, N, 0.4, 0x000000, 'E', 'az orosz MiG-29-es műrepülő csapat fehér-kék-piros festése'),
+    ('russianknights', 'Russian Knights (Orosz Vitézek)', ['su35'], 0xeef3f8, 'tricolor', 0x2e6fd1, 0x9cc4f0, N, 0.4, 0x000000, 'E', 'az orosz Szu-27-es család műrepülő csapatának fehér-kék festése'),
+    ('pl_pixel', 'Lengyel digitális terep', ['mig29'], 0xaab3b8, 'digital', 0x5c7080, 0, N, N, 0x000000, 'R', 'a lengyel légierő MiG-29-eseinek "pixel" álcája'),
+    ('ua_pixel', 'Ukrán digitális terep', ['mig29'], 0x9aa6ad, 'digital', 0x4d5f6a, 0, N, N, 0x000000, 'R', 'az ukrán légierő MiG-29-eseinek szürke-kék digitális álcája'),
+    ('ghost', 'USAF "Compass Ghost"', ['f16', 'f15'], 0xaab1b8, N, 0, 0, N, 0.55, 0x000000, 'C', 'a légierő világosszürke, alacsony láthatóságú festése (F-15, F-16)'),
+    ('asb', 'Air Superiority Blue', ['f15'], 0x7f9ab4, N, 0, 0, N, 0.5, 0x000000, 'C', 'az F-15C klasszikus "légifölény-kék" festése'),
+    ('gunship', 'Gunship Gray', ['f35', 'f22'], 0x7c8085, N, 0, 0, N, 0.6, 0x000000, 'C', 'az F-22 és az F-35 sötétszürke, lopakodó festése'),
+    ('navylowvis', 'US Navy alacsony láthatóságú szürke', ['fa18'], 0x8a8f94, N, 0, 0, N, 0.55, 0x000000, 'C', 'a Super Hornet hordozós szürke festése'),
+    ('jollyrogers', 'VFA-103 "Jolly Rogers"', ['fa18'], 0x3d4046, 'tricolor', 0xf2f2f2, 0x3d4046, N, 0.4, 0x000000, 'R', 'a haditengerészet híres fekete-fehér "kalóz" százada'),
+    ('nasa_t38', 'NASA T-38', ['t38'], 0xf5f7f8, 'tricolor', 0x1550a8, 0xf5f7f8, N, 0.35, 0x000000, 'R', 'a NASA űrhajósainak fehér-kék T-38-asa'),
+    ('navy_t45', 'US Navy T-45 oktató', ['t45'], 0xf6f4ee, 'tricolor', 0xea5a14, 0xf6f4ee, N, 0.4, 0x000000, 'R', 'a haditengerészeti kiképző gép fehér-narancs festése'),
+]
+
 PILOT = [
     dict(id='alpha', name='Alfa ász', rarity='C', desc='A légierő alap repülőruhája: olajzöld overall, fehér sisak sárga csíkkal, tiszta napellenző – a legjobb kilátás.',
          suit=0x56603f, suit2=0x3c442c, helmet=0xe8e8e2, helmet2=0xe8c030, pattern='stripes', visor=0xe8f0f4, visorT=0.97, mirror=False, accent=0xe8c030, glove=0x3a3d33, callsign='ALPHA', patch='unit'),

@@ -117,6 +117,20 @@ local function decorate(model: Model, body: Part, skin, mat: Enum.Material)
 			add("Flame", Vector3.new(0.6 + r() * 0.5, 0.1, 2.4 + r() * 3.2), onTube(2 + i * 0.7 + r()) * CFrame.new(((i % 2 == 0) and 1 or -1) * (0.2 + r() * 0.6), 0, 0) * CFrame.Angles(0, (r() - 0.5) * 0.3, 0))
 		end
 		for i = 1, 6 do add("Flame", Vector3.new(0.9, 0.1, 1.2 + r() * 1.4), wingTop((i % 2 == 0) and 1 or -1, -3 + i * 1.0, 0.5 + r() * 0.6)) end
+	elseif kind == "tricolor" then
+		-- the livery bands of the display-team jets: two colours (and a white line) across the wings and round the fuselage
+		local col2 = color(skin.pcolor2 or 0xffffff)
+		for k = 0, 3 do
+			local c = (k % 2 == 0) and col or col2
+			local u = -2.6 + k * 1.75
+			add("Band", Vector3.new(0.9, 0.1, 3.7), wingTop(1, u, 0), c)
+			add("Band", Vector3.new(0.9, 0.1, 3.7), wingTop(-1, u, 0), c)
+		end
+		for k = 0, 4 do
+			local c = (k % 2 == 0) and col or col2
+			add("Ring", Vector3.new(0.7, 2.68, 2.68), CFrame.new(0, 0, -5 + k * 2.6) * CFrame.Angles(0, math.rad(90), 0), c, Enum.PartType.Cylinder)
+		end
+		for _, side in { -1, 1 } do add("Fin", Vector3.new(0.34, 2.6, 0.7), CFrame.new(side * 1.0, 2.5, 6.6) * CFrame.Angles(0, 0, side * math.rad(-10)), col) end
 	else -- stripes, tiger, wave, rainbow: bands across the wings and rings round the fuselage
 		for k = 0, 3 do
 			local c = (kind == "rainbow") and color(rainbow[(k % #rainbow) + 1]) or col
@@ -296,17 +310,23 @@ local function fromImported(src: Instance, key: string, skin, enemy: boolean?): 
 	return model
 end
 
+-- a real livery is only worn on the jets it exists on
+local function applicable(skin, modelKey: string?)
+	if skin and skin.jets and modelKey and not table.find(skin.jets, modelKey) then return nil end
+	return skin
+end
+
 -- a Model with PrimaryPart "Body".  air: a Catalog.Air id (nil = the factory grey), pilot: a Catalog.Pilot id (nil = plain),
 -- enemy: true builds the dark hostile scheme (smaller part count); twoSeat: a longer canopy with a rear seat (wsoId: the
 -- outfit of whoever sits there; addPilot puts a pilot in a seat later, removeSeat takes him out)
 function JetBuilder.build(airId: string?, pilotId: string?, enemy: boolean?, twoSeat: boolean?, wsoId: string?, modelKey: string?): Model
-	local skin = enemy and ENEMY or (airId and Catalog.AirById[airId]) or DEFAULT
+	local skin = enemy and ENEMY or applicable(airId and Catalog.AirById[airId], modelKey) or DEFAULT
 	-- the game's own model when it is imported (a two-seater uses the built one: there is no rear seat in the single-seat models)
 	if modelKey and not twoSeat then
 		local folder = ReplicatedStorage:FindFirstChild("JetModels")
 		local src = folder and folder:FindFirstChild(modelKey)
 		if src then
-			local m = fromImported(src, modelKey, (airId and Catalog.AirById[airId]) or nil, enemy)
+			local m = fromImported(src, modelKey, applicable(airId and Catalog.AirById[airId], modelKey), enemy)
 			if m then return m end
 		end
 	end

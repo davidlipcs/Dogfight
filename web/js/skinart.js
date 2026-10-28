@@ -7,7 +7,7 @@ function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) 
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 
 // draws the pattern `kind` in colour `col` (0xRRGGBB) over a w x h canvas context
-export function drawPattern(ctx, w, h, kind, col, seed = 1) {
+export function drawPattern(ctx, w, h, kind, col, seed = 1, col2 = null) {
   const r = seeded(seed), u = Math.max(w, h);
   ctx.save();
   ctx.fillStyle = rgba(col, 0.78); ctx.strokeStyle = rgba(col, 0.78); ctx.lineJoin = 'round';
@@ -72,6 +72,14 @@ export function drawPattern(ctx, w, h, kind, col, seed = 1) {
       ctx.bezierCurveTo(x + wd * 1.4, h - hgt * 0.5, x + wd * 1.2, h - hgt * 0.2, x + wd, h);
       ctx.closePath(); ctx.fill();
     }
+  } else if (kind === 'tricolor') {
+    // livery bands of real display-team jets: broad diagonal bands in two colours with a thin white line between
+    ctx.translate(w / 2, h / 2); ctx.rotate(-0.42);
+    const band = u / 7;
+    ctx.fillStyle = rgba(col, 0.95); ctx.fillRect(-u, -band * 1.5, u * 2, band);
+    if (col2 !== null && col2 !== undefined) { ctx.fillStyle = rgba(col2, 0.95); ctx.fillRect(-u, band * 0.1, u * 2, band); }
+    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(-u, -band * 0.3, u * 2, band * 0.12);
+    ctx.fillStyle = rgba(col, 0.95); ctx.fillRect(-u, band * 2.4, u * 2, band * 0.6);
   } else if (kind === 'rainbow') {
     ctx.translate(w / 2, h / 2); ctx.rotate(-0.5);
     const cols = ['#ff3b3b', '#ff9a2a', '#ffe83a', '#3bd86a', '#3ba8ff', '#8a4aff'], band = u / 9;
@@ -86,7 +94,7 @@ export function patterned(img, skin, max = 2048) {
   const cv = document.createElement('canvas'); cv.width = Math.max(8, Math.round(iw * k)); cv.height = Math.max(8, Math.round(ih * k));
   const ctx = cv.getContext('2d');
   ctx.drawImage(img, 0, 0, cv.width, cv.height);
-  drawPattern(ctx, cv.width, cv.height, skin.pattern, skin.pcolor, hash(skin.id));
+  drawPattern(ctx, cv.width, cv.height, skin.pattern, skin.pcolor, hash(skin.id), skin.pcolor2);
   return cv;
 }
 
@@ -98,7 +106,7 @@ export function swatch(skin, size = 72) {
   const cv = document.createElement('canvas'); cv.width = cv.height = size;
   const ctx = cv.getContext('2d');
   ctx.fillStyle = hex(skin.color); ctx.fillRect(0, 0, size, size);
-  if (skin.pattern) drawPattern(ctx, size, size, skin.pattern, skin.pcolor, hash(skin.id));
+  if (skin.pattern) drawPattern(ctx, size, size, skin.pattern, skin.pcolor, hash(skin.id), skin.pcolor2);
   const shine = ctx.createLinearGradient(0, 0, size, size);
   const m = skin.metal === null || skin.metal === undefined ? 0.15 : skin.metal;
   shine.addColorStop(0, `rgba(255,255,255,${0.1 + m * 0.35})`); shine.addColorStop(0.5, 'rgba(255,255,255,0)'); shine.addColorStop(1, 'rgba(0,0,0,0.35)');

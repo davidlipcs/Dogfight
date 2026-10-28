@@ -6,6 +6,7 @@ import { AIRCRAFT, BANDITS, TRAINERS, PLANE_GROUPS } from './specs.js';
 
 const $ = (id) => document.getElementById(id);
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+const ALL_NAMES = { f16: 'F-16C', fa18: 'F/A-18E', f15: 'F-15EX', f22: 'F-22A', f35: 'F-35A', su35: 'Szu-35', mig29: 'MiG-29', t38: 'T-38', t45: 'T-45' };
 const TABS = [['planes', 'Gépek'], ['skins', 'Festések'], ['pilots', 'Pilóta'], ['upgrades', 'Fejlesztések'], ['mods', 'Módok'], ['intel', 'Hírszerzés'], ['save', 'Mentés']];
 
 // what to know about each enemy type, worked out from its numbers (the "reverse engineering" of the intel cards)
@@ -79,17 +80,18 @@ export class HangarUI {
   filters(tab, list, owned) {
     const total = list.length, have = list.filter((x) => owned[x.id]).length;
     const chip = (v, label) => `<button type="button" class="small${this.flt[tab] === v ? ' primary' : ''}" data-act="flt" data-id="${tab}:${v}">${label}</button>`;
-    return `<div class="buttons" style="margin:6px 0">${chip('all', `Mind (${total})`)}${Object.keys(RARITY).map((k) => chip(k, `${RARITY[k]} (${list.filter((x) => x.rarity === k).length})`)).join('')}`
+    const real = list.filter((x) => x.real).length;
+    return `<div class="buttons" style="margin:6px 0">${chip('all', `Mind (${total})`)}${Object.keys(RARITY).map((k) => chip(k, `${RARITY[k]} (${list.filter((x) => x.rarity === k).length})`)).join('')}${real ? chip('real', `Valódi festések (${real})`) : ''}`
       + `<button type="button" class="small${this.own[tab] ? ' primary' : ''}" data-act="own" data-id="${tab}">Megvan: ${have}</button></div>`;
   }
   skins() {
-    const d = this.h.data, list = SKINS.filter((s) => (this.flt.skins === 'all' || s.rarity === this.flt.skins) && (!this.own.skins || d.skins[s.id]));
+    const d = this.h.data, list = SKINS.filter((s) => (this.flt.skins === 'all' || (this.flt.skins === 'real' ? s.real : s.rarity === this.flt.skins)) && (!this.own.skins || d.skins[s.id]));
     return `<p class="hint">A festés a te gépedre kerül (minden típusra). Az ellenség marad gyári szürke. ${SKINS.length} festés van.</p>` + this.filters('skins', SKINS, d.skins) + '<div class="grid">' + list.map((s) => {
       const own = !!d.skins[s.id], on = d.skin === s.id;
       const sw = `<img class="swatch" alt="" src="${swatch(s)}" style="width:56px;height:56px;border-radius:6px;object-fit:cover">`;
       const btn = on ? '<em>felszerelve</em>' : own ? `<button type="button" class="small" data-act="equip-skin" data-id="${s.id}">Felszerelem</button>`
         : `<button type="button" class="small primary" data-act="buy-skin" data-id="${s.id}">Megveszem</button>`;
-      return `<div class="item${on ? ' sel' : ''}">${sw}<b>${s.name}</b>${s.rarity ? `<span class="rar rar-${s.rarity}">${RARITY[s.rarity]}</span>` : ''}${this.price(s.price, own)}${btn}</div>`;
+      return `<div class="item${on ? ' sel' : ''}">${sw}<b>${s.name}</b>${s.rarity ? `<span class="rar rar-${s.rarity}">${RARITY[s.rarity]}</span>` : ''}${s.real ? `<span style="font-size:11px;opacity:.8">${s.note} · csak: ${s.jets.map((j) => (ALL_NAMES[j] || j)).join(', ')}</span>` : ''}${this.price(s.price, own)}${btn}</div>`;
     }).join('') + '</div>';
   }
   pilots() {

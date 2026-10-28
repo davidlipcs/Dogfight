@@ -1,7 +1,7 @@
 // Hangar: credits earned in the air (1 point = 1 credit) and what they buy - a new jet, paint schemes,
 // engine-room upgrades and mods.  Kept in this browser like the career; the whole save (settings, menu,
 // career, hangar) can be downloaded to a file and loaded back on another device.
-import { AIR_SKINS, PILOT_SKINS } from './skins.js';
+import { AIR_SKINS, REAL_SKINS, PILOT_SKINS } from './skins.js';
 const KEY = 'dogfight-hangar';
 export const START_CREDITS = 500;
 
@@ -18,6 +18,7 @@ export const SKINS = [
   { id: 'gold', name: 'Arany ász', price: 2500, color: 0xf0c860, emissive: 0x2a1800, metal: 0.85, rough: 0.28 },
   { id: 'chrome', name: 'Króm', price: 3000, color: 0xe8eef4, emissive: 0x101418, metal: 1.0, rough: 0.12 },
   ...AIR_SKINS,                                    // 100 more (skins.js): patterns, metals, neon, flags, animals ...
+  ...REAL_SKINS,                                   // paint schemes that exist on real aircraft (only on the jets they belong to)
 ];
 // the pilot's flight outfits (helmet, suit, visor): 100 of them (skins.js); the default is no outfit at all
 export { PILOT_SKINS };
