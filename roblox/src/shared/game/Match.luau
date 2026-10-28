@@ -67,6 +67,7 @@ function G.new(opts, env)
 		base = { x = self.terrain.airfield.x, y = self.terrain.airfield.y, r = SAFE_RADIUS }, wave = 0, enemies = 0 }
 	self.prevPos, self.myFin, self.ejectArm, self.thrPress = nil, nil, 0, -1e9
 	self.events = {}                                    -- the world's events of the last frame, for the view
+	self.guest = self.opts.netGuest == true
 	self:spawnPlayer()
 	return self
 end
@@ -75,9 +76,11 @@ function Match:scenario()
 	if self.opts.tutorial then return "waves" end
 	return self.opts.scenario or "waves"
 end
+-- the host of a co-op room runs the enemies; the guests only see them (Net.luau)
+function Match:setGuest(on) self.guest = on == true end
 function Match:wantWingman()
 	local sc = self:scenario()
-	return self.opts.wingman and not self.opts.tutorial and sc ~= "duel" and sc ~= "race" and sc ~= "canyon" and sc ~= "tube" and sc ~= "free" and not self.opts.benchmark
+	return self.opts.wingman and not self.opts.tutorial and not self.guest and sc ~= "pvp" and sc ~= "duel" and sc ~= "race" and sc ~= "canyon" and sc ~= "tube" and sc ~= "free" and not self.opts.benchmark
 end
 function Match:enemiesAlive()
 	local out = {}
@@ -97,8 +100,9 @@ function Match:spawnPlayer()
 	end
 	local sc = self:scenario()
 	local duel, canyon, tube, free = sc == "duel", sc == "canyon", sc == "tube", sc == "free"
+	local pvp = sc == "pvp"
 	local race = sc == "race" or canyon or tube
-	local air = self.opts.airStart or duel or race or free
+	local air = self.opts.airStart or duel or race or free or pvp
 	local field = terrain.airfield
 	local pos, heading, speed = nil, 0, 0
 	local st = self.state
@@ -138,6 +142,13 @@ function Match:spawnPlayer()
 		for _, a in ipairs(w.aircraft) do if a.team == "blue" then keep[#keep + 1] = a end end
 		w.aircraft = keep
 		st.waveActive, st.waveTimer = false, 3
+	elseif pvp then
+		-- team fight: the two teams start on the two sides of the combat zone, facing each other
+		local red = self.env.netTeam == "red"
+		local slot = (self.env.netSlot or 0) % 8
+		pos = V(ZONE.x + (red and 7000 or -7000), ZONE.y + (slot - 3.5) * 700, 4500 + (slot % 3) * 350)
+		pos.z = math.max(pos.z, terrain:height(pos.x, pos.y) + 1500)
+		speed, heading = 250, red and 270 or 90
 	elseif free then
 		-- free flight: over the base, heading north
 		pos = V(field.x, field.y + 2500, 0)
@@ -164,10 +175,11 @@ function Match:spawnPlayer()
 	local hg = self.hangar
 	local base = AIRCRAFT[self.opts.aircraft] or TRAINERS[self.opts.aircraft] or AIRCRAFT.f16
 	local spec = self.opts.benchmark and base or hg:upgraded(base)
-	local ac = Sim.newAircraft(spec, "Te (" .. spec.callsign .. " 1)", "blue", pos, heading, speed, { isPlayer = true, livery = "viper", lockAssist = true,
+	local ac = Sim.newAircraft(spec, "Te (" .. spec.callsign .. " 1)", self.env.netTeam or "blue", pos, heading, speed, { isPlayer = true, livery = "viper", lockAssist = true,
 		missiles = Specs.missilesFor(spec, false), loadout = spec.trainer and "default" or self.opts.loadout or "default", rnd = rng(math.floor(self.rnd() * 1e9)),
 		outfit = hg.pilotSkin, skin = hg.skin, blastMult = hg:modOn("bigboom") and 1.6 or 1,
 		tracerColor = hg:modOn("tracer") and { 0.85, 0.4, 1, 0.45, 0.1, 0.7 } or nil })
+	ac.specKey = AIRCRAFT[self.opts.aircraft] and self.opts.aircraft or TRAINERS[self.opts.aircraft] and self.opts.aircraft or "f16"
 	if air then
 		ac.controls.throttle = 0.95
 	else
@@ -252,6 +264,7 @@ function Match:spawnEnemies(n, back)
 		local ac = Sim.newAircraft(spec, "Bandita " .. st.spawned .. " (" .. spec.short .. ")", "red", pos, heading, 240,
 			{ livery = "viper", missiles = Specs.missilesFor(spec, true), loadout = loadout, rnd = rng(math.floor(r() * 1e9)) })
 		AI.newAIPilot(ac, self.opts.difficulty or "normal", area)
+		ac.specKey = typ
 		self.world:addAircraft(ac)
 		if self.env.onSpawn then self.env.onSpawn(ac, spec) end
 	end
@@ -275,6 +288,7 @@ function Match:spawnDuel()
 	local ac = Sim.newAircraft(spec, "Ellenfél (" .. spec.short .. ")", "red", pos, atan2(p.pos.x - pos.x, p.pos.y - pos.y) / DEG, 240,
 		{ livery = "viper", missiles = Specs.missilesFor(spec, true), loadout = loadout, rnd = rng(math.floor(r() * 1e9)) })
 	AI.newAIPilot(ac, self.opts.difficulty or "normal", nil)
+	ac.specKey = typ
 	self.world:addAircraft(ac)
 	if self.env.onSpawn then self.env.onSpawn(ac, spec) end
 	st.waveActive = true
@@ -651,6 +665,10 @@ function Match:modeLine()
 		return "ALAGÚTFUTAM · kör " .. r.lap .. "/" .. r.laps .. " · " .. fmt(r.clock) .. (r.lastLap and (" · utolsó " .. fmt(r.lastLap)) or "")
 			.. (r.bestLap and (" · legjobb " .. fmt(r.bestLap)) or "") .. (r.outside and " · KILÓGSZ A CSŐBŐL" or "") .. friend
 	end
+	if sc == "pvp" then
+		local sc2 = self.env.teamScore and self.env.teamScore() or { blue = 0, red = 0 }
+		return "CSAPATHARC · KÉK " .. sc2.blue .. " : " .. sc2.red .. " PIROS · te: " .. (self.env.netTeam == "red" and "PIROS" or "KÉK")
+	end
 	if sc == "free" then return "KÖZÖS REPÜLÉS" .. (self.env.friendLine and " · a barátoddal" or " · egyedül") end
 	if sc == "canyon" and self.race then
 		local r = self.race
@@ -663,6 +681,7 @@ function Match:modeLine()
 		return "PÁRBAJ · győzelem " .. st.duelWins .. " · vereség " .. st.duelLosses .. (st.duelStreak > 1 and (" · " .. st.duelStreak .. " egymás után") or "")
 	end
 	if sc == "survival" then return "TÚLÉLÉS · egy életed van · rekord: " .. (self.career.data.bestSurvival or 0) .. ". hullám" end
+	if self.guest then return "KÖZÖS HARC · " .. (st.wave or 0) .. ". hullám (a szoba nyitója vezeti)" end
 	if self.wingman then
 		return "KÍSÉRŐ: " .. (self.wingman.alive and "a levegőben" or "lelőtték, a következő hullámmal visszajön")
 	end
@@ -680,9 +699,10 @@ function Match:gameFlow(dt)
 		self.hud:message("SIKERES FELSZÁLLÁS - húzd be a futóművet (G)", "good", 4)
 	end
 	local sc = self:scenario()
-	if sc == "race" or sc == "canyon" or sc == "tube" or sc == "free" then return end
+	if sc == "race" or sc == "canyon" or sc == "tube" or sc == "free" or sc == "pvp" then return end
+	local runsWaves = not self.guest                        -- the host's machine runs the enemies
 	-- reinforcements: the rest of a big wave comes in groups, when the first ones are thinned out (or after a while)
-	if not self.opts.tutorial and st.waveActive and st.reserve > 0 then
+	if runsWaves and not self.opts.tutorial and st.waveActive and st.reserve > 0 then
 		st.reserveT = st.reserveT + dt
 		if #self:enemiesAlive() <= 1 or st.reserveT > REINFORCE_GAP then
 			local n = math.min(st.reserve, 3)
@@ -691,7 +711,7 @@ function Match:gameFlow(dt)
 			self.hud:message("ERŐSÍTÉS: még " .. n .. " ellenség érkezik" .. (st.reserve > 0 and (" (utána még " .. st.reserve .. ")") or ""), "warn", 4, "reinf")
 		end
 	end
-	if not self.opts.tutorial and st.waveActive and not (st.reserve > 0) and #self:enemiesAlive() == 0 then
+	if runsWaves and not self.opts.tutorial and st.waveActive and not (st.reserve > 0) and #self:enemiesAlive() == 0 then
 		st.waveActive, st.waveTimer = false, WAVE_DELAY
 		if sc == "duel" then
 			st.duelWins, st.duelStreak = st.duelWins + 1, st.duelStreak + 1
@@ -715,8 +735,8 @@ function Match:gameFlow(dt)
 		self.career:best("bestScore", st.score)
 		self.career:save()
 	end
-	if not self.opts.tutorial and self:wantWingman() and not self.wingman and airborne then self:spawnWingman() end
-	if not self.opts.tutorial and not st.waveActive and airborne then
+	if runsWaves and not self.opts.tutorial and self:wantWingman() and not self.wingman and airborne then self:spawnWingman() end
+	if runsWaves and not self.opts.tutorial and not st.waveActive and airborne then
 		st.waveTimer = st.waveTimer - dt
 		if st.waveTimer <= 0 then self:spawnWave() end
 	end

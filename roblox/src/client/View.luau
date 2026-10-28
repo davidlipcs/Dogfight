@@ -102,7 +102,7 @@ end
 
 local function jetModel(ac)
 	local info = JetInfo[ac.spec.model] or JetInfo.f16
-	local enemy = ac.team == "red"
+	local enemy = ac.team == "red" and not ac.human
 	local model = JetBuilder.build((not enemy) and ac.skin or nil, (not enemy) and ac.outfit or nil, enemy, false, nil, ac.spec.model)
 	for _, d in model:GetChildren() do
 		if d.Name == "Flame" or d.Name == "Missile" then d:Destroy() end          -- the flames and the missiles are drawn here

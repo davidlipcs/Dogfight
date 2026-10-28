@@ -37,6 +37,29 @@ remotes.Earn.OnServerEvent:Connect(function(player, n) Data.earn(player, n) end)
 remotes.SaveCareer.OnServerEvent:Connect(function(player, t) Data.saveCareer(player, t) end)
 remotes.SaveBest.OnServerEvent:Connect(function(player, kind, time, lap) Data.saveBest(player, kind, time, lap) end)
 
+-- the match of a room: every message of a player goes to the others of the same room (the server only relays; each player is the
+-- authority of their own jet, the room's host of the enemies)
+local netBudget = {}
+remotes.Net.OnServerEvent:Connect(function(player, batch)
+	if typeof(batch) ~= "table" or #batch == 0 or #batch > 40 then return end
+	local room = Rooms.get(player)
+	if not room then return end
+	local now = os.clock()
+	local b = netBudget[player]
+	if not b then b = { tokens = 60, t = now }; netBudget[player] = b end
+	b.tokens = math.min(60, b.tokens + (now - b.t) * 40)
+	b.t = now
+	if b.tokens < 1 then return end
+	b.tokens -= 1
+	for _, m in batch do
+		if typeof(m) ~= "table" or typeof(m.t) ~= "string" then return end
+	end
+	for p in room.members do
+		if p ~= player then remotes.Net:FireClient(p, player.UserId, batch) end
+	end
+end)
+Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil end)
+
 game:GetService("RunService").Heartbeat:Connect(function(dt) Rooms.step(dt) end)
 
 print("Dogfight Plus server ready")

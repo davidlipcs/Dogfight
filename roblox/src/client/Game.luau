@@ -26,6 +26,8 @@ local View = require(script.Parent.View)
 local Env = require(script.Parent.Env)
 local Sounds = require(script.Parent.Sounds)
 local MfdView = require(script.Parent.MfdView)
+local State = require(script.Parent.State)
+local Net = require(Shared.game.Net)
 
 local V, norm, copy, sub, len = SimMath.V, SimMath.norm, SimMath.copy, SimMath.sub, SimMath.len
 
@@ -46,6 +48,7 @@ local pendingEarn, earnTimer, saveTimer = 0, 0, 0
 local missileCam, followM, followEnd, followLast = false, nil, 0, nil
 local bt = nil
 local pauseGui
+local session, netQueue, netConn, netTimer
 local sounds
 local mfdView
 
@@ -326,6 +329,16 @@ local function frame(dt)
 		end
 	end
 	local events = match:update(dt)
+	if session then
+		session:step(dt)
+		session:onEvents(events)
+		netTimer -= dt
+		if #netQueue > 0 and netTimer <= 0 then
+			netTimer = 1 / 20
+			remotes.Net:FireServer(netQueue)
+			netQueue = {}
+		end
+	end
 	for _, e in ipairs(events) do
 		local kind, d = e[1], e[2]
 		view:handleEvent(kind, d)
@@ -420,7 +433,39 @@ function Game.start(opts)
 			end
 		end,
 	}
+	-- in a room: the others fly in the same sky (Net.luau)
+	local room = State.room
+	local myId = player.UserId
+	local inRoom = room ~= nil and #room.members > 0
+	if inRoom then
+		local team, slot = "A", 0
+		for i, m in ipairs(room.members) do
+			if m.userId == myId then team, slot = m.team, i - 1 end
+		end
+		local pvp = room.mode == "pvp"
+		opts.scenario = pvp and "pvp" or "waves"
+		opts.netGuest = (not pvp) and room.host ~= myId
+		opts.wingman = 0
+		env.netTeam = pvp and (team == "A" and "blue" or "red") or "blue"
+		env.netSlot = slot
+	end
 	match = Match.new(opts, env)
+	if inRoom then
+		netQueue, netTimer = {}, 0
+		local bus = {
+			userId = myId, name = player.DisplayName, team = env.netTeam, clock = os.clock,
+			isHost = function() return State.room == nil or State.room.host == myId end,
+			send = function(m) table.insert(netQueue, m) end,
+		}
+		session = Net.new(match, bus)
+		env.teamScore = function() return session.score end
+		netConn = remotes.Net.OnClientEvent:Connect(function(from, batch)
+			if not session or typeof(batch) ~= "table" then return end
+			for _, m in batch do
+				if typeof(m) == "table" then session:onMessage(from, m) end
+			end
+		end)
+	end
 	view = View.new(match.world)
 	view.quality = Game.settings.quality or "high"
 	Env.set(Game.settings.tod)
@@ -447,6 +492,12 @@ function Game.stop()
 	if Game.wasInside and Game.onCockpit then Game.onCockpit(false) end
 	Game.wasInside = false
 	if view then view:destroy() end
+	if session then
+		session:leave()
+		if #netQueue > 0 then remotes.Net:FireServer(netQueue) end
+		session, netQueue = nil, nil
+	end
+	if netConn then netConn:Disconnect(); netConn = nil end
 	if sounds then sounds:stopAll(); sounds:destroy(); sounds = nil end
 	if mfdView then mfdView:destroy(); mfdView = nil end
 	match, view, hud, cam = nil, nil, nil, nil
