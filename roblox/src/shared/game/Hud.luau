@@ -101,7 +101,7 @@ function Hud:dashed(x1, y1, x2, y2, c, on, off) self.g:dashed(x1, y1, x2, y2, c,
 -- player: the Aircraft; world; view = { position, orientation, fov }; camCtl: the flight camera; game: the state table of the match
 -- (wave, kills, deaths, score, streak, credits, modeLine, banner, subBanner, meatball, bt, raceTarget, missionLine)
 function Hud:update(dt, player, world, view, camCtl, game, w, h)
-	self.player, self.cam = player, view
+	self.player, self.cam, self.state = player, view, game
 	self.w, self.h, self.u = w, h, min(w, h) / 900
 	local g = self.g
 	g:lineWidth(max(1.2, 1.6 * self.u))
@@ -285,6 +285,16 @@ function Hud:targets(ac, world)
 	end
 	self.nearestEnemy = nearest
 	local locked = self:lockTarget(ac, ac.selectedSpec)
+	-- the target the rear seat marked
+	local mk = self.state and self.state.wsoMark
+	if mk and mk ~= ac and mk.alive then
+		local mx, my = self:project(mk.pos)
+		if mx then
+			local k = 16 * u
+			self:poly({ { mx, my - k }, { mx + k, my }, { mx, my + k }, { mx - k, my } }, AMBER)
+			self:text("JELÖLT", mx, my + k + 12 * u, AMBER, 10 * u + 2, "center")
+		end
+	end
 	for _, t in ipairs(world.aircraft) do
 		if t ~= ac and t.alive and t.team == ac.team then               -- wingman: cyan ring with the distance
 			local px, py = self:project(t.pos)

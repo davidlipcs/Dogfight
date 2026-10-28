@@ -33,7 +33,7 @@ local FUNCTIONS = {
 	"ClaimDaily", "GetMissions", "ClaimMission", "GetLeaderboard",   -- the daily reward, the daily missions, the top list
 	"BuySkinRobux",                                     -- (kind "air"/"pilot", id): the Robux purchase of a skin
 	"ListRooms", "CreateRoom", "JoinRoom", "LeaveRoom", "QuickPlay", "SetTeam", "SetSlots",   -- the hangar groups
-	"JoinSeat", "LeaveSeat",                            -- the rear seat of a two-seat jet
+	"OpenSeat", "JoinSeat", "LeaveSeat",                -- the rear seat of a two-seat jet: the pilot opens it (open, aircraft key, loadout pairs), a team mate takes / leaves it
 }
 
 function Remotes.init()

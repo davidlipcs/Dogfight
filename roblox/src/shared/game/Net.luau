@@ -27,8 +27,15 @@ function N.snapshot(ac)
 		t = "s", p = { r1(p.x), r1(p.y), r1(p.z) }, v = { floor(v.x + 0.5), floor(v.y + 0.5), floor(v.z + 0.5) },
 		q = { r3(q.x), r3(q.y), r3(q.z), r3(q.w) }, c = { r3(c.pitch), r3(c.roll), r3(c.yaw) }, e = r3(ac.fm.engine), g = ac.fm.gearDown and 1 or 0,
 		hp = floor(ac.hp), al = ac.alive and 1 or 0, bn = ac.burning and 1 or 0, cr = ac.crashed and 1 or 0, gn = (ac.gun.firing and ac.alive) and 1 or 0,
-		ej = ac.ejected and 1 or 0,
+		ej = ac.ejected and 1 or 0, fl = ac.flares, ld = N.loadedMask(ac),
 	}
+end
+
+-- which stations still hold a missile: "1011" (in the order of ac.stations) - the rear seat's copy of the jet needs it
+function N.loadedMask(ac)
+	local t = {}
+	for i, st in ipairs(ac.stations) do t[i] = (st.loaded and not st.launch) and "1" or "0" end
+	return table.concat(t)
 end
 
 -- ------------------------------------------------------------------ the ghost's pilot
@@ -46,6 +53,7 @@ function Ghost:receive(s)
 	local q = s.q
 	self.target.x, self.target.y, self.target.z, self.target.w = q[1], q[2], q[3], q[4]
 	self.snap = { p = s.p, v = s.v, c = s.c, e = s.e, g = s.g, at = self.clock() }
+	if self.ac.slave then N.applyExtras(self.ac, s) end
 end
 function Ghost:think() end
 function Ghost:fly(dt)
@@ -72,6 +80,27 @@ function Ghost:fly(dt)
 end
 N.GhostPilot = Ghost
 
+-- the rear seat's copy of the pilot's jet: follows the packets like a ghost, but its sensors run and nothing can hurt it here
+function N.applyExtras(ac, s)
+	if s.fl then ac.flares = s.fl end
+	if s.ld then
+		for i, st in ipairs(ac.stations) do
+			if st.loaded and string.sub(s.ld, i, i) == "0" then st.loaded = false end
+			if not st.loaded and string.sub(s.ld, i, i) == "1" then st.loaded = true end
+		end
+		ac:updateStores()
+		if ac.selected and ac:missileCount(ac.selected) == 0 then ac:afterLaunch() end
+	end
+end
+function N.makeSlave(ac, clock)
+	newGhostPilot(ac, clock)
+	ac.slave = true
+	ac.takeDamage = function() end
+	ac.kill = function() end
+	ac.crash = function() end
+	return ac
+end
+
 local function specOf(key)
 	return Specs.AIRCRAFT[key] or Specs.TRAINERS[key] or Specs.BANDITS[key]
 end
@@ -88,12 +117,15 @@ Session.__index = Session
 function N.new(match, bus)
 	local self = setmetatable({}, Session)
 	self.match, self.bus = match, bus
-	self.myId = "u" .. tostring(bus.userId)
+	self.wsoOf = match.opts.wsoOf                    -- a number: this machine sits in the rear seat of that player's jet (match.player is its copy)
+	self.myId = "u" .. tostring(self.wsoOf or bus.userId)
 	self.humans = {}                   -- id -> ghost of another player
 	self.enemies = {}                  -- id -> ghost of the host's AI jets (guests only)
 	self.local_ = {}                   -- id -> the host's own AI jets (so that messages can name them)
 	self.nextEnemy = 1
-	self.t = { snap = 0, hello = 0, en = 0, st = 0, need = 0, host = 0 }
+	self.t = { snap = 0, hello = 0, en = 0, st = 0, need = 0, host = 0, wso = 0 }
+	self.pilotSeen, self.pilotGone = bus.clock(), false
+	self.wsoUser, self.wsoSeen = nil, 0             -- the pilot's side: who sits in my rear seat
 	self.score = { blue = 0, red = 0 }
 	self.wasHost = bus.isHost()
 	self.hostNow = self.wasHost
@@ -147,17 +179,62 @@ local function makeGhost(self, id, key, name, team, human, skin, outfit)
 	return g
 end
 
+-- a state packet of a player's jet applied to the copy of it in this world
+local function applyState(self, g, m)
+	local w = self:world()
+	g.pilot:receive(m)
+	g.lastSeen = self:clock()
+	local wasCrashed = g.crashed
+	g.hp, g.burning, g.ejected = m.hp, m.bn == 1, m.ej == 1
+	g.gun.firing = m.gn == 1
+	if m.al == 1 then g.alive, g.crashed = true, false
+	else
+		if g.alive then g.alive, g.deathTime = false, w.time end
+		if m.cr == 1 and not wasCrashed then
+			g.crashed = true
+			g.fm.vel = V()
+			w:emit("explosion", { pos = copy(g.pos), size = 2.5, ground = true })
+		end
+	end
+end
+
 -- ------------------------------------------------------------------ incoming
 function Session:onMessage(from, m)
 	local t = m.t
 	local id = "u" .. tostring(from)
 	local w = self:world()
+	if self.wsoOf and id == self.myId then
+		-- the pilot whose rear seat this is
+		if t == "s" then
+			applyState(self, self.match.player, m)
+			self.pilotSeen = self:clock()
+			return
+		elseif t == "bye" then self.pilotGone = true; return
+		elseif t == "hello" or t == "need" then return end                 -- (the jet itself is the copy; the rest - enemies, missiles - is as for anybody)
+	end
+	if t == "wsohello" then
+		if m.to == self.bus.userId then
+			if self.wsoUser ~= from then self.t.hello = 0 end
+			self.wsoUser, self.wsoSeen, self.wsoName, self.wsoOutfit = from, self:clock(), m.n, m.pl
+			self.match.wsoName = m.n
+		end
+		return
+	elseif t == "wso" then
+		if m.to == self.bus.userId and from == self.wsoUser then
+			self.wsoSeen = self:clock()
+			self.match:wsoDo(m.a, m.k, self:byId(m.tg), self.wsoName)
+		end
+		return
+	end
 	if t == "hello" then
 		local g = self.humans[id]
 		if g and g.specKey ~= m.a then dropGhost(self, g); self.humans[id] = nil; g = nil end
 		if not g then self.humans[id] = makeGhost(self, id, m.a, m.n or "Pilóta", m.tm or "blue", true, m.sk, m.pl) end
 		local gg = self.humans[id]
-		if gg then gg.team, gg.name, gg.tag, gg.skin, gg.outfit = m.tm or "blue", m.n or gg.name, m.n or gg.tag, m.sk, m.pl end
+		if gg then
+			gg.team, gg.name, gg.tag, gg.skin, gg.outfit = m.tm or "blue", m.n or gg.name, m.n or gg.tag, m.sk, m.pl
+			gg.twoSeat, gg.wsoOutfit = m.ts == 1, m.wo
+		end
 	elseif t == "s" then
 		local g = self.humans[id]
 		if not g then
@@ -167,20 +244,7 @@ function Session:onMessage(from, m)
 			end
 			return
 		end
-		g.pilot:receive(m)
-		g.lastSeen = self:clock()
-		local wasCrashed = g.crashed
-		g.hp, g.burning, g.ejected = m.hp, m.bn == 1, m.ej == 1
-		g.gun.firing = m.gn == 1
-		if m.al == 1 then g.alive, g.crashed = true, false
-		else
-			if g.alive then g.alive, g.deathTime = false, w.time end
-			if m.cr == 1 and not wasCrashed then
-				g.crashed = true
-				g.fm.vel = V()
-				w:emit("explosion", { pos = copy(g.pos), size = 2.5, ground = true })
-			end
-		end
+		applyState(self, g, m)
 	elseif t == "need" then
 		self.t.hello = 0                                      -- answer with our hello next step
 	elseif t == "bye" then
@@ -214,7 +278,7 @@ function Session:onMessage(from, m)
 		st.wave, st.waveActive = m.wave or st.wave, m.active == true
 	elseif t == "launch" then
 		local shooter = self:byId(m.s)
-		if not shooter or shooter == self.match.player then return end
+		if not shooter or (shooter == self.match.player and not self.wsoOf) then return end
 		local spec = shooter.missiles and shooter.missiles[m.k] or Specs.MISSILES[m.k]
 		if not spec then return end
 		local target = self:byId(m.tg)
@@ -263,9 +327,29 @@ function Session:step(dt)
 			match:setGuest(true)
 		end
 	end
+	if self.wsoOf then
+		-- the rear seat: only says it is there; the jet is flown (and the packets come) from the pilot's machine
+		if T.wso <= 0 then
+			T.wso = 2
+			bus.send({ t = "wsohello", to = self.wsoOf, n = bus.name, pl = bus.outfit })
+		end
+		for id, g in pairs(self.humans) do
+			if g.lastSeen and now - g.lastSeen > 6 then dropGhost(self, g); self.humans[id] = nil end
+		end
+		for id, g in pairs(self.enemies) do
+			if g.lastSeen and now - g.lastSeen > 1.5 then dropGhost(self, g); self.enemies[id] = nil end
+		end
+		if now - self.pilotSeen > 8 then self.pilotGone = true end
+		return
+	end
+	if self.wsoUser and now - self.wsoSeen > 6 then
+		self.wsoUser, self.wsoName, self.wsoOutfit, match.wsoName = nil, nil, nil, nil
+		T.hello = 0
+	end
 	if T.hello <= 0 and p then
 		T.hello = 3
-		bus.send({ t = "hello", n = bus.name, a = p.specKey or "f16", tm = bus.team, sk = p.skin, pl = p.outfit })
+		bus.send({ t = "hello", n = bus.name, a = p.specKey or "f16", tm = bus.team, sk = p.skin, pl = p.outfit,
+			ts = p.twoSeat and 1 or 0, wo = self.wsoUser and self.wsoOutfit or nil })
 	end
 	if T.snap <= 0 and p then
 		T.snap = 1 / 15
@@ -301,6 +385,7 @@ end
 
 -- the world's events of the frame: what happened to what this machine is the authority of is told to the others
 function Session:onEvents(events)
+	if self.wsoOf then return end
 	local match, bus = self.match, self.bus
 	local p = match.player
 	for _, e in ipairs(events) do
@@ -328,8 +413,14 @@ function Session:onEvents(events)
 	end
 end
 
+-- the rear seat gives the pilot's machine an order: a = "fire" (k: AIM-9M / AIM-120A), "flare", "mark"; target: an aircraft of this world
+function Session:wsoSend(a, key, target)
+	if not self.wsoOf then return end
+	self.bus.send({ t = "wso", to = self.wsoOf, a = a, k = key, tg = target and target.netId or nil })
+end
+
 function Session:leave()
-	self.bus.send({ t = "bye" })
+	if not self.wsoOf then self.bus.send({ t = "bye" }) end
 	remove(self, self.humans)
 	remove(self, self.enemies)
 end

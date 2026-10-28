@@ -77,15 +77,12 @@ function Rooms.view(room, forPlayer: Player?)
 	end
 	table.sort(members, function(a, b) return a.name < b.name end)
 	local seats = {}
-	local jets = workspace:FindFirstChild("Jets")
-	if jets then
-		for _, j in jets:GetChildren() do
-			if j:GetAttribute("RoomId") == room.id and j:GetAttribute("Seats") == 2 and j:GetAttribute("WsoId") == 0 and j:GetAttribute("SeatOpen") then
-				local pilot = Players:GetPlayerByUserId(j:GetAttribute("OwnerId") or 0)
-				if pilot then table.insert(seats, { userId = pilot.UserId, name = pilot.DisplayName, team = j:GetAttribute("Team") }) end
-			end
+	for pilot, seat in room.seats do
+		if seat.open and not seat.wso then
+			table.insert(seats, { userId = pilot.UserId, name = pilot.DisplayName, team = room.team[pilot] or "A", a = seat.a, lo = seat.lo })
 		end
 	end
+	table.sort(seats, function(x, y) return x.userId < y.userId end)
 	return {
 		id = room.id, name = room.name, mode = room.mode, max = room.max, private = room.private,
 		code = (forPlayer and room.members[forPlayer]) and room.private and room.code or nil,
@@ -109,6 +106,10 @@ function Rooms.leave(player: Player)
 	roomOf[player] = nil
 	room.members[player] = nil
 	room.team[player] = nil
+	room.seats[player] = nil
+	for _, seat in room.seats do
+		if seat.wso == player then seat.wso = nil end
+	end
 	if Rooms.hooks.left then Rooms.hooks.left(player, room) end
 	if next(room.members) == nil then
 		rooms[room.id] = nil
@@ -137,7 +138,7 @@ function Rooms.create(player: Player, name: string, mode: string, extra: number,
 	local room = {
 		id = nextId, name = filtered(name ~= "" and name or (player.DisplayName .. " szobája"), player), host = player,
 		mode = mode == "pvp" and "pvp" or "coop", max = 1 + extra, private = private == true, code = nil,
-		members = {}, team = {}, score = { A = 0, B = 0 }, created = os.time(),
+		members = {}, team = {}, seats = {}, score = { A = 0, B = 0 }, created = os.time(),
 	}
 	nextId += 1
 	if room.private then room.code = newCode() end
@@ -208,6 +209,60 @@ function Rooms.setSlots(player: Player, extra)
 	return true, room.max
 end
 
+-- the pilot of a two-seat jet opens / closes the rear seat: the aircraft key and the loadout (a list of { station, weapon }) of the jet
+function Rooms.openSeat(player: Player, open, aircraft, loadout)
+	local room = roomOf[player]
+	if not room then return false, "Nem vagy szobában" end
+	if open ~= true then
+		room.seats[player] = nil
+		Rooms.push(room)
+		return true
+	end
+	if typeof(aircraft) ~= "string" or #aircraft > 12 then return false end
+	local lo = {}
+	if typeof(loadout) == "table" then
+		for _, pair in loadout do
+			if typeof(pair) == "table" and typeof(pair[1]) == "number" and typeof(pair[2]) == "string" and #lo < 16 and #pair[2] <= 12 then
+				table.insert(lo, { pair[1], pair[2] })
+			end
+		end
+	end
+	local old = room.seats[player]
+	room.seats[player] = { open = true, a = aircraft, lo = lo, wso = old and old.wso or nil }
+	Rooms.push(room)
+	return true
+end
+
+-- a team mate sits in the rear seat of the pilot's jet.  -> true, the seat ({ a, lo, team }) or false, why
+function Rooms.joinSeat(player: Player, pilotUserId)
+	local room = roomOf[player]
+	if not room then return false, "Nem vagy szobában" end
+	local pilot = nil
+	for p in room.members do
+		if p.UserId == pilotUserId then pilot = p end
+	end
+	local seat = pilot and room.seats[pilot]
+	if not pilot or pilot == player or not seat or not seat.open then return false, "Ez az ülés nem szabad" end
+	if seat.wso and seat.wso ~= player then return false, "Már ül valaki a hátsó ülésen" end
+	if room.mode == "pvp" and room.team[pilot] ~= room.team[player] then return false, "Csak a saját csapatod gépébe ülhetsz be" end
+	for _, other in room.seats do
+		if other.wso == player then other.wso = nil end
+	end
+	seat.wso = player
+	Rooms.push(room)
+	return true, { a = seat.a, lo = seat.lo, team = room.team[pilot] or "A", pilot = pilot.UserId }
+end
+
+function Rooms.leaveSeat(player: Player)
+	local room = roomOf[player]
+	if not room then return true end
+	for _, seat in room.seats do
+		if seat.wso == player then seat.wso = nil end
+	end
+	Rooms.push(room)
+	return true
+end
+
 function Rooms.score(room, team: string)
 	room.score[team] = (room.score[team] or 0) + 1
 end
@@ -221,6 +276,9 @@ function Rooms.init(r)
 	remotes.QuickPlay.OnServerInvoke = function(player) return Rooms.quickPlay(player) end
 	remotes.SetTeam.OnServerInvoke = function(player, team) return Rooms.setTeam(player, team) end
 	remotes.SetSlots.OnServerInvoke = function(player, extra) return Rooms.setSlots(player, extra) end
+	remotes.OpenSeat.OnServerInvoke = function(player, open, aircraft, loadout) return Rooms.openSeat(player, open, aircraft, loadout) end
+	remotes.JoinSeat.OnServerInvoke = function(player, pilotUserId) return Rooms.joinSeat(player, pilotUserId) end
+	remotes.LeaveSeat.OnServerInvoke = function(player) return Rooms.leaveSeat(player) end
 	Players.PlayerRemoving:Connect(function(player) Rooms.leave(player) end)
 end
 

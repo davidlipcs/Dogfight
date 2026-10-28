@@ -159,7 +159,7 @@ function Aircraft:physicsStep(dt, world)
 end
 
 function Aircraft:sensorStep(dt, world)
-	if not self.alive or self.ghost then return end
+	if not self.alive or (self.ghost and not self.slave) then return end          -- (the rear seat's copy of the pilot's jet looks round too)
 	local r = self.radar
 	r:update(dt, world)
 	local msgs = { locked = { "RADAR LOCK", "good" }, lost = { "LOCK LOST", "warn" }, decoyed = { "LOCK LOST - CHAFF", "warn" } }
@@ -231,6 +231,30 @@ function Aircraft:fireMissile(world)
 	end
 	local m = self:release(st, target, axis, world, math.abs(st.mount.x) > 4.5 and 0 or 4)
 	if sp.guidance == IR then self.irSeeker:reset() end
+	self:afterLaunch()
+	return m
+end
+-- the rear seat shoots: a missile of the given kind at the given target, whatever the radar of the jet says (nil: not launched)
+function Aircraft:fireFrom(world, key, target)
+	if not self.alive or self.ejected then return nil end
+	local byNum = {}
+	for _, s in ipairs(self.stations) do byNum[s.number] = s end
+	local st = nil
+	for _, n in ipairs(self.spec.firingOrder) do
+		local s = byNum[n]
+		if s and s.loaded and not s.launch and s.key == key then st = s; break end
+	end
+	if not st then return nil end
+	if target and (not target.alive or target.team == self.team) then target = nil end
+	local sp = st.spec
+	local axis = nil
+	if sp.guidance == IR and target then axis = norm(sub(target.pos, self.pos)) end
+	if self.spec.bays then
+		st.launch = { t = 0, target = target, axis = axis, released = false, timing = self.spec.launch[st.key] }
+		self:afterLaunch()
+		return { spec = sp, pending = true }
+	end
+	local m = self:release(st, target, axis, world, math.abs(st.mount.x) > 4.5 and 0 or 4)
 	self:afterLaunch()
 	return m
 end

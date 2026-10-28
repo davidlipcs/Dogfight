@@ -12,6 +12,7 @@ local Career = require(script.Parent.Career)
 local Tutorial = require(script.Parent.Tutorial)
 local CarrierLib = require(script.Parent.Carrier)
 local Radio = require(script.Parent.Radio)
+local Net = require(script.Parent.Net)
 local V, add, sub, mul, len, norm, copy, clamp, DEG = M.V, M.add, M.sub, M.mul, M.len, M.norm, M.copy, M.clamp, M.DEG
 local atan2, rng = M.atan2, M.rng
 local abs = math.abs
@@ -73,6 +74,8 @@ function G.new(opts, env)
 	self.prevPos, self.myFin, self.ejectArm, self.thrPress = nil, nil, 0, -1e9
 	self.events = {}                                    -- the world's events of the last frame, for the view
 	self.guest = self.opts.netGuest == true
+	self.wso = self.opts.wsoOf ~= nil                   -- the rear seat of another player's jet: the player is a copy of that jet
+	self.wsoMark, self.wsoMarkT, self.wsoFlare, self.wsoName, self.wsoFired = nil, nil, 0, nil, -1e9
 	-- the carrier, 21 km east and 42 km south of the island's middle (its deck is ground for the flight model)
 	self.carrier = self.terrain.carrier or CarrierLib.new(self.terrain, 21000, -42000, 0)
 	self.nav.carrier = { x = self.carrier.x, y = self.carrier.y }
@@ -109,6 +112,7 @@ function Match:spawnPlayer()
 		for _, a in ipairs(w.aircraft) do if a ~= self.player then keep[#keep + 1] = a end end
 		w.aircraft = keep
 	end
+	if self.wso then self:spawnSlave() return end
 	local sc = self:scenario()
 	local duel, canyon, tube, free = sc == "duel", sc == "canyon", sc == "tube", sc == "free"
 	local pvp = sc == "pvp"
@@ -202,6 +206,7 @@ function Match:spawnPlayer()
 		st.subBanner = (self.opts.carrierStart and self.carrier.active) and CAT_HINT or (spec.noAB and TAKEOFF_HINT_NOAB or TAKEOFF_HINT)
 	end
 	w:addAircraft(ac)
+	ac.twoSeat = self.opts.twoSeat == true
 	self.player, self.pilot = ac, AI.newPlayerPilot(ac)
 	self.killCam, self.followM = nil, nil
 	self.threats, self.hitBy = {}, {}
@@ -209,6 +214,89 @@ function Match:spawnPlayer()
 	if self.wingman and self.wingman.alive then self.wingman.pilot.lead = ac
 	elseif air and self:wantWingman() then self:spawnWingman() end
 	if sc == "survival" and st.wave == 0 then st.waveTimer = air and 12 or FIRST_WAVE_DELAY end
+end
+
+-- the rear seat: the player is a copy of the pilot's jet (it follows the pilot's packets, its sensors run, nothing hurts it here)
+function Match:spawnSlave()
+	local w = self.world
+	local key = self.opts.aircraft
+	local spec = AIRCRAFT[key] or TRAINERS[key] or AIRCRAFT.fa18
+	local ac = Sim.newAircraft(spec, "Pilóta (" .. spec.callsign .. ")", self.env.netTeam or "blue", V(self.terrain.airfield.x, self.terrain.airfield.y, 3000), 0, 200,
+		{ isPlayer = true, livery = "viper", lockAssist = true, missiles = Specs.missilesFor(spec, false), loadout = self.opts.loadout or "default",
+			rnd = rng(math.floor(self.rnd() * 1e9)) })
+	ac.specKey = AIRCRAFT[key] and key or "fa18"
+	ac.twoSeat = true
+	Net.makeSlave(ac, self.clock)
+	w:addAircraft(ac)
+	self.player = ac
+	self.pilot = { think = noop, fly = noop }
+	self.killCam, self.followM = nil, nil
+	self.threats, self.hitBy = {}, {}
+	if self.env.onSpawn then self.env.onSpawn(ac, spec) end
+	self.hud:message("HÁTSÓ ÜLÉS: T = célpont jelölése a pilótának · Space = rakéta · X = flare · 1/2 = fegyver · Y = következő cél", "info", 8, "wso")
+end
+
+-- the pilot's machine: an order from the rear seat (the Session checked who sent it).  a: "fire" (key: AIM-9M / AIM-120A), "flare", "mark"
+function Match:wsoDo(a, key, target, name)
+	local p = self.player
+	if not p or not p.alive or p.ejected or self.wso then return end
+	local who = name or "WSO"
+	if a == "fire" then
+		if key ~= "AIM-9M" and key ~= "AIM-120A" then return end
+		local m = p:fireFrom(self.world, key, target)
+		if m then self.hud:message(who .. ": " .. (key == "AIM-9M" and "FOX 2" or "FOX 3") .. "!", "good", 2, "wso")
+		else self.hud:message(who .. ": nincs több " .. key, "warn", 1.5, "wso") end
+	elseif a == "flare" then
+		self.wsoFlare = 1.6
+		self.hud:message(who .. ": FLARE!", "info", 1.2, "wso")
+	elseif a == "mark" then
+		if target and target.alive then
+			self.wsoMark, self.wsoMarkT = target, 30
+			self.hud:message(who .. " jelölt: " .. target.name .. " – T = lock", "good", 3, "wso")
+		end
+	end
+end
+
+-- the rear seat's keys (a press): k as in the browser game
+function Match:wsoKey(k, camForward)
+	local p = self.player
+	if not p or not p.alive then return end
+	local function msg(t, l, d) self.hud:message(t, l or "info", d or 1.6, "wso") end
+	local send = self.env.wsoSend or noop
+	if k == "t" or k == "y" then
+		local cands = {}
+		for _, a in ipairs(self.world.aircraft) do
+			if a ~= p and a.alive and a.team ~= p.team then
+				local rel = sub(a.pos, p.pos)
+				local off = M.angleBetween(camForward or p.forward, rel)
+				if k == "y" or off < 40 * DEG then cands[#cands + 1] = { t = a, key = k == "t" and off or len(rel) } end
+			end
+		end
+		table.sort(cands, function(x, y) return x.key < y.key end)
+		if #cands == 0 then msg(k == "t" and "Nincs cél a nézési irányban" or "Nincs ellenség", "warn") return end
+		local pick = cands[1].t
+		for i, c in ipairs(cands) do
+			if c.t == self.wsoMark then pick = cands[(i % #cands) + 1].t end
+		end
+		self.wsoMark = pick
+		send("mark", nil, pick)
+		msg(string.format("JELÖLT: %s · %.1f km", pick.name, len(sub(pick.pos, p.pos)) / 1000), "good", 2)
+	elseif k == "Space" then
+		local key = p.selected
+		if not key then return end
+		if self.clock() - self.wsoFired < 0.6 then return end
+		if p:missileCount(key) == 0 then msg("NINCS TÖBB " .. key, "warn") return end
+		local tg = self.wsoMark
+		if not tg or not tg.alive then msg("Előbb jelölj célt (T)", "warn") return end
+		self.wsoFired = self.clock()
+		send("fire", key, tg)
+		msg((key == "AIM-9M" and "FOX 2" or "FOX 3") .. " – kérés a pilótának", "good", 1.5)
+	elseif k == "x" then
+		send("flare")
+		msg("FLARE kérés a pilótának", "info", 1.2)
+	elseif k == "1" then if p:select("AIM-9M") then msg("AIM-9M", "info", 1) end
+	elseif k == "2" then if p:select("AIM-120A") then msg("AIM-120A", "info", 1) end
+	end
 end
 
 -- the wingman joins behind and to the right of the player (same type, the weaker AI airframe and missiles)
@@ -351,7 +439,7 @@ function Match:applyInput(dt, inp)
 	c.airbrake = inp.brake == true
 	c.brakes = inp.brake == true and p.onGround
 	p.trigger = inp.trigger == true
-	p.cmHold = inp.flare == true
+	p.cmHold = inp.flare == true or self.wsoFlare > 0
 end
 
 -- the keys that are not held (a press): k as in the browser game
@@ -378,8 +466,16 @@ function Match:onKey(k, camForward)
 			msg("Nincs ellenség az orr előtt (±30°)", "warn")
 		end
 	elseif k == "t" then
-		-- lock the enemy closest to where you are looking (mouse aim, or free look)
-		local res = p.radar:quickLock(self.world, camForward or p.forward)
+		-- the target the rear seat marked first; else the enemy closest to where you are looking (mouse aim, or free look)
+		local mk = self.wsoMark
+		local dir = camForward or p.forward
+		if mk and mk.alive and p.radar.locked ~= mk and p.radar.pending ~= mk then
+			dir = norm(sub(mk.pos, p.pos))
+			local res = p.radar:quickLock(self.world, dir, 12)
+			if res == "none" or res == "keep" then msg("A jelölt cél nincs a radar látószögében – fordulj felé", "warn", 2) end
+			return
+		end
+		local res = p.radar:quickLock(self.world, dir)
 		local t = ({ unlocked = { "UNLOCK", "info" }, locking = { "LOCKOLÁS...", "info" }, keep = { "Nincs másik cél", "info" },
 			none = { "Nincs cél a nézési irányban - fordulj felé", "warn" } })[res]
 		if t then msg(t[1], t[2], 1.6) end
@@ -489,7 +585,12 @@ function Match:update(dt)
 		local wdt = bt.active > 0 and dt * 0.35 or dt
 		self.world:update(wdt)
 		if self.race and self.player.alive then self:raceStep(wdt) end
-		if self.player.alive and not self.player.ejected and self.carrier.active then self:carrierStep(dt) end
+		if self.player.alive and not self.player.ejected and self.carrier.active and not self.wso then self:carrierStep(dt) end
+		if self.wsoFlare > 0 then self.wsoFlare = self.wsoFlare - dt end
+		if self.wsoMark then
+			if self.wsoMarkT then self.wsoMarkT = self.wsoMarkT - dt end
+			if not self.wsoMark.alive or (self.wsoMarkT and self.wsoMarkT <= 0) then self.wsoMark, self.wsoMarkT = nil, nil end
+		end
 		if self.player.alive and not self.player.onGround then self.career:tick(dt) end
 		for _, m in ipairs(self.player.rwr.incoming) do self.threats[m.missile] = true end
 		if self.tutorial then self.tutorial:update(dt) end
@@ -505,7 +606,8 @@ function Match:update(dt)
 	self.events = events
 	local nav = self.nav
 	nav.wave, nav.enemies = st.wave, #self:enemiesAlive()
-	st.modeLine = self:modeLine()
+	st.modeLine = self:modeLine() .. (self.wsoName and (" · WSO: " .. self.wsoName) or "")
+	st.wsoMark = self.wsoMark
 	st.meatball = self:meatball()
 	st.credits = self.hangar.credits and self.hangar:credits() or 0
 	return events
@@ -579,6 +681,7 @@ function Match:meatball()
 end
 
 function Match:addScore(n)
+	if self.wso then n = math.floor(n / 2) end                    -- the rear seat gets half of a kill
 	self.state.score = self.state.score + n
 	if not self.opts.tutorial and not self.opts.benchmark then self.hangar:earn(n) end
 end
@@ -743,6 +846,7 @@ function Match:modeLine()
 	if self.opts.tutorial then return "" end
 	local fmt = Race.fmtTime
 	local friend = self.env.friendLine and self.env.friendLine() or ""
+	if self.wso then return "HÁTSÓ ÜLÉS · te jelölsz és lősz, a pilóta repül" end
 	if sc == "race" and self.race then
 		local r = self.race
 		return "GYŰRŰVERSENY · " .. math.min(r.next, #r.rings) .. "/" .. #r.rings .. " · " .. fmt(r.time) .. " · rekord " .. fmt(r.best) .. friend
