@@ -332,7 +332,7 @@ local function frame(dt)
 	updateFollow(Game.paused and 0 or dt)
 	cam:update(Game.paused and 0 or dt, match.player)
 	view.world = match.world
-	view:setCamera(cam)
+	view:setCamera(cam, cam.follow and cam.follow.pos or match.player.pos)
 	local inside = cam.cockpit and match.player.alive and not cam.follow
 	view:update(Game.paused and 0 or dt, match.player, inside)
 	if inside ~= Game.wasInside then

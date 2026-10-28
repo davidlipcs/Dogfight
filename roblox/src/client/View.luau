@@ -358,12 +358,16 @@ function View:update(dt, player, cockpit)
 	fx:setTracers(w.bullets)
 end
 
--- the camera: cam is the flight camera of shared/game/Camera.luau
-function View:setCamera(cam)
+-- the camera: cam is the flight camera of shared/game/Camera.luau; anchor: the point (sim frame) it is placed round (the player's jet, or
+-- what the missile / kill camera follows).  The jets are drawn Config.ModelScale times bigger than the island's scale, so the camera's
+-- distance from the anchor (the chase distance, the eye in the cockpit) is scaled the same way - or it would sit inside the jet.
+function View:setCamera(cam, anchor)
 	self.camPos = cam.position
 	local c = self.camera
 	c.CameraType = Enum.CameraType.Scriptable
-	c.CFrame = Coords.cframe(cam.position, cam.orientation)
+	anchor = anchor or cam.position
+	local p = Coords.pos(anchor) + Coords.vec(SimMath.sub(cam.position, anchor)) * Config.ModelScale
+	c.CFrame = Coords.cframe(SimMath.V(0, 0, 0), cam.orientation).Rotation + p
 	c.FieldOfView = cam.fov
 end
 
