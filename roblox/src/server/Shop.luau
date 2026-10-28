@@ -8,6 +8,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Catalog = require(Shared.Catalog)
 local Data = require(script.Parent.Data)
+local Combat = require(script.Parent.Combat)
 
 local Shop = {}
 
@@ -75,6 +76,21 @@ function Shop.start(remotes)
 		return true
 	end
 
+	-- a skin for Robux: the price is the skin's tier (Config.SkinRobux, 500 Ft at most); the pick is remembered until the receipt
+	remotes.BuySkinRobux.OnServerInvoke = function(player, kind, id)
+		local p = Data.get(player)
+		if not p or (kind ~= "air" and kind ~= "pilot") then return false, "Hiba" end
+		local skin = typeof(id) == "string" and (kind == "air" and Catalog.AirById[id] or Catalog.PilotById[id])
+		if not skin then return false, "Ismeretlen skin" end
+		if (kind == "air" and p.air or p.pilot)[id] then return false, "Ez már a tiéd" end
+		local product = Config.SkinProducts[skin.rarity]
+		if not product or product == 0 then return false, "A Robux-vásárlás még nincs beállítva" end
+		p.pending = { kind = kind, id = id, rarity = skin.rarity }
+		task.spawn(Data.save, player)
+		MarketplaceService:PromptProductPurchase(player, product)
+		return true, tostring(Config.SkinRobux[skin.rarity]) .. " Robux"
+	end
+
 	-- Robux: the client asks, the server opens the purchase window (only for an id that is in the Config)
 	remotes.BuyProduct.OnServerInvoke = function(player, index)
 		local prod = typeof(index) == "number" and Config.Products[index]
@@ -102,6 +118,24 @@ function Shop.start(remotes)
 		if not p then return Enum.ProductPurchaseDecision.NotProcessedYet end
 		local rid = tostring(info.PurchaseId)
 		if p.receipts[rid] then return Enum.ProductPurchaseDecision.PurchaseGranted end
+		-- a skin: the four rarity products
+		for rarity, pid in Config.SkinProducts do
+			if pid ~= 0 and pid == info.ProductId then
+				p.receipts[rid] = true
+				local pend = p.pending
+				if pend and pend.rarity == rarity then
+					(pend.kind == "air" and p.air or p.pilot)[pend.id] = true
+					if pend.kind == "air" then p.airOn = pend.id else p.pilotOn = pend.id end
+					Combat.toast(player, "Megvetted: " .. pend.id, "good")
+				else
+					p.coins += Config.TierCoins[rarity]       -- the pick was lost (a restart): the same value in coins
+				end
+				p.pending = nil
+				Data.push(player)
+				task.spawn(Data.save, player)
+				return Enum.ProductPurchaseDecision.PurchaseGranted
+			end
+		end
 		for _, prod in Config.Products do
 			if prod.id == info.ProductId then
 				p.receipts[rid] = true

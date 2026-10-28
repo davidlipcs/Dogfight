@@ -11,7 +11,10 @@ local EVENTS = {
 	"FireMissile",    -- client -> server: a missile at an enemy (the Model)
 	"Flare",          -- client -> server: drop flares
 	"Crashed",        -- client -> server: my jet hit the ground / the sea
-	"Launch",         -- client -> server: take off (spawn the jet)
+	"Launch",         -- client -> server: take off (kind: "single" or "twoseat")
+	"Mark",           -- client -> server: the rear seat marks an enemy (the Model) for the pilot
+	"Seat",           -- server -> client: you sit in the rear seat of this jet (the Model), or nil: you left it
+	"RoomState",      -- server -> client: the room you are in (members, teams, open rear seats)
 	"Tracer",         -- server -> clients: a line of tracer fire (from, to, color)
 	"Hud",            -- server -> client: { wave, enemies, missiles, flares, hp }
 	"Toast",          -- server -> client: a short message (text, kind)
@@ -23,6 +26,9 @@ local FUNCTIONS = {
 	"BuyAir", "BuyPilot", "EquipAir", "EquipPilot",    -- shop: (id) -> ok, message
 	"BuyProduct", "BuyPass",                            -- Robux: (index) -> ok
 	"GetProfile",
+	"BuySkinRobux",                                     -- (kind "air"/"pilot", id): the Robux purchase of a skin
+	"ListRooms", "CreateRoom", "JoinRoom", "LeaveRoom", "QuickPlay", "SetTeam", "SetSlots",   -- the hangar groups
+	"JoinSeat", "LeaveSeat",                            -- the rear seat of a two-seat jet
 }
 
 function Remotes.init()

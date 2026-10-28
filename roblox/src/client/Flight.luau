@@ -12,6 +12,7 @@ local Debris = game:GetService("Debris")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local JetBuilder = require(Shared.JetBuilder)
+local State = require(script.Parent.State)
 
 local Flight = {}
 
@@ -116,20 +117,22 @@ local function readThrottle(dt: number)
 	throttle = math.clamp(throttle + d * 0.6 * dt, 0, 1)
 end
 
--- the enemy in front of the nose that a missile can lock (the HUD draws the box)
+-- the enemy in front of the nose that a missile can lock (the HUD draws the box); the one the rear seat marked comes first
 local function findLock()
 	local best, bestAng = nil, math.rad(Config.Missile.Cone)
 	local look = rot.LookVector
-	for _, m in workspace.Enemies:GetChildren() do
-		if m:IsA("Model") then
-			local to = m:GetPivot().Position - pos
-			local d = to.Magnitude
-			if d < Config.Missile.Range and d > 80 then
-				local ang = math.acos(math.clamp(look:Dot(to.Unit), -1, 1))
-				if ang < bestAng then best, bestAng = m, ang end
-			end
+	local function consider(m: Instance)
+		if not m:IsA("Model") or not State.hostile(m) then return end
+		local to = m:GetPivot().Position - pos
+		local d = to.Magnitude
+		if d < Config.Missile.Range and d > 80 then
+			local ang = math.acos(math.clamp(look:Dot(to.Unit), -1, 1))
+			if (Flight.markUid or 0) ~= 0 and m:GetAttribute("Uid") == Flight.markUid then ang *= 0.4 end
+			if ang < bestAng then best, bestAng = m, ang end
 		end
 	end
+	for _, m in workspace.Enemies:GetChildren() do consider(m) end
+	for _, m in workspace.Jets:GetChildren() do consider(m) end
 	return best
 end
 

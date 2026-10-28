@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Ui = require(script.Parent.Ui)
+local State = require(script.Parent.State)
 
 local Hud = {}
 
@@ -54,6 +55,8 @@ function Hud.init(remotes, flight)
 	text(top, "coins", { Position = UDim2.new(0, 0, 0, 0), TextSize = 22, TextColor3 = Ui.Amber })
 	text(top, "kills", { Position = UDim2.new(0, 0, 0, 26), TextSize = 16, TextColor3 = Color3.fromRGB(200, 215, 210) })
 	text(gui, "wave", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Size = UDim2.new(0, 400, 0, 26), TextSize = 20, TextColor3 = Color3.fromRGB(235, 245, 240), TextXAlignment = Enum.TextXAlignment.Center })
+
+	text(gui, "partner", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 40), Size = UDim2.new(0, 400, 0, 22), TextSize = 16, TextColor3 = Color3.fromRGB(150, 210, 255), TextXAlignment = Enum.TextXAlignment.Center })
 
 	-- warnings and toasts
 	text(gui, "alert", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.17, 0), Size = UDim2.new(0, 500, 0, 34), TextSize = 30, TextColor3 = Ui.Red, TextXAlignment = Enum.TextXAlignment.Center, Visible = false })
@@ -170,7 +173,22 @@ function Hud.update(dt: number, fs)
 	f.gun.Text = "ÁGYÚ ∞"
 	f.coins.Text = string.format("%d érme", profile.coins or 0)
 	f.kills.Text = string.format("lelőtt: %d", profile.kills or 0)
-	f.wave.Text = (server.wave or 0) > 0 and string.format("%d. HULLÁM · ellenség: %d", server.wave, server.enemies or 0) or "Hamarosan jönnek…"
+	if server.mode == "pvp" then
+		f.wave.Text = string.format("KÉK %d – %d PIROS  ·  te: %s", server.scoreA or 0, server.scoreB or 0, server.team == "A" and "KÉK" or "PIROS")
+	else
+		f.wave.Text = (server.wave or 0) > 0 and string.format("%d. HULLÁM · ellenség: %d", server.wave, server.enemies or 0) or "Hamarosan jönnek…"
+	end
+	if server.partner then
+		f.partner.Text = (server.role == "wso" and "Pilóta: " or "Navigátor: ") .. server.partner
+	elseif server.role == "pilot" and (State.room and #State.room.seats > 0) then
+		f.partner.Text = "A hátsó ülés szabad – a csapattársaid beülhetnek"
+	else
+		f.partner.Text = ""
+	end
+	if fs.wso then
+		f.thr.Text = "NAVIGÁTOR  ·  X rakéta · G flare · T jelölés · Z kiszállás"
+		f.gun.Text = ""
+	end
 
 	-- warnings
 	f.alert.Visible = alertOn
@@ -192,23 +210,37 @@ function Hud.update(dt: number, fs)
 		f.dot.Position = UDim2.new(0, m.X, 0, m.Y)
 	end
 
-	-- enemy markers and the lock box
+	-- markers: the enemies of the room (red), team mates (blue-ish, with the name), the other team in a team fight (red)
 	local list = {}
-	for _, m in workspace.Enemies:GetChildren() do
-		if m:IsA("Model") then table.insert(list, m) end
+	local me = Players.LocalPlayer.UserId
+	for _, name in { "Enemies", "Jets" } do
+		for _, m in workspace[name]:GetChildren() do
+			if m:IsA("Model") and State.mine(m) and m:GetAttribute("OwnerId") ~= me then
+				table.insert(list, m)
+			end
+		end
 	end
 	for i, m in list do
 		local mk = markers[i]
 		if not mk then
-			mk = Ui.make("TextLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 70, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.Code, TextSize = 14, TextColor3 = Ui.Red, TextStrokeTransparency = 0.5, Parent = gui })
+			mk = Ui.make("TextLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(0, 110, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.Code, TextSize = 14, TextStrokeTransparency = 0.5, Parent = gui })
 			markers[i] = mk
 		end
+		local hostile = State.hostile(m)
 		local wp = m:GetPivot().Position
 		local d = fs.pos and (wp - fs.pos).Magnitude or 0
 		local p, on, z = screenPoint(wp)
-		local label = string.format("%s%.1f", on and "▼ " or "◆ ", d / 1000)
+		local who = ""
+		local oid = m:GetAttribute("OwnerId")
+		if oid then
+			local pl = Players:GetPlayerByUserId(oid)
+			who = pl and (" " .. pl.DisplayName) or ""
+		end
+		local marked = (server.markUid or 0) ~= 0 and m:GetAttribute("Uid") == server.markUid
+		local label = string.format("%s%s%.1f%s", marked and "◎ " or (on and "▼ " or "◆ "), "", d / 1000, who)
+		mk.TextColor3 = hostile and (marked and Ui.Amber or Ui.Red) or Color3.fromRGB(120, 200, 255)
 		if not on then
-			-- off screen: on the edge of the screen, towards the enemy
+			-- off screen: on the edge of the screen, towards it
 			local dir = p - size / 2
 			if z < 0 then dir = -dir end
 			if dir.Magnitude < 1 then dir = Vector2.new(0, -1) end
