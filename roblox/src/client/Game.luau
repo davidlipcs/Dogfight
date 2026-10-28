@@ -26,6 +26,7 @@ local View = require(script.Parent.View)
 local Env = require(script.Parent.Env)
 local Sounds = require(script.Parent.Sounds)
 local MfdView = require(script.Parent.MfdView)
+local TutorialUi = require(script.Parent.TutorialUi)
 local State = require(script.Parent.State)
 local Net = require(Shared.game.Net)
 
@@ -49,6 +50,7 @@ local missileCam, followM, followEnd, followLast = false, nil, 0, nil
 local bt = nil
 local pauseGui
 local session, netQueue, netConn, netTimer
+local tutUi
 local sounds
 local mfdView
 
@@ -244,7 +246,10 @@ local function onKey(k)
 	if k == "h" or k == "F1" then Game.toggleHelp(); return end
 	if Game.paused then return end
 	local p = match.player
-	if k == "Enter" then match:respawn(); if cam then cam:reset(match.player) end; return end
+	if k == "Enter" then
+		if match.tutorial then match.tutorial:enter() else match:respawn(); if cam then cam:reset(match.player) end end
+		return
+	end
 	if k == "m" then hud.markers = not hud.markers; return end
 	if k == "eject" then match:ejectHandle(); return end
 	if k == "u" then
@@ -372,7 +377,14 @@ local function frame(dt)
 	hud.hideScopes = showMfd
 	canvas:begin()
 	if match.race or match:scenario() == "free" then hud.nav = nil else hud.nav = match.nav end
-	hud.tutorial = match.opts.tutorial == true
+	hud.tutorial = match.tutorial ~= nil
+	if match.tutorial then
+		tutUi = tutUi or TutorialUi.new()
+		tutUi:update(match.tutorial:view())
+	elseif tutUi then
+		tutUi:destroy()
+		tutUi = nil
+	end
 	st.raceTarget = match.race and match.race.target and match.race.target.c or nil
 	local meatball = nil
 	hud:update(dt, match.player, match.world, { position = cam.position, orientation = cam.orientation, fov = cam.fov }, cam, st, w, h)
@@ -410,7 +422,8 @@ function Game.start(opts)
 	local env = {
 		terrain = terrain,
 		career = career or Career.new(nil, nil),
-		hangar = hangar, hud = hud,
+		hangar = hangar, hud = hud, cam = cam,
+		onTutorialEnd = function() task.defer(Game.stop) end,
 		sounds = sounds,
 		best = profile and profile.best or {},
 		onRecord = function(kind, t, lap)
@@ -500,6 +513,7 @@ function Game.stop()
 	if netConn then netConn:Disconnect(); netConn = nil end
 	if sounds then sounds:stopAll(); sounds:destroy(); sounds = nil end
 	if mfdView then mfdView:destroy(); mfdView = nil end
+	if tutUi then tutUi:destroy(); tutUi = nil end
 	match, view, hud, cam = nil, nil, nil, nil
 	local c = workspace.CurrentCamera
 	c.CameraType = Enum.CameraType.Scriptable

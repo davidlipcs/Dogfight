@@ -34,7 +34,7 @@ local function goLobby()
 end
 Game.onEnd = goLobby
 
-local function play(airStart)
+local function play(airStart, tutorial)
 	if inMatch then return end
 	if not Game.ready() then
 		Lobby.say("A sziget adatai még töltődnek…", false)
@@ -46,7 +46,12 @@ local function play(airStart)
 	RoomsUi.show(false)
 	Lobby.show(false)
 	inMatch = true
-	if not Game.start(Menu.opts(airStart)) then
+	local opts = Menu.opts(airStart)
+	if tutorial then
+		opts.tutorial, opts.scenario, opts.enemies, opts.wingman, opts.mode, opts.airStart = true, "waves", 0, 0, "arcade", true
+		if profile then profile.pilotOn = profile.pilotOn end
+	end
+	if not Game.start(opts) then
 		inMatch = false
 		Lobby.show(true)
 	end

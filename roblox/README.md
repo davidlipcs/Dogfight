@@ -12,15 +12,16 @@ ha valami elromlik – azt kell elküldeni a javításhoz.
 
 ### 1. A sziget (egyszer)
 1. Nyisd meg a `DogfightPlus.rbxlx` fájlt Studióban (ne indíts játékot).
-2. **View → Command Bar**, ide másold be és Enter: `require(game.ServerScriptService.Server.IslandBuilder).build()`
-3. Pár percig dolgozik (az Output ablakban a végén: „the island is built”). Utána **File → Save**.
+2. **Window → Command Bar** (régebbi Studióban View → Command Bar), ide másold be és Enter: `require(game.ServerScriptService.Server.IslandBuilder).build()`
+3. Pár percig dolgozik (a **Window → Output** ablakban a végén: „the island is built”). Utána **File → Save**.
 
 ### 2. A gépek (egyszer; nélkülük kockákból épített gépek repülnek)
 A `roblox/models` mappában 16 `.glb` fájl van, a böngészős játék gépei Roblox-barát (≤ 15 000 háromszögű darabokra csökkentett) változatban.
-1. Studióban: **View → Asset Manager** (ha nem látszik, a View menüben kapcsold be) → fent a **Bulk Import** gomb.
+0. Ha a játék teszt módban fut (Client / Server fülek), előbb **Test → Stop**.
+1. Studióban: **Window → Asset Manager** (régebbi Studióban View → Asset Manager; vagy a Home fülön az Asset Manager gomb) → fent a **Bulk Import** gomb.
 2. A megnyíló fájlválasztóban jelöld ki az összes `.glb` fájlt a `roblox/models` mappából (Ctrl+A), **Open**.
 3. A Studio megmutatja az importálandókat – **Import**. Várd meg, amíg mind átkerül (néhány perc). Minden gép egy `Model` lesz a Workspace-ben, a fájl nevével (`f16`, `fa18` …).
-4. **View → Command Bar**, ide: `require(game.ServerScriptService.Server.Tools).adoptJets()` – ez a modelleket a `ReplicatedStorage.JetModels` mappába teszi, onnan veszi a játék.
+4. **Window → Command Bar**, ide: `require(game.ServerScriptService.Server.Tools).adoptJets()` – ez a modelleket a `ReplicatedStorage.JetModels` mappába teszi, onnan veszi a játék.
 5. **File → Save.** (A `Tools.listJets()` kiírja, melyik gép van meg.)
 Ha egy gép hátrafelé repül: `Config.JetModelFlip = { f16 = true }`.
 Az újragenerálás: `python3 tools/make_roblox_models.py` (kell hozzá: `pip install trimesh fast-simplification scipy numpy pillow`).
@@ -30,7 +31,7 @@ A böngésző a hangokat képletekből készíti; Roblox csak feltöltött hangf
 összes hang (motor, utánégető, ágyú, rakéta, robbanás, figyelmeztetések …); a `src/shared/SoundMap.luau` tudja, melyik hang hol van benne.
 1. Menj a **create.roblox.com** oldalra, jelentkezz be.
 2. Bal oldalt **Creations** (Alkotások) → fent **Development Items** (Fejlesztői elemek) → **Audio** (Hang) → **Upload** (Feltöltés).
-   (A Studióban is megy: **View → Asset Manager → Audio → Import**; az Asset Manager a sima fájlt is feltölti.)
+   (A Studióban is megy: **Window → Asset Manager → Audio → Import**.)
 3. Válaszd ki a `dogfight_sounds.wav` fájlt, add neki a nevét (pl. „Dogfight hangok”), **Upload**. A Roblox pár percig ellenőrzi.
 4. Ha kész, nyisd meg a hang oldalát: az **Asset ID** egy hosszú szám (a címsorban is ott van: `.../audio/1234567890`). Másold ki.
 5. Studióban: Explorer → kattints a **ReplicatedStorage**-ra → Properties → lent az **Attributes** → **Add Attribute** → név: `SoundAssetId`, típus: **String**, érték: az Asset ID. (Vagy írd be a `src/shared/Config.luau` fájlban a `Config.SoundId = ` után.)

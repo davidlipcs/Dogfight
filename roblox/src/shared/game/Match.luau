@@ -9,6 +9,7 @@ local AI = require(script.Parent.Parent.sim.AI)
 local Specs = require(script.Parent.Parent.sim.Specs)
 local Race = require(script.Parent.Race)
 local Career = require(script.Parent.Career)
+local Tutorial = require(script.Parent.Tutorial)
 local V, add, sub, mul, len, norm, copy, clamp, DEG = M.V, M.add, M.sub, M.mul, M.len, M.norm, M.copy, M.clamp, M.DEG
 local atan2, rng = M.atan2, M.rng
 local IR = Specs.IR
@@ -69,6 +70,7 @@ function G.new(opts, env)
 	self.events = {}                                    -- the world's events of the last frame, for the view
 	self.guest = self.opts.netGuest == true
 	self:spawnPlayer()
+	if self.opts.tutorial then self.tutorial = Tutorial.new(self, env.cam) end
 	return self
 end
 
@@ -476,12 +478,14 @@ function Match:update(dt)
 		if self.race and self.player.alive then self:raceStep(wdt) end
 		if self.player.alive and not self.player.onGround then self.career:tick(dt) end
 		for _, m in ipairs(self.player.rwr.incoming) do self.threats[m.missile] = true end
+		if self.tutorial then self.tutorial:update(dt) end
 		self:gameFlow(dt)
 	end
 	local events = self.world:drainEvents()
 	for _, e in ipairs(events) do
 		self:onEvent(e[1], e[2])
 		self:extraEvent(e[1], e[2])
+		if self.tutorial then self.tutorial:onEvent(e[1], e[2]) end
 	end
 	self.events = events
 	local nav = self.nav
