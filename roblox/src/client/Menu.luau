@@ -235,7 +235,7 @@ function Menu.opts(airStart)
 	table.sort(foes)
 	if #foes == 0 then foes = { "f16" } end
 	return {
-		airStart = airStart == true, difficulty = S.diff, enemies = S.enemies, mode = S.mode, aircraft = S.plane, enemyTypes = foes, loadout = layout,
+		airStart = airStart == true, carrierStart = airStart == "carrier", difficulty = S.diff, enemies = S.enemies, mode = S.mode, aircraft = S.plane, enemyTypes = foes, loadout = layout,
 		tutorial = false, scenario = S.scen, wingman = S.wing,
 	}
 end

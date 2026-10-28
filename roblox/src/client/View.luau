@@ -39,6 +39,83 @@ function View.new(world)
 	return self
 end
 
+-- a flat triangle of two wedges (the standard way of drawing a triangle with parts)
+local function triangle(parent, a, b, c, color, name)
+	local ab, ac, bc = b - a, c - a, c - b
+	local abd, acd, bcd = ab:Dot(ab), ac:Dot(ac), bc:Dot(bc)
+	if abd > acd and abd > bcd then c, a = a, c
+	elseif acd > bcd and acd > abd then a, b = b, a end
+	ab, ac, bc = b - a, c - a, c - b
+	local right = ac:Cross(ab).Unit
+	local up = bc:Cross(right).Unit
+	local back = bc.Unit
+	local height = math.abs(ab:Dot(up))
+	local function wedge()
+		local w = Instance.new("WedgePart")
+		w.Name = name or "Tri"
+		w.Anchored, w.CanCollide, w.CanQuery, w.CanTouch, w.Massless, w.CastShadow = true, false, false, false, true, false
+		w.Color = color
+		w.Material = Enum.Material.Concrete
+		w.TopSurface, w.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+		w.Parent = parent
+		return w
+	end
+	local w1, w2 = wedge(), wedge()
+	w1.Size = Vector3.new(0.1, height, math.abs(ab:Dot(back)))
+	w1.CFrame = CFrame.fromMatrix((a + b) / 2, right, up, back)
+	w2.Size = Vector3.new(0.1, height, math.abs(ac:Dot(back)))
+	w2.CFrame = CFrame.fromMatrix((a + c) / 2, -right, up, -back)
+end
+
+-- the carrier (shared/game/Carrier.luau) from parts, at the island's scale: a hull, the angled flight deck, the island with its mast
+function View:buildCarrier(carrier)
+	local Carrier = require(Shared.game.Carrier)
+	local S = Config.Island.StudsPerMeter
+	local folder = Instance.new("Folder")
+	folder.Name = "Carrier"
+	folder.Parent = self.folder
+	local function at(lx, ly, z) return Coords.pos(carrier:world(lx, ly, z)) end
+	local function block(name, cx, cy, cz, w, l, h, color, material)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = true, false, false, false, true
+		p.Size = Vector3.new(w * S, h * S, l * S)
+		p.CFrame = CFrame.new(at(cx, cy, cz)) * CFrame.Angles(0, -math.rad(carrier.heading), 0)
+		p.Color = color
+		p.Material = material or Enum.Material.Metal
+		p.Parent = folder
+		return p
+	end
+	local grey, dark = Color3.fromRGB(124, 132, 140), Color3.fromRGB(65, 70, 76)
+	local secs = { { 166, 2 }, { 150, 12 }, { 120, 18 }, { 60, 20.5 }, { -100, 20.5 }, { -150, 19 }, { -162, 17 } }
+	local zTop = Carrier.DECK_Z - 1.2
+	for i = 1, #secs - 1 do
+		local y0, w0, y1, w1 = secs[i][1], secs[i][2], secs[i + 1][1], secs[i + 1][2]
+		block("Hull", 0, (y0 + y1) / 2, (zTop - 6) / 2, (w0 + w1) * 0.9, y0 - y1, zTop + 6, grey)
+	end
+	block("Boot", 0, 0, 0.4, 38, 300, 2.2, Color3.fromRGB(106, 42, 36))
+	-- the deck: the outline as triangles (fan from the first corner)
+	local o = Carrier.OUTLINE
+	for i = 2, #o - 1 do
+		triangle(folder, at(o[1][1], o[1][2], Carrier.DECK_Z), at(o[i][1], o[i][2], Carrier.DECK_Z), at(o[i + 1][1], o[i + 1][2], Carrier.DECK_Z), dark, "Deck")
+	end
+	-- the island, the mast and the radar
+	block("Island", 19, 6, Carrier.DECK_Z + 7, 9, 34, 14, grey)
+	block("Bridge", 18.7, 8, Carrier.DECK_Z + 17, 8, 26, 6, grey)
+	block("Mast", 19, 10, Carrier.DECK_Z + 33, 1.2, 1.2, 16, grey)
+	-- the landing line and the wires, painted on the deck
+	local lx, ly = carrier.landStart[1], carrier.landStart[2]
+	local dx, dy = carrier.landDir[1], carrier.landDir[2]
+	for _, w in ipairs(Carrier.WIRES) do
+		local px, py = lx + dx * w, ly + dy * w
+		local p = block("Wire", px, py, Carrier.DECK_Z + 0.2, 24, 0.8, 0.2, Color3.fromRGB(190, 190, 190), Enum.Material.SmoothPlastic)
+		p.CFrame = CFrame.new(at(px, py, Carrier.DECK_Z + 0.3)) * CFrame.Angles(0, SimMath.atan2(dx, dy), 0)
+	end
+	for _, c in ipairs(Carrier.CATS) do
+		block("Cat", c[1], (c[2] + c[3]) / 2, Carrier.DECK_Z + 0.2, 1.5, c[3] - c[2], 0.2, Color3.fromRGB(30, 33, 36), Enum.Material.SmoothPlastic)
+	end
+end
+
 function View:setWorld(world)
 	self.world = world
 	self.fx.rnd = world.rnd

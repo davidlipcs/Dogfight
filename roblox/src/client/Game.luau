@@ -424,6 +424,14 @@ function Game.start(opts)
 		career = career or Career.new(nil, nil),
 		hangar = hangar, hud = hud, cam = cam,
 		onTutorialEnd = function() task.defer(Game.stop) end,
+		onKick = function(k) if cam then cam.kick = math.max(cam.kick or 0, k) end end,
+		onCatapultTow = function() if cam and match then cam:reset(match.player) end end,
+		onCatapultOff = function()
+			if cam and match then
+				local f = norm(V(match.player.forward.x, match.player.forward.y, 0), V(0, 1, 0))
+				cam.aim = SimMath.qlook(norm(V(f.x, f.y, 0.21)))
+			end
+		end,
 		sounds = sounds,
 		best = profile and profile.best or {},
 		onRecord = function(kind, t, lap)
@@ -480,6 +488,7 @@ function Game.start(opts)
 		end)
 	end
 	view = View.new(match.world)
+	view:buildCarrier(match.carrier)
 	view.quality = Game.settings.quality or "high"
 	Env.set(Game.settings.tod)
 	match.env.onRestart = function() view:setWorld(match.world) end

@@ -10,8 +10,10 @@ local Specs = require(script.Parent.Parent.sim.Specs)
 local Race = require(script.Parent.Race)
 local Career = require(script.Parent.Career)
 local Tutorial = require(script.Parent.Tutorial)
+local CarrierLib = require(script.Parent.Carrier)
 local V, add, sub, mul, len, norm, copy, clamp, DEG = M.V, M.add, M.sub, M.mul, M.len, M.norm, M.copy, M.clamp, M.DEG
 local atan2, rng = M.atan2, M.rng
+local abs = math.abs
 local IR = Specs.IR
 local AIRCRAFT, TRAINERS, BANDITS = Specs.AIRCRAFT, Specs.TRAINERS, Specs.BANDITS
 local WEAPON_CLASS = Specs.WEAPON_CLASS
@@ -26,6 +28,7 @@ G.NET_SIDE = { race = 40, canyon = 25, tube = 35, free = 90 }
 -- base (safe area), so taking off and landing is quiet.  An air start puts the player on the way there, just outside the zone.
 local ZONE, ENGAGE_MARGIN, SAFE_RADIUS = { x = -14000, y = 16000, r = 16000 }, 12000, 14000
 G.ZONE, G.SAFE_RADIUS = ZONE, SAFE_RADIUS
+local CAT_HINT = "KATAPULT: adj teljes gázt (Shift tartva, 100%), és a katapult kilő az orr felé  ·  utána húzd az orrot (S), G = futómű"
 local TAKEOFF_HINT_NOAB = "FELSZÁLLÁS: Shift tartva = gáz 100%-ig  ·  felemelkedési sebességnél emeld az egeret (vagy S)  ·  G = futómű"
 local TAKEOFF_HINT = "FELSZÁLLÁS: Shift tartva = gáz 100%-ig, újra Shift = utánégető  ·  ~280 km/h-nál emeld az egeret (vagy S)  ·  G = futómű"
 local SPLASH = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" }
@@ -69,6 +72,10 @@ function G.new(opts, env)
 	self.prevPos, self.myFin, self.ejectArm, self.thrPress = nil, nil, 0, -1e9
 	self.events = {}                                    -- the world's events of the last frame, for the view
 	self.guest = self.opts.netGuest == true
+	-- the carrier, 21 km east and 42 km south of the island's middle (its deck is ground for the flight model)
+	self.carrier = self.terrain.carrier or CarrierLib.new(self.terrain, 21000, -42000, 0)
+	self.nav.carrier = { x = self.carrier.x, y = self.carrier.y }
+	self.wasOnDeck, self.catState, self.trapped, self.towTimer = false, nil, false, 0
 	self:spawnPlayer()
 	if self.opts.tutorial then self.tutorial = Tutorial.new(self, env.cam) end
 	return self
@@ -163,6 +170,9 @@ function Match:spawnPlayer()
 		pos.z = math.max(pos.z, terrain:height(pos.x, pos.y) + 1500)
 		speed = 250
 		heading = atan2(ZONE.x - pos.x, ZONE.y - pos.y) / DEG
+	elseif self.opts.carrierStart and self.carrier.active then
+		local cx, cy, ch = self.carrier:catapult(0)            -- on catapult 1, facing the bow
+		pos, heading = V(cx, cy, 0), ch
 	else
 		local p = field:startPosition()
 		pos, heading = V(p[1], p[2], 0), 0
@@ -187,7 +197,7 @@ function Match:spawnPlayer()
 	else
 		ac.fm:placeOnGround(pos.x, pos.y, terrain:height(pos.x, pos.y), heading)
 		ac.controls.throttle = 0
-		st.subBanner = spec.noAB and TAKEOFF_HINT_NOAB or TAKEOFF_HINT
+		st.subBanner = (self.opts.carrierStart and self.carrier.active) and CAT_HINT or (spec.noAB and TAKEOFF_HINT_NOAB or TAKEOFF_HINT)
 	end
 	w:addAircraft(ac)
 	self.player, self.pilot = ac, AI.newPlayerPilot(ac)
@@ -476,6 +486,7 @@ function Match:update(dt)
 		local wdt = bt.active > 0 and dt * 0.35 or dt
 		self.world:update(wdt)
 		if self.race and self.player.alive then self:raceStep(wdt) end
+		if self.player.alive and not self.player.ejected and self.carrier.active then self:carrierStep(dt) end
 		if self.player.alive and not self.player.onGround then self.career:tick(dt) end
 		for _, m in ipairs(self.player.rwr.incoming) do self.threats[m.missile] = true end
 		if self.tutorial then self.tutorial:update(dt) end
@@ -491,8 +502,76 @@ function Match:update(dt)
 	local nav = self.nav
 	nav.wave, nav.enemies = st.wave, #self:enemiesAlive()
 	st.modeLine = self:modeLine()
+	st.meatball = self:meatball()
 	st.credits = self.hangar.credits and self.hangar:credits() or 0
 	return events
+end
+
+-- carrier: arresting wires on touchdown, bolters, the catapult; the deck counts as paved for rearming
+function Match:carrierStep(dt)
+	local p, cv, st = self.player, self.carrier, self.state
+	local fm = p.fm
+	local on = p.onGround and cv:onDeck(p.pos.x, p.pos.y)
+	if on and not self.wasOnDeck and p.speed > 22 then
+		if fm.gearDown and cv:inWires(p.pos.x, p.pos.y) then
+			fm.arrest, self.catState, self.trapped = 30, nil, true
+			local n = cv:wireNumber(p.pos.x, p.pos.y)
+			self.hud:message("BEAKADT - " .. n .. ". fékezőkötél" .. (n == 3 and " (tökéletes!)" or ""), "good", 4, "trap")
+			if not self.opts.tutorial and not self.opts.benchmark then self:medal("trap") end
+			if self.env.onTrap then self.env.onTrap(n) end
+		else
+			self.hud:message("BOLTER! Teljes gáz, és emelkedj újra", "warn", 3, "trap")
+		end
+	end
+	self.wasOnDeck = on
+	if self.trapped and p.speed < 3 then               -- the wire stopped the jet: throttle back, brakes on
+		self.trapped, p.controls.throttle, fm.parkBrake, self.towTimer = false, 0, true, 2.5
+		self.hud:message("ELKAPVA! A fedélzeti személyzet a katapulthoz vontat...", "good", 3, "trap")
+	end
+	if self.towTimer > 0 and on then
+		self.towTimer = self.towTimer - dt
+		if self.towTimer <= 0 then                      -- towed to catapult 1 (rearmed and refuelled by the deck crew)
+			local x, y, h = cv:catapult(0)
+			fm:placeOnGround(x, y, CarrierLib.DECK_Z, h)
+			p.controls.throttle = 0
+			p:rearm()
+			p.hp, p.burning = p.spec.hp, false
+			fm.fuel = p.spec.internalFuel
+			if self.env.onCatapultTow then self.env.onCatapultTow() end
+			self.hud:message("A KATAPULTON - teljes gáz = kilövés", "info", 4, "trap")
+		end
+	end
+	if fm.parkBrake and ((not on) or p.controls.throttle >= 0.99) then fm.parkBrake = false end
+	-- catapult: stopped on the track at full throttle -> 1 s run-up, then the shuttle fires
+	local cat = self.catState
+	if on and cv:onCatapult(p.pos.x, p.pos.y) and fm.gearDown and p.speed < 3 and p.controls.throttle >= 0.99 and not cat then
+		self.catState = { t = 0, fired = false }
+		cat = self.catState
+		self.hud:message("KATAPULT ÉLESÍTVE...", "warn", 1.5, "cat")
+	end
+	if cat then
+		cat.t = cat.t + dt
+		if not cat.fired and cat.t > 1.0 then
+			cat.fired, fm.catapultAcc = true, 30
+			self.hud:message("KATAPULT!", "good", 2, "cat")
+			if self.env.onKick then self.env.onKick(0.8) end
+		end
+		if cat.fired and ((not p.onGround) or p.speed > 88) then
+			fm.catapultAcc, self.catState = 0, nil
+			-- off the bow: the aim point goes 12 degrees up so the jet climbs away from the sea
+			if self.env.onCatapultOff then self.env.onCatapultOff() end
+		end
+		if not cat.fired and (p.controls.throttle < 0.99 or not on) then self.catState = nil end
+	end
+	if st.subBanner == CAT_HINT and not p.onGround then st.subBanner = "" end
+end
+-- optical landing system: shown while flying an approach to the carrier (behind it, gear down, within 4 km)
+function Match:meatball()
+	local p = self.player
+	if not p or not p.alive or p.onGround or not p.fm.gearDown then return nil end
+	local g = self.carrier:glide(p.pos.x, p.pos.y, p.pos.z)
+	if not g.behind or g.dist > 4500 or abs(g.off) > 700 then return nil end
+	return g
 end
 
 function Match:addScore(n)
