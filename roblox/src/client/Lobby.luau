@@ -188,7 +188,10 @@ function Lobby.updateStatus()
 	end
 	local island = workspace:GetAttribute("IslandBuilt") == true
 	local function mark(ok, text) return string.format("<font color=\"%s\">%s</font>", ok and "#6bff85" or "#ff7a64", text) end
+	local sid = ReplicatedStorage:GetAttribute("SoundAssetId")
+	local sound = (sid ~= nil and sid ~= "" and sid ~= 0) or (Config.SoundId ~= nil and Config.SoundId ~= 0)
 	statusLabel.Text = mark(island, island and "Sziget: kész" or "Sziget: NINCS felépítve") .. "  ·  " .. mark(have == #Config.JetModels, string.format("Gépek: %d/%d importálva", have, #Config.JetModels))
+		.. "  ·  " .. mark(sound, sound and "Hang: azonosító beállítva" or "Hang: NINCS azonosító")
 end
 
 function Lobby.say(text, good) if msgLabel then say(text, good) end end

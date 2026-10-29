@@ -564,6 +564,12 @@ function Game.start(opts)
 	input.onWheel = function(dir) if match and not Game.paused then match:cycleWeapon(dir) end end
 	local hangar = makeHangar()
 	sounds = Sounds.new(0.7)
+	task.delay(4, function()
+		if sounds and hud and Game.active then
+			if not sounds.id then hud:message("NINCS HANG: a ReplicatedStorage SoundAssetId attribútuma üres", "warn", 8, "snd")
+			elseif sounds.error then hud:message("A HANG NEM TÖLT BE (" .. sounds.error .. ") – lásd az Output ablakot", "warn", 10, "snd") end
+		end
+	end)
 	local env = {
 		terrain = terrain,
 		career = career or Career.new(nil, nil),

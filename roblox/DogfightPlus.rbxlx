@@ -16184,6 +16184,12 @@ function Game.start(opts)
 	input.onWheel = function(dir) if match and not Game.paused then match:cycleWeapon(dir) end end
 	local hangar = makeHangar()
 	sounds = Sounds.new(0.7)
+	task.delay(4, function()
+		if sounds and hud and Game.active then
+			if not sounds.id then hud:message("NINCS HANG: a ReplicatedStorage SoundAssetId attribútuma üres", "warn", 8, "snd")
+			elseif sounds.error then hud:message("A HANG NEM TÖLT BE (" .. sounds.error .. ") – lásd az Output ablakot", "warn", 10, "snd") end
+		end
+	end)
 	local env = {
 		terrain = terrain,
 		career = career or Career.new(nil, nil),
@@ -16967,7 +16973,10 @@ function Lobby.updateStatus()
 	end
 	local island = workspace:GetAttribute("IslandBuilt") == true
 	local function mark(ok, text) return string.format("<font color=\"%s\">%s</font>", ok and "#6bff85" or "#ff7a64", text) end
+	local sid = ReplicatedStorage:GetAttribute("SoundAssetId")
+	local sound = (sid ~= nil and sid ~= "" and sid ~= 0) or (Config.SoundId ~= nil and Config.SoundId ~= 0)
 	statusLabel.Text = mark(island, island and "Sziget: kész" or "Sziget: NINCS felépítve") .. "  ·  " .. mark(have == #Config.JetModels, string.format("Gépek: %d/%d importálva", have, #Config.JetModels))
+		.. "  ·  " .. mark(sound, sound and "Hang: azonosító beállítva" or "Hang: NINCS azonosító")
 end
 
 function Lobby.say(text, good) if msgLabel then say(text, good) end end
@@ -18163,6 +18172,7 @@ return RoomsUi
 -- ReplicatedStorage) the game is silent.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -18197,6 +18207,27 @@ function Sounds.new(volume)
 	folder.Parent = SoundService
 	self.folder = folder
 	self.manual = {}
+	-- does the sound sheet load?  (a wrong id, a sound that is still being checked by Roblox or one that this place may not use stays silent)
+	self.error = nil
+	if self.id then
+		local probe = Instance.new("Sound")
+		probe.Name = "Probe"
+		probe.SoundId = self.id
+		probe.Volume = 0
+		probe.Parent = folder
+		task.spawn(function()
+			local status = nil
+			local ok, err = pcall(function()
+				ContentProvider:PreloadAsync({ probe }, function(_, st) status = st end)
+			end)
+			if not ok then self.error = tostring(err)
+			elseif status ~= nil and status ~= Enum.AssetFetchStatus.Success then self.error = tostring(status)
+			elseif probe.TimeLength == 0 and not probe.IsLoaded then self.error = "nem töltődött be" end
+			if self.error then
+				warn("Dogfight Plus: the sound sheet " .. self.id .. " does not load (" .. self.error .. "). Check the id, and that the audio has passed Roblox's review (create.roblox.com > Creations > Audio).")
+			end
+		end)
+	end
 	return self
 end
 

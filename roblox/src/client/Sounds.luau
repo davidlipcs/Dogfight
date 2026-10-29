@@ -5,6 +5,7 @@
 -- ReplicatedStorage) the game is silent.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -39,6 +40,27 @@ function Sounds.new(volume)
 	folder.Parent = SoundService
 	self.folder = folder
 	self.manual = {}
+	-- does the sound sheet load?  (a wrong id, a sound that is still being checked by Roblox or one that this place may not use stays silent)
+	self.error = nil
+	if self.id then
+		local probe = Instance.new("Sound")
+		probe.Name = "Probe"
+		probe.SoundId = self.id
+		probe.Volume = 0
+		probe.Parent = folder
+		task.spawn(function()
+			local status = nil
+			local ok, err = pcall(function()
+				ContentProvider:PreloadAsync({ probe }, function(_, st) status = st end)
+			end)
+			if not ok then self.error = tostring(err)
+			elseif status ~= nil and status ~= Enum.AssetFetchStatus.Success then self.error = tostring(status)
+			elseif probe.TimeLength == 0 and not probe.IsLoaded then self.error = "nem töltődött be" end
+			if self.error then
+				warn("Dogfight Plus: the sound sheet " .. self.id .. " does not load (" .. self.error .. "). Check the id, and that the audio has passed Roblox's review (create.roblox.com > Creations > Audio).")
+			end
+		end)
+	end
 	return self
 end
 
