@@ -10,14 +10,16 @@ ha valami elromlik – azt kell elküldeni a javításhoz.
 
 ## Hova mi kerül (lépésről lépésre)
 
-### 0. Frissítés (ha már van felépített szigeted és importált gépeid)
-**Ne a `DogfightPlus.rbxlx`-et nyisd meg újra** – az üres, abban nincs sziget és nincsenek gépek. Helyette a **`DogfightCode.rbxmx`** csak a játék kódját cseréli ki a *te* pályádban:
-1. Nyisd meg a saját, már elmentett pályádat (ahol a sziget és a gépek vannak).
-2. Húzd be a `DogfightCode.rbxmx` fájlt a Studio 3D ablakába (vagy jobb klikk a Workspace-en → *Insert from File…*).
-3. **Window → Command Bar**, ide: `require(workspace.DogfightCodeUpdate.Install)()` → Enter. (Az Output kiírja: „the code is updated”.)
-4. **File → Save**, majd **Play**.
-A lobbi bal felső részén látszik: *Sziget: kész/NINCS* és *Gépek: X/16*. Ha valami hiányzik, a játék nem indul el, hanem megmondja, mit pótolj.
-
+### 0. A Studio-plugin (a Command Bar nélkül, ez a legegyszerűbb)
+A `DogfightPlugin.rbxmx` egy Studio-plugin: három gombot ad a **Plugins** fülhöz, és benne van a játék teljes kódja. Egyszer kell telepíteni:
+1. Studio → **Plugins** fül → **Plugins Folder** gomb: megnyílik egy mappa (Windowson `%LOCALAPPDATA%\Roblox\Plugins`).
+2. Másold bele a `DogfightPlugin.rbxmx` fájlt, és indítsd újra a Studiót.
+3. A **Plugins** fülön megjelenik a **Dogfight Plus** csoport három gombbal:
+   * **Kód telepítése** – a játék kódja bekerül a megnyitott pályába (a sziget és a gépek megmaradnak);
+   * **Sziget építése** – egyszer, pár perc (az Output kiírja, ha kész);
+   * **Gépek átemelése** – az importált gépeket a helyükre teszi.
+4. Mindhárom után **File → Save**.
+**Új verzió:** cseréld ki a plugin fájlt a Plugins mappában (a régit felülírva), indítsd újra a Studiót, és nyomd meg a **Kód telepítése** gombot. A sziget és a gépek nem tűnnek el, nem kell újra építeni.
 
 ### 1. A sziget (egyszer)
 1. Nyisd meg a `DogfightPlus.rbxlx` fájlt Studióban (ne indíts játékot).

@@ -458,7 +458,7 @@ local function loadEverything(opts, myId)
 	if myId ~= loadId then return end
 	if Config.RequireIsland and not (ground() and workspace:FindFirstChild("Runway") ~= nil) then
 		LoadingUi.fail("A sziget nincs felépítve ezen a pályán",
-			"A repülőtér alatt nincs a játék saját szigete (csak tenger), ezért a gép a semmin állna.\n\n<b>Egyszer</b> kell felépíteni: Studióban (Play nélkül) a <b>Window → Command Bar</b>-ba ez:\n<font face=\"RobotoMono\">require(game.ServerScriptService.Server.IslandBuilder).build()</font>\nmajd várd meg az Output „the island is built” sorát, és <b>File → Save</b>.\nA következő frissítéseknél a kódot a DogfightCode.rbxmx-szel cseréld (a README 0. pontja), így a sziget és a gépek megmaradnak.",
+			"A repülőtér alatt nincs a játék saját szigete (csak tenger), ezért a gép a semmin állna.\n\n<b>Egyszer</b> kell felépíteni: Studióban (Play nélkül) a <b>Plugins</b> fülön a <b>Sziget építése</b> gombbal (pár percig tart, az Output ablak kiírja, ha kész), majd <b>File → Save</b>.\n(Ha nincs ilyen gomb: a README 0. pontja a DogfightPlugin.rbxmx telepítését írja le.)",
 			function() Game.stop() end)
 		return
 	end
@@ -489,7 +489,7 @@ local function loadEverything(opts, myId)
 		local miss = missing()
 		if #miss > 0 then
 			LoadingUi.fail("Hiányzó gépmodellek",
-				"Ezek a gépek nincsenek a pályán: <b>" .. table.concat(miss, ", ") .. "</b>\n\nImportáld a gépeket (zip kicsomagolva → húzd be a Studio 3D ablakába), majd <b>File → Save</b>; indításkor a játék magától a helyére teszi őket. Az Output ablak („Dogfight Plus: … jet model(s) moved …”) mutatja, hány van meg.",
+				"Ezek a gépek nincsenek a pályán: <b>" .. table.concat(miss, ", ") .. "</b>\n\nImportáld a gépeket (zip kicsomagolva → húzd be a Studio 3D ablakába), majd a <b>Plugins</b> fülön a <b>Gépek átemelése</b> gomb, és <b>File → Save</b>. Az Output ablak („Dogfight Plus: … jet model(s) moved …”) mutatja, hány van meg.",
 				function() Game.stop() end)
 			return
 		end
