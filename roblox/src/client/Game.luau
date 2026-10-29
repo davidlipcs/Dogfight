@@ -524,11 +524,27 @@ local function loadEverything(opts, myId)
 		end
 	end
 	local total, done = #list, 0
+	local broken = {}
 	for _, inst in ipairs(list) do
 		if myId ~= loadId then return end
-		pcall(function() ContentProvider:PreloadAsync({ inst }) end)
+		local bad = nil
+		pcall(function()
+			ContentProvider:PreloadAsync({ inst }, function(id, status)
+				if status ~= Enum.AssetFetchStatus.Success and status ~= Enum.AssetFetchStatus.None then bad = bad or (tostring(id) .. " (" .. tostring(status) .. ")") end
+			end)
+		end)
+		-- a jet whose meshes or textures do not download would be an invisible jet: the part-built stand-in is used instead
+		if bad and inst.Parent == models then
+			inst:SetAttribute("Broken", true)
+			table.insert(broken, inst.Name)
+			warn("Dogfight Plus: the jet model '" .. inst.Name .. "' does not load (" .. bad .. "). Roblox may still be checking the uploaded meshes (Studio: View > Asset Manager / Creator Hub: Creations > Models), or rejected them.")
+		end
 		done += 1
 		LoadingUi.set(nil, 0.45 + 0.5 * done / total)
+	end
+	if #broken > 0 then
+		table.sort(broken)
+		Game.brokenJets = broken
 	end
 	if myId ~= loadId then return end
 	LoadingUi.set("Indulás…", 1)
@@ -538,6 +554,10 @@ local function loadEverything(opts, myId)
 	LoadingUi.hide()
 	Game.loading = false
 	if input then input:setEnabled(true) end
+	if Game.brokenJets and hud then
+		hud:message("EZEK A GÉPEK NEM TÖLTENEK BE (kockagép áll helyettük): " .. table.concat(Game.brokenJets, ", ") .. " – lásd az Output ablakot", "warn", 12, "broken")
+		Game.brokenJets = nil
+	end
 end
 
 -- ------------------------------------------------------------------ start / stop

@@ -343,6 +343,7 @@ function JetBuilder.build(airId: string?, pilotId: string?, enemy: boolean?, two
 	if modelKey and not twoSeat then
 		local folder = ReplicatedStorage:FindFirstChild("JetModels")
 		local src = folder and folder:FindFirstChild(modelKey)
+		if src and src:GetAttribute("Broken") then src = nil end                 -- (its meshes do not download: the stand-in)
 		if src then
 			local m = fromImported(src, modelKey, applicable(airId and Catalog.AirById[airId], modelKey), enemy)
 			if m then return m end

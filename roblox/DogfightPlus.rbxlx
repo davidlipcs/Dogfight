@@ -255,7 +255,7 @@ Config.JetModels = {
 }
 -- the match starts only when the island is built under the air base and the jets of the match are imported (the tests switch this off)
 Config.RequireIsland, Config.RequireJets = true, true
-Config.Version = "df0ce37+29.1901"                  -- replaced by the build tools with the commit id (shown in the lobby, so that it is clear which code runs)
+Config.Version = "3df15db+29.1907"                  -- replaced by the build tools with the commit id (shown in the lobby, so that it is clear which code runs)
 Config.JetModelFlip = {}                -- e.g. { f16 = true } turns an imported jet round if it flies backwards
 Config.EnemyModels = { "su35", "mig29", "typhoon", "su57", "mig31", "rafale", "j20" }   -- the enemies use these when imported
 
@@ -857,6 +857,7 @@ function JetBuilder.build(airId: string?, pilotId: string?, enemy: boolean?, two
 	if modelKey and not twoSeat then
 		local folder = ReplicatedStorage:FindFirstChild("JetModels")
 		local src = folder and folder:FindFirstChild(modelKey)
+		if src and src:GetAttribute("Broken") then src = nil end                 -- (its meshes do not download: the stand-in)
 		if src then
 			local m = fromImported(src, modelKey, applicable(airId and Catalog.AirById[airId], modelKey), enemy)
 			if m then return m end
@@ -16146,11 +16147,27 @@ local function loadEverything(opts, myId)
 		end
 	end
 	local total, done = #list, 0
+	local broken = {}
 	for _, inst in ipairs(list) do
 		if myId ~= loadId then return end
-		pcall(function() ContentProvider:PreloadAsync({ inst }) end)
+		local bad = nil
+		pcall(function()
+			ContentProvider:PreloadAsync({ inst }, function(id, status)
+				if status ~= Enum.AssetFetchStatus.Success and status ~= Enum.AssetFetchStatus.None then bad = bad or (tostring(id) .. " (" .. tostring(status) .. ")") end
+			end)
+		end)
+		-- a jet whose meshes or textures do not download would be an invisible jet: the part-built stand-in is used instead
+		if bad and inst.Parent == models then
+			inst:SetAttribute("Broken", true)
+			table.insert(broken, inst.Name)
+			warn("Dogfight Plus: the jet model '" .. inst.Name .. "' does not load (" .. bad .. "). Roblox may still be checking the uploaded meshes (Studio: View > Asset Manager / Creator Hub: Creations > Models), or rejected them.")
+		end
 		done += 1
 		LoadingUi.set(nil, 0.45 + 0.5 * done / total)
+	end
+	if #broken > 0 then
+		table.sort(broken)
+		Game.brokenJets = broken
 	end
 	if myId ~= loadId then return end
 	LoadingUi.set("Indulás…", 1)
@@ -16160,6 +16177,10 @@ local function loadEverything(opts, myId)
 	LoadingUi.hide()
 	Game.loading = false
 	if input then input:setEnabled(true) end
+	if Game.brokenJets and hud then
+		hud:message("EZEK A GÉPEK NEM TÖLTENEK BE (kockagép áll helyettük): " .. table.concat(Game.brokenJets, ", ") .. " – lásd az Output ablakot", "warn", 12, "broken")
+		Game.brokenJets = nil
+	end
 end
 
 -- ------------------------------------------------------------------ start / stop
