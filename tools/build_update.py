@@ -21,6 +21,9 @@ return function()
 		local old = parent:FindFirstChild(name)
 		if old then old:Destroy() end
 		pack[name].Parent = parent
+		for _, d in parent[name]:GetDescendants() do
+			if d:IsA("Script") or d:IsA("LocalScript") then d.Disabled = false end
+		end
 	end
 	swap(RS, "Shared")
 	swap(SSS, "Server")
@@ -33,6 +36,15 @@ end
 
 
 def main():
+    import re
+    orig = B.script_item
+
+    def disabled(path, fname):                                   # the update file lies in the Workspace: its scripts must not run there
+        x = orig(path, fname)
+        if re.match(r'<Item class="(Script|LocalScript)"', x):
+            x = x.replace("<Properties>", '<Properties><bool name="Disabled">true</bool>', 1)
+        return x
+    B.script_item = disabled
     out = os.path.join(B.ROOT, "roblox", "build", "DogfightCode.rbxmx")
     kids = B.folder_item("Shared", os.path.join(B.SRC, "shared")) + B.folder_item("Server", os.path.join(B.SRC, "server")) + B.folder_item("Client", os.path.join(B.SRC, "client"))
     body = INSTALL.replace("]]>", "]]]]><![CDATA[>")

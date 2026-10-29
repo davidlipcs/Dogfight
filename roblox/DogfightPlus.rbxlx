@@ -14410,6 +14410,13 @@ return IslandBuilder
 -- Dogfight Plus for Roblox: the server's entry point.  The match itself runs on the player's own machine (the same simulation as the
 -- browser game, shared/game/Match.luau); the server keeps what must not be the client's word: the save (coins, skins, career, records),
 -- the shop and the Robux purchases, and the rooms.
+-- Only one copy of the game's server may run (an update file left in the Workspace has a copy of this script, too)
+if workspace:GetAttribute("DogfightServerRunning") == true or not script:IsDescendantOf(game:GetService("ServerScriptService")) then
+	warn("Dogfight Plus: a second copy of the server script was not started (" .. script:GetFullName() .. "). Delete leftovers such as 'DogfightCodeUpdate' from the Workspace.")
+	return
+end
+workspace:SetAttribute("DogfightServerRunning", true)
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -17097,6 +17104,14 @@ return Lobby
 <Item class="LocalScript" referent="RBX78"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- Dogfight Plus for Roblox: the client's entry point.  The menu (hangar, shop, rooms, match options) -> a match on this machine
 -- (Game.luau) -> back to the menu.
+-- Only one copy of the game's client may run (two would show two menus on top of each other)
+local LocalPlayer = game:GetService("Players").LocalPlayer
+if LocalPlayer:GetAttribute("DogfightClientRunning") == true then
+	warn("Dogfight Plus: a second copy of the client script was not started (" .. script:GetFullName() .. ").")
+	return
+end
+LocalPlayer:SetAttribute("DogfightClientRunning", true)
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")

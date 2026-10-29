@@ -2,6 +2,13 @@
 -- Dogfight Plus for Roblox: the server's entry point.  The match itself runs on the player's own machine (the same simulation as the
 -- browser game, shared/game/Match.luau); the server keeps what must not be the client's word: the save (coins, skins, career, records),
 -- the shop and the Robux purchases, and the rooms.
+-- Only one copy of the game's server may run (an update file left in the Workspace has a copy of this script, too)
+if workspace:GetAttribute("DogfightServerRunning") == true or not script:IsDescendantOf(game:GetService("ServerScriptService")) then
+	warn("Dogfight Plus: a second copy of the server script was not started (" .. script:GetFullName() .. "). Delete leftovers such as 'DogfightCodeUpdate' from the Workspace.")
+	return
+end
+workspace:SetAttribute("DogfightServerRunning", true)
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

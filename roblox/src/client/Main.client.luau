@@ -1,6 +1,14 @@
 --!nonstrict
 -- Dogfight Plus for Roblox: the client's entry point.  The menu (hangar, shop, rooms, match options) -> a match on this machine
 -- (Game.luau) -> back to the menu.
+-- Only one copy of the game's client may run (two would show two menus on top of each other)
+local LocalPlayer = game:GetService("Players").LocalPlayer
+if LocalPlayer:GetAttribute("DogfightClientRunning") == true then
+	warn("Dogfight Plus: a second copy of the client script was not started (" .. script:GetFullName() .. ").")
+	return
+end
+LocalPlayer:SetAttribute("DogfightClientRunning", true)
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
