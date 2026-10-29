@@ -308,6 +308,7 @@ methods.IsKeyDown = function() return false end
 methods.GetMouseLocation = function() return v2(640, 360) end
 methods.SetCoreGuiEnabled = function() end
 methods.Clear = function() end
+methods.GetFullName = function(o) local n = {}; local c = o; while c do n[#n + 1] = tostring(c.__p.Name or c.__class); c = c.__p.Parent end local out = {}; for i = #n, 1, -1 do out[#out + 1] = n[i] end return table.concat(out, '.') end
 methods.GetFocusedTextBox = function() return nil end
 methods.PreloadAsync = function() end
 methods.IsLoaded = function() return true end

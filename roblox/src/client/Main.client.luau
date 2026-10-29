@@ -164,5 +164,11 @@ task.spawn(function()
 	WarUi.setProfile(p)
 end)
 
+-- while a match runs the menu is never shown (whatever happened, it is put away)
+game:GetService("RunService").Heartbeat:Connect(function()
+	if Game.active and Lobby.isVisible() then Lobby.show(false) end
+end)
+print("Dogfight Plus client " .. tostring(require(Shared.Config).Version) .. " runs from " .. script:GetFullName())
+
 goLobby()
 Lobby.setRoom(nil)

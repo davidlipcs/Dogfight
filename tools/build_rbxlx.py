@@ -28,9 +28,19 @@ def item(cls, name, props="", children=""):
         cls, ref(), escape(name), props, children)
 
 
+def version():
+    import subprocess
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT).decode().strip() + "+" + subprocess.check_output(["date", "+%d.%H%M"]).decode().strip()
+    except Exception:
+        return "dev"
+
+
 def script_item(path, fname):
     with open(path, encoding="utf-8") as f:
         src = f.read()
+    if fname == "Config.luau":
+        src = src.replace('Config.Version = "dev"', 'Config.Version = "%s"' % version(), 1)
     if fname.endswith(".server.luau"):
         cls, name = "Script", fname[: -len(".server.luau")]
     elif fname.endswith(".client.luau"):

@@ -98,6 +98,7 @@ Config.JetModels = {
 }
 -- the match starts only when the island is built under the air base and the jets of the match are imported (the tests switch this off)
 Config.RequireIsland, Config.RequireJets = true, true
+Config.Version = "dev"                  -- replaced by the build tools with the commit id (shown in the lobby, so that it is clear which code runs)
 Config.JetModelFlip = {}                -- e.g. { f16 = true } turns an imported jet round if it flies backwards
 Config.EnemyModels = { "su35", "mig29", "typhoon", "su57", "mig31", "rafale", "j20" }   -- the enemies use these when imported
 

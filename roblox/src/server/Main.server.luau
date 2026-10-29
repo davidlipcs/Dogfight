@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
+local Config = require(Shared.Config)
 
 local Data = require(script.Parent.Data)
 local Shop = require(script.Parent.Shop)
@@ -94,4 +95,4 @@ Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil; warSave
 
 game:GetService("RunService").Heartbeat:Connect(function(dt) Rooms.step(dt) end)
 
-print("Dogfight Plus server ready")
+print("Dogfight Plus server " .. tostring(Config.Version) .. " ready, running from " .. script:GetFullName())

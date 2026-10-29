@@ -98,6 +98,11 @@ HELPERS = r'''
 run(HELPERS + '''
     clickText("INDULÁS A PÁLYÁRÓL")
     frames(180)
+    do
+        local gui = M.localPlayer.PlayerGui
+        for _, g in ipairs(gui:GetChildren()) do print("gui", g.Name, g.Enabled) end
+        assert(not gui.DogfightLobby.Enabled, "the lobby is still shown while the match runs")
+    end
     press("W", true); frames(60); press("W", false)
     press("Space", true); press("Space", false)
     press("T", true); press("T", false); press("One", true); press("One", false)

@@ -231,6 +231,7 @@ function Lobby.init(r, h)
 	Ui.label(gui, "DOGFIGHT PLUS", { Position = UDim2.new(0, 28, 0, 22), Size = UDim2.new(0, 500, 0, 54), TextSize = 46, Font = Enum.Font.GothamBlack, TextColor3 = Ui.Green })
 	Ui.label(gui, "Légiharc a barátaiddal – lődd le a hullámokat, gyűjts érméket, öltöztesd a gépedet és a pilótádat.", { Position = UDim2.new(0, 30, 0, 78), Size = UDim2.new(0, 520, 0, 40), TextSize = 16, TextWrapped = true, TextColor3 = Color3.fromRGB(200, 215, 210) })
 	coinsLabel = Ui.label(gui, "", { Position = UDim2.new(0, 30, 0, 126), Size = UDim2.new(0, 300, 0, 30), TextSize = 24, TextColor3 = Ui.Amber, Font = Enum.Font.GothamBold })
+	Ui.label(gui, "Verzió: " .. tostring(Config.Version), { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -6), Size = UDim2.new(0, 260, 0, 18), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(130, 150, 145) })
 	statusLabel = Ui.label(gui, "", { Position = UDim2.new(0, 30, 0, 134), Size = UDim2.new(0, 700, 0, 20), TextSize = 14, TextColor3 = Color3.fromRGB(190, 210, 205), RichText = true })
 	task.spawn(function()
 		while gui do
@@ -310,6 +311,8 @@ function Lobby.init(r, h)
 		end
 	end)
 end
+
+function Lobby.isVisible() return visible end
 
 function Lobby.show(v: boolean)
 	visible = v
