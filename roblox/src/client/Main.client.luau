@@ -8,6 +8,15 @@ if LocalPlayer:GetAttribute("DogfightClientRunning") == true then
 	return
 end
 LocalPlayer:SetAttribute("DogfightClientRunning", true)
+-- screens left behind by an older copy of the client are removed before the new ones are built
+do
+	local gui = LocalPlayer:WaitForChild("PlayerGui")
+	for _, g in gui:GetChildren() do
+		if g.Name == "HudCanvas" or g.Name == "RadioGui" or g.Name == "MfdGui" or g.Name == "TutorialGui" or g.Name == "PauseGui" or g.Name == "HelpGui" or string.sub(g.Name, 1, 8) == "Dogfight" then
+			g:Destroy()
+		end
+	end
+end
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

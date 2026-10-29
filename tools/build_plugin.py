@@ -38,12 +38,42 @@ local function swap(parent, name)
 	enableScripts(new)
 end
 
+-- leftovers of older versions (a second copy of the scripts runs a second menu / game on top of the first one): removed
+local KNOWN = { Main = true, Lobby = true, Game = true, Hud = true, Flight = true, Wso = true, Visibility = true, Combat = true, Enemies = true, Shop = true, Data = true,
+	Rooms = true, World = true, Tools = true, Daily = true, IslandBuilder = true, Menu = true, View = true, RoomsUi = true, Ui = true, State = true, Visor = true,
+	Config = true, Catalog = true, Remotes = true, JetBuilder = true, DeviceInput = true, GuiCanvas = true, Env = true, Fx = true, Sounds = true, WarUi = true, RadioUi = true }
+local FOLDERS = { Client = true, Server = true, Shared = true, DogfightCodeUpdate = true }
+local function cleanup()
+	local keep = { RS:FindFirstChild("Shared"), SSS:FindFirstChild("Server"), SP:FindFirstChild("Client") }
+	local function kept(inst)
+		for _, k in keep do
+			if k and (inst == k or inst:IsDescendantOf(k)) then return true end
+		end
+		return false
+	end
+	local roots = { workspace, game:GetService("StarterGui"), game:GetService("StarterPack"), game:GetService("ReplicatedFirst"), game:GetService("ServerStorage"),
+		SSS, game:GetService("StarterPlayer"), RS, game:GetService("Lighting") }
+	local removed = {}
+	for _, root in roots do
+		for _, d in root:GetDescendants() do
+			if not kept(d) and d.Parent and ((d:IsA("LuaSourceContainer") and KNOWN[d.Name]) or (d:IsA("Folder") and FOLDERS[d.Name]) or (d:IsA("Model") and d.Name == "DogfightCodeUpdate")) then
+				table.insert(removed, d:GetFullName())
+				d:Destroy()
+			end
+		end
+	end
+	if #removed > 0 then
+		print("Dogfight Plus: leftovers of older versions removed: " .. table.concat(removed, ", "))
+	end
+end
+
 bInstall.Click:Connect(function()
 	bInstall:SetActive(false)
 	ChangeHistoryService:SetWaypoint("Dogfight Plus: before the code")
 	swap(RS, "Shared")
 	swap(SSS, "Server")
 	swap(SP, "Client")
+	cleanup()
 	game:GetService("Players").CharacterAutoLoads = false
 	ChangeHistoryService:SetWaypoint("Dogfight Plus: the code")
 	print("Dogfight Plus: the code is installed. Now File > Save, then Play.")

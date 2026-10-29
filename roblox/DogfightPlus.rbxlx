@@ -255,7 +255,7 @@ Config.JetModels = {
 }
 -- the match starts only when the island is built under the air base and the jets of the match are imported (the tests switch this off)
 Config.RequireIsland, Config.RequireJets = true, true
-Config.Version = "3df15db+29.1907"                  -- replaced by the build tools with the commit id (shown in the lobby, so that it is clear which code runs)
+Config.Version = "71ce909+29.1910"                  -- replaced by the build tools with the commit id (shown in the lobby, so that it is clear which code runs)
 Config.JetModelFlip = {}                -- e.g. { f16 = true } turns an imported jet round if it flies backwards
 Config.EnemyModels = { "su35", "mig29", "typhoon", "su57", "mig31", "rafale", "j20" }   -- the enemies use these when imported
 
@@ -17146,6 +17146,15 @@ if LocalPlayer:GetAttribute("DogfightClientRunning") == true then
 	return
 end
 LocalPlayer:SetAttribute("DogfightClientRunning", true)
+-- screens left behind by an older copy of the client are removed before the new ones are built
+do
+	local gui = LocalPlayer:WaitForChild("PlayerGui")
+	for _, g in gui:GetChildren() do
+		if g.Name == "HudCanvas" or g.Name == "RadioGui" or g.Name == "MfdGui" or g.Name == "TutorialGui" or g.Name == "PauseGui" or g.Name == "HelpGui" or string.sub(g.Name, 1, 8) == "Dogfight" then
+			g:Destroy()
+		end
+	end
+end
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
