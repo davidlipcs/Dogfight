@@ -27,10 +27,11 @@ local JETS = { "f16", "fa18", "f35", "f15", "f22" }
 
 local function colour(id) local c = POWERS[id].colour return Color3.fromRGB(c[1], c[2], c[3]) end
 
-local function persist()
+-- reset: a new career (the server then accepts smaller counters than the old pilot's)
+local function persist(reset)
 	if not S.war or not S.pilot then return end
 	while #S.war.log > 40 do table.remove(S.war.log) end
-	if remotes and remotes.SaveWar then remotes.SaveWar:FireServer({ war = S.war, pilot = S.pilot }) end
+	if remotes and remotes.SaveWar then remotes.SaveWar:FireServer({ war = S.war, pilot = S.pilot, reset = reset == true }) end
 end
 
 -- ------------------------------------------------------------------ building blocks
@@ -177,7 +178,7 @@ function screens.warRoom()
 	if #w.log == 0 then para("még üres", { TextColor3 = Color3.fromRGB(150, 170, 165) }) end
 	for i = 1, math.min(12, #w.log) do para(string.format("<b>%d.</b> %s", w.log[i].day, w.log[i].text), { TextSize = 13 }) end
 	local r2 = row()
-	button(r2, "Új karrier", function() S.war, S.pilot = nil, nil; persist(); screens.start() end, { BackgroundColor3 = Color3.fromRGB(200, 120, 110) })
+	button(r2, "Új karrier", function() screens.start() end, { BackgroundColor3 = Color3.fromRGB(200, 120, 110) })
 end
 
 -- ------------------------------------------------------------------ briefing
@@ -355,7 +356,7 @@ function screens.warEnd()
 	button(r, "Új háború", function()
 		S.war = C.newWar("us", os.time())
 		S.war.started = true
-		persist()
+		persist(true)
 		screens.warRoom()
 	end, { BackgroundColor3 = Ui.Green })
 	persist()
@@ -382,7 +383,7 @@ function screens.start()
 		S.pilot = C.newPilot(name, cs)
 		S.war = C.newWar("us", os.time())
 		S.war.started = true
-		persist()
+		persist(true)
 		screens.warRoom()
 	end, { BackgroundColor3 = Ui.Green })
 end

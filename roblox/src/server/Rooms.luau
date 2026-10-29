@@ -134,12 +134,15 @@ end
 -- a new room: name, mode ("coop" against the AI waves, "pvp" two teams), how many more may come in, private?
 function Rooms.create(player: Player, name: string, mode: string, extra: number, private: boolean)
 	if typeof(name) ~= "string" then name = "" end
-	extra = math.clamp(math.floor(tonumber(extra) or 3), 0, R.MaxPlayers - 1)
+	extra = tonumber(extra) or 3
+	if extra ~= extra then extra = 3 end
+	extra = math.clamp(math.floor(extra), 0, R.MaxPlayers - 1)
 	local room = {
 		id = nextId, name = filtered(name ~= "" and name or (player.DisplayName .. " szobája"), player), host = player,
 		mode = mode == "pvp" and "pvp" or "coop", max = 1 + extra, private = private == true, code = nil,
 		members = {}, team = {}, seats = {}, score = { A = 0, B = 0 }, created = os.time(),
 	}
+	if player.Parent == nil then return false, "Kiléptél" end                -- (the name filter yields: the player may be gone)
 	nextId += 1
 	if room.private then room.code = newCode() end
 	rooms[room.id] = room
@@ -203,7 +206,9 @@ end
 function Rooms.setSlots(player: Player, extra)
 	local room = roomOf[player]
 	if not room or room.host ~= player then return false, "Csak a szoba nyitója állíthatja" end
-	extra = math.clamp(math.floor(tonumber(extra) or 0), 0, R.MaxPlayers - 1)
+	extra = tonumber(extra) or 0
+	if extra ~= extra then extra = 0 end
+	extra = math.clamp(math.floor(extra), 0, R.MaxPlayers - 1)
 	room.max = math.max(Rooms.count(room), 1 + extra)
 	Rooms.push(room)
 	return true, room.max

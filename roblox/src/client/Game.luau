@@ -598,7 +598,10 @@ function Game.start(opts)
 		netConn = remotes.Net.OnClientEvent:Connect(function(from, batch)
 			if not session or typeof(batch) ~= "table" then return end
 			for _, m in batch do
-				if typeof(m) == "table" then session:onMessage(from, m) end
+				if typeof(m) == "table" then
+					local ok, err = pcall(session.onMessage, session, from, m)
+					if not ok then warn("Dogfight Plus: a message of another player could not be applied: ", err) end
+				end
 			end
 		end)
 	end

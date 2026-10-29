@@ -5409,8 +5409,36 @@ local function applyState(self, g, m)
 end
 
 -- ------------------------------------------------------------------ incoming
+-- what comes from the other machines is not trusted: a malformed or absurd packet is dropped (the server only relays)
+local function isNum(x, lo, hi) return type(x) == "number" and x == x and x >= lo and x <= hi end
+local function isVec(v, n, lim)
+	if type(v) ~= "table" then return false end
+	for i = 1, n do
+		if not isNum(v[i], -lim, lim) then return false end
+	end
+	return true
+end
+local function validSnap(m)
+	return isVec(m.p, 3, 2e5) and isVec(m.v, 3, 3000) and isVec(m.q, 4, 2) and isVec(m.c, 3, 2) and isNum(m.e, 0, 2) and isNum(m.hp, -1e4, 1e4)
+		and isNum(m.fl or 0, 0, 1000) and (m.ld == nil or (type(m.ld) == "string" and #m.ld <= 24))
+end
+local MAX_GUN_DAMAGE = 40                                       -- the most one packet may hurt a jet
+
 function Session:onMessage(from, m)
+	if type(m) ~= "table" or type(m.t) ~= "string" or type(from) ~= "number" then return end
 	local t = m.t
+	if t == "s" and not validSnap(m) then return end
+	if t == "en" then
+		if type(m.list) ~= "table" or #m.list > 40 then return end
+		for _, e in ipairs(m.list) do
+			if type(e) ~= "table" or not validSnap(e) or type(e.id) ~= "string" or type(e.a) ~= "string" then return end
+		end
+	end
+	if t == "launch" and not (type(m.s) == "string" and type(m.k) == "string" and isVec(m.p, 3, 2e5) and isVec(m.v, 3, 3000) and isVec(m.d, 3, 2)) then return end
+	if t == "dmg" and not (type(m.to) == "string" and isNum(m.a, 0, MAX_GUN_DAMAGE) and type(m.w) == "string") then return end
+	if t == "kill" and type(m.v) ~= "string" then return end
+	if t == "hello" and type(m.a) ~= "string" then return end
+	if t == "st" and not (m.wave == nil or isNum(m.wave, 0, 1e4)) then return end
 	local id = "u" .. tostring(from)
 	local w = self:world()
 	if self.wsoOf and id == self.myId then
@@ -14062,26 +14090,41 @@ function Data.isLoaded(player: Player): boolean
 end
 
 -- what the client needs to draw the shop and the HUD
-function Data.view(player: Player)
+-- full: with the war career (a few KB; the client asks for it once, at the start - the frequent pushes of coins leave it out)
+function Data.view(player: Player, full: boolean?)
 	local p = profiles[player]
 	if not p then return nil end
-	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true, career = p.career, best = p.best, warSave = p.warSave }
+	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true, career = p.career,
+		warSave = full and p.warSave or nil }
 end
 
 function Data.push(player: Player)
-	if remotes and profiles[player] then remotes.Profile:FireClient(player, Data.view(player)) end
+	if remotes and profiles[player] then remotes.Profile:FireClient(player, Data.view(player, false)) end
 end
 
 function Data.load(player: Player)
 	local p = fresh()
 	if store then
-		local ok, saved = pcall(function() return store:GetAsync(key(player)) end)
-		if ok and typeof(saved) == "table" then
-			for k, v in saved do p[k] = v end
-		elseif not ok then
-			warn("DataStore load failed: ", saved)
+		-- a failed load is tried again; if it still fails the profile is NOT saved later (a blank profile must never overwrite the real save)
+		local loadedOk = false
+		for attempt = 1, 3 do
+			local ok, saved = pcall(function() return store:GetAsync(key(player)) end)
+			if ok then
+				if typeof(saved) == "table" then
+					for k, v in saved do p[k] = v end
+				end
+				loadedOk = true
+				break
+			end
+			warn("DataStore load failed (" .. attempt .. "): ", saved)
+			task.wait(1.5 * attempt)
+		end
+		if not loadedOk then
+			p.noSave = true
+			if remotes then remotes.Toast:FireClient(player, "A mentés most nem érhető el: ebben a játékban nem mentődik a haladásod.", "warn") end
 		end
 	end
+	if player.Parent == nil then return nil end                       -- left while the data was coming
 	p.air = p.air or {}
 	p.pilot = p.pilot or {}
 	p.receipts = p.receipts or {}
@@ -14092,17 +14135,20 @@ function Data.load(player: Player)
 	return p
 end
 
+local saving = 0                  -- saves in progress (the server shutdown waits for them)
 function Data.save(player: Player)
 	local p = profiles[player]
-	if not p or not store then return end
+	if not p or not store or p.noSave then return end
+	saving += 1
 	local copy = {}
-	for k, v in p do if k ~= "double" then copy[k] = v end end
+	for k, v in p do if k ~= "double" and k ~= "noSave" then copy[k] = v end end
 	for attempt = 1, 3 do
 		local ok, err = pcall(function() store:SetAsync(key(player), copy) end)
-		if ok then return end
+		if ok then saving -= 1 return end
 		warn("DataStore save failed (" .. attempt .. "): ", err)
 		task.wait(2 * attempt)
 	end
+	saving -= 1
 end
 
 function Data.addCoins(player: Player, n: number)
@@ -14175,10 +14221,10 @@ function Data.saveWar(player: Player, t: any)
 	if not ok or #json > 60000 then return end
 	-- the pilot's counters only go up inside a war (a smaller number is a stale or forged packet), unless it is a fresh war
 	local old = p.warSave
-	if old and old.war and old.war.day and w.day >= old.war.day and typeof(old.pilot) == "table" then
+	if t.reset ~= true and old and old.war and old.war.day and w.day >= old.war.day and typeof(old.pilot) == "table" then
 		if (pl.sorties or 0) < (old.pilot.sorties or 0) or (pl.kills or 0) < (old.pilot.kills or 0) or pl.rank < (old.pilot.rank or 0) then return end
 	end
-	p.warSave = t
+	p.warSave = { war = t.war, pilot = t.pilot }
 end
 
 function Data.saveBest(player: Player, kind: any, time: any, lap: any)
@@ -14225,7 +14271,9 @@ function Data.start()
 		for _, player in Players:GetPlayers() do
 			if loaded[player] then task.spawn(Data.save, player) end
 		end
-		task.wait(3)
+		local t0 = os.clock()
+		task.wait(0.5)
+		while saving > 0 and os.clock() - t0 < 25 do task.wait(0.25) end      -- (the server may stay up for 30 s)
 	end)
 end
 
@@ -14381,13 +14429,11 @@ Rooms.init(remotes)
 Daily.init(remotes)
 
 Players.PlayerAdded:Connect(function(player)
-	Data.load(player)
-	Shop.onLoaded(player)
+	if Data.load(player) then Shop.onLoaded(player) end
 end)
 for _, player in Players:GetPlayers() do
 	task.spawn(function()
-		Data.load(player)
-		Shop.onLoaded(player)
+		if Data.load(player) then Shop.onLoaded(player) end
 	end)
 end
 
@@ -14398,12 +14444,24 @@ remotes.SaveCareer.OnServerEvent:Connect(function(player, t)
 	if p and p.career then Daily.reportScore(player, p.career.bestScore) end
 end)
 remotes.SaveBest.OnServerEvent:Connect(function(player, kind, time, lap) Data.saveBest(player, kind, time, lap) end)
-local warSaved = {}
+-- the war career is saved at most every 0.3 s, but the newest state is never dropped (a later one replaces a waiting one)
+local warSaved, warPending, warWaiting = {}, {}, {}
+local function flushWar(player)
+	local t = warPending[player]
+	warPending[player] = nil
+	warWaiting[player] = nil
+	warSaved[player] = os.clock()
+	if t then Data.saveWar(player, t) end
+end
 remotes.SaveWar.OnServerEvent:Connect(function(player, t)
-	local now = os.clock()
-	if warSaved[player] and now - warSaved[player] < 0.3 then return end
-	warSaved[player] = now
-	Data.saveWar(player, t)
+	warPending[player] = t
+	local wait = 0.3 - (os.clock() - (warSaved[player] or -1))
+	if wait <= 0 then
+		flushWar(player)
+	elseif not warWaiting[player] then
+		warWaiting[player] = true
+		task.delay(wait, function() flushWar(player) end)
+	end
 end)
 
 -- the match of a room: every message of a player goes to the others of the same room (the server only relays; each player is the
@@ -14427,7 +14485,7 @@ remotes.Net.OnServerEvent:Connect(function(player, batch)
 		if p ~= player then remotes.Net:FireClient(p, player.UserId, batch) end
 	end
 end)
-Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil; warSaved[player] = nil end)
+Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil; warSaved[player] = nil; warPending[player] = nil; warWaiting[player] = nil end)
 
 game:GetService("RunService").Heartbeat:Connect(function(dt) Rooms.step(dt) end)
 
@@ -14569,12 +14627,15 @@ end
 -- a new room: name, mode ("coop" against the AI waves, "pvp" two teams), how many more may come in, private?
 function Rooms.create(player: Player, name: string, mode: string, extra: number, private: boolean)
 	if typeof(name) ~= "string" then name = "" end
-	extra = math.clamp(math.floor(tonumber(extra) or 3), 0, R.MaxPlayers - 1)
+	extra = tonumber(extra) or 3
+	if extra ~= extra then extra = 3 end
+	extra = math.clamp(math.floor(extra), 0, R.MaxPlayers - 1)
 	local room = {
 		id = nextId, name = filtered(name ~= "" and name or (player.DisplayName .. " szobája"), player), host = player,
 		mode = mode == "pvp" and "pvp" or "coop", max = 1 + extra, private = private == true, code = nil,
 		members = {}, team = {}, seats = {}, score = { A = 0, B = 0 }, created = os.time(),
 	}
+	if player.Parent == nil then return false, "Kiléptél" end                -- (the name filter yields: the player may be gone)
 	nextId += 1
 	if room.private then room.code = newCode() end
 	rooms[room.id] = room
@@ -14638,7 +14699,9 @@ end
 function Rooms.setSlots(player: Player, extra)
 	local room = roomOf[player]
 	if not room or room.host ~= player then return false, "Csak a szoba nyitója állíthatja" end
-	extra = math.clamp(math.floor(tonumber(extra) or 0), 0, R.MaxPlayers - 1)
+	extra = tonumber(extra) or 0
+	if extra ~= extra then extra = 0 end
+	extra = math.clamp(math.floor(extra), 0, R.MaxPlayers - 1)
 	room.max = math.max(Rooms.count(room), 1 + extra)
 	Rooms.push(room)
 	return true, room.max
@@ -14758,7 +14821,7 @@ end
 function Shop.start(remotes)
 	Shop.remotes = remotes
 	remotes.GetProfile.OnServerInvoke = function(player)
-		return Data.view(player)
+		return Data.view(player, true)
 	end
 
 	remotes.BuyAir.OnServerInvoke = function(player, id)
@@ -16118,7 +16181,10 @@ function Game.start(opts)
 		netConn = remotes.Net.OnClientEvent:Connect(function(from, batch)
 			if not session or typeof(batch) ~= "table" then return end
 			for _, m in batch do
-				if typeof(m) == "table" then session:onMessage(from, m) end
+				if typeof(m) == "table" then
+					local ok, err = pcall(session.onMessage, session, from, m)
+					if not ok then warn("Dogfight Plus: a message of another player could not be applied: ", err) end
+				end
 			end
 		end)
 	end
@@ -17685,6 +17751,7 @@ return RadioUi
 <Item class="ModuleScript" referent="RBX82"><Properties><string name="Name">RoomsUi</string><ProtectedString name="Source"><![CDATA[--!nonstrict
 -- The rooms screen: your room (members, teams, slots, the open rear seats), a quick start, a new room and the list.
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared").Config)
@@ -17788,7 +17855,7 @@ local function myRoomSection()
 			Ui.label(rw, st.name .. " kétüléses gépének hátsó ülése szabad", { Size = UDim2.new(0, 330, 0, 28), TextSize = 14 })
 			Ui.button(rw, "Beülök", { Size = UDim2.new(0, 110, 0, 28), TextSize = 14, BackgroundColor3 = Ui.Green }, function()
 				local ok, m2 = remotes.JoinSeat:InvokeServer(st.userId)
-				say(m2, ok)
+				say(type(m2) == "string" and m2 or (ok and "Beültél a hátsó ülésre" or "Nem sikerült"), ok)
 				if ok and onSeat then onSeat(m2, st.userId) end
 			end)
 		end
@@ -17868,7 +17935,7 @@ end
 local function refreshList()
 	local ok, l = pcall(function() return remotes.ListRooms:InvokeServer() end)
 	if ok and typeof(l) == "table" then list = l end
-	if open then render() end
+	if open and not UserInputService:GetFocusedTextBox() then render() end       -- (a rebuild would take the text away from the one who types)
 end
 
 function RoomsUi.init(r, hooks)
@@ -17881,7 +17948,7 @@ function RoomsUi.init(r, hooks)
 	msg = Ui.label(panel, "", { Position = UDim2.new(0, 0, 0, 34), Size = UDim2.new(1, 0, 0, 20), TextSize = 15 })
 	body = Ui.make("ScrollingFrame", { Position = UDim2.new(0, 0, 0, 58), Size = UDim2.new(1, 0, 1, -58), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 8,
 		CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = panel }, { Ui.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	State.onChange(function() if open then render() end end)
+	State.onChange(function() if open and not UserInputService:GetFocusedTextBox() then render() end end)
 	task.spawn(function()
 		while true do
 			task.wait(3)
@@ -18897,10 +18964,11 @@ local JETS = { "f16", "fa18", "f35", "f15", "f22" }
 
 local function colour(id) local c = POWERS[id].colour return Color3.fromRGB(c[1], c[2], c[3]) end
 
-local function persist()
+-- reset: a new career (the server then accepts smaller counters than the old pilot's)
+local function persist(reset)
 	if not S.war or not S.pilot then return end
 	while #S.war.log > 40 do table.remove(S.war.log) end
-	if remotes and remotes.SaveWar then remotes.SaveWar:FireServer({ war = S.war, pilot = S.pilot }) end
+	if remotes and remotes.SaveWar then remotes.SaveWar:FireServer({ war = S.war, pilot = S.pilot, reset = reset == true }) end
 end
 
 -- ------------------------------------------------------------------ building blocks
@@ -19047,7 +19115,7 @@ function screens.warRoom()
 	if #w.log == 0 then para("még üres", { TextColor3 = Color3.fromRGB(150, 170, 165) }) end
 	for i = 1, math.min(12, #w.log) do para(string.format("<b>%d.</b> %s", w.log[i].day, w.log[i].text), { TextSize = 13 }) end
 	local r2 = row()
-	button(r2, "Új karrier", function() S.war, S.pilot = nil, nil; persist(); screens.start() end, { BackgroundColor3 = Color3.fromRGB(200, 120, 110) })
+	button(r2, "Új karrier", function() screens.start() end, { BackgroundColor3 = Color3.fromRGB(200, 120, 110) })
 end
 
 -- ------------------------------------------------------------------ briefing
@@ -19225,7 +19293,7 @@ function screens.warEnd()
 	button(r, "Új háború", function()
 		S.war = C.newWar("us", os.time())
 		S.war.started = true
-		persist()
+		persist(true)
 		screens.warRoom()
 	end, { BackgroundColor3 = Ui.Green })
 	persist()
@@ -19252,7 +19320,7 @@ function screens.start()
 		S.pilot = C.newPilot(name, cs)
 		S.war = C.newWar("us", os.time())
 		S.war.started = true
-		persist()
+		persist(true)
 		screens.warRoom()
 	end, { BackgroundColor3 = Ui.Green })
 end

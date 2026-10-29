@@ -1,6 +1,7 @@
 --!nonstrict
 -- The rooms screen: your room (members, teams, slots, the open rear seats), a quick start, a new room and the list.
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared").Config)
@@ -104,7 +105,7 @@ local function myRoomSection()
 			Ui.label(rw, st.name .. " kétüléses gépének hátsó ülése szabad", { Size = UDim2.new(0, 330, 0, 28), TextSize = 14 })
 			Ui.button(rw, "Beülök", { Size = UDim2.new(0, 110, 0, 28), TextSize = 14, BackgroundColor3 = Ui.Green }, function()
 				local ok, m2 = remotes.JoinSeat:InvokeServer(st.userId)
-				say(m2, ok)
+				say(type(m2) == "string" and m2 or (ok and "Beültél a hátsó ülésre" or "Nem sikerült"), ok)
 				if ok and onSeat then onSeat(m2, st.userId) end
 			end)
 		end
@@ -184,7 +185,7 @@ end
 local function refreshList()
 	local ok, l = pcall(function() return remotes.ListRooms:InvokeServer() end)
 	if ok and typeof(l) == "table" then list = l end
-	if open then render() end
+	if open and not UserInputService:GetFocusedTextBox() then render() end       -- (a rebuild would take the text away from the one who types)
 end
 
 function RoomsUi.init(r, hooks)
@@ -197,7 +198,7 @@ function RoomsUi.init(r, hooks)
 	msg = Ui.label(panel, "", { Position = UDim2.new(0, 0, 0, 34), Size = UDim2.new(1, 0, 0, 20), TextSize = 15 })
 	body = Ui.make("ScrollingFrame", { Position = UDim2.new(0, 0, 0, 58), Size = UDim2.new(1, 0, 1, -58), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 8,
 		CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = panel }, { Ui.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
-	State.onChange(function() if open then render() end end)
+	State.onChange(function() if open and not UserInputService:GetFocusedTextBox() then render() end end)
 	task.spawn(function()
 		while true do
 			task.wait(3)

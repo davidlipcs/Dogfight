@@ -49,26 +49,41 @@ function Data.isLoaded(player: Player): boolean
 end
 
 -- what the client needs to draw the shop and the HUD
-function Data.view(player: Player)
+-- full: with the war career (a few KB; the client asks for it once, at the start - the frequent pushes of coins leave it out)
+function Data.view(player: Player, full: boolean?)
 	local p = profiles[player]
 	if not p then return nil end
-	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true, career = p.career, best = p.best, warSave = p.warSave }
+	return { coins = p.coins, kills = p.kills, best = p.best, air = p.air, pilot = p.pilot, airOn = p.airOn, pilotOn = p.pilotOn, jetOn = p.jetOn, double = p.double == true, career = p.career,
+		warSave = full and p.warSave or nil }
 end
 
 function Data.push(player: Player)
-	if remotes and profiles[player] then remotes.Profile:FireClient(player, Data.view(player)) end
+	if remotes and profiles[player] then remotes.Profile:FireClient(player, Data.view(player, false)) end
 end
 
 function Data.load(player: Player)
 	local p = fresh()
 	if store then
-		local ok, saved = pcall(function() return store:GetAsync(key(player)) end)
-		if ok and typeof(saved) == "table" then
-			for k, v in saved do p[k] = v end
-		elseif not ok then
-			warn("DataStore load failed: ", saved)
+		-- a failed load is tried again; if it still fails the profile is NOT saved later (a blank profile must never overwrite the real save)
+		local loadedOk = false
+		for attempt = 1, 3 do
+			local ok, saved = pcall(function() return store:GetAsync(key(player)) end)
+			if ok then
+				if typeof(saved) == "table" then
+					for k, v in saved do p[k] = v end
+				end
+				loadedOk = true
+				break
+			end
+			warn("DataStore load failed (" .. attempt .. "): ", saved)
+			task.wait(1.5 * attempt)
+		end
+		if not loadedOk then
+			p.noSave = true
+			if remotes then remotes.Toast:FireClient(player, "A mentés most nem érhető el: ebben a játékban nem mentődik a haladásod.", "warn") end
 		end
 	end
+	if player.Parent == nil then return nil end                       -- left while the data was coming
 	p.air = p.air or {}
 	p.pilot = p.pilot or {}
 	p.receipts = p.receipts or {}
@@ -79,17 +94,20 @@ function Data.load(player: Player)
 	return p
 end
 
+local saving = 0                  -- saves in progress (the server shutdown waits for them)
 function Data.save(player: Player)
 	local p = profiles[player]
-	if not p or not store then return end
+	if not p or not store or p.noSave then return end
+	saving += 1
 	local copy = {}
-	for k, v in p do if k ~= "double" then copy[k] = v end end
+	for k, v in p do if k ~= "double" and k ~= "noSave" then copy[k] = v end end
 	for attempt = 1, 3 do
 		local ok, err = pcall(function() store:SetAsync(key(player), copy) end)
-		if ok then return end
+		if ok then saving -= 1 return end
 		warn("DataStore save failed (" .. attempt .. "): ", err)
 		task.wait(2 * attempt)
 	end
+	saving -= 1
 end
 
 function Data.addCoins(player: Player, n: number)
@@ -162,10 +180,10 @@ function Data.saveWar(player: Player, t: any)
 	if not ok or #json > 60000 then return end
 	-- the pilot's counters only go up inside a war (a smaller number is a stale or forged packet), unless it is a fresh war
 	local old = p.warSave
-	if old and old.war and old.war.day and w.day >= old.war.day and typeof(old.pilot) == "table" then
+	if t.reset ~= true and old and old.war and old.war.day and w.day >= old.war.day and typeof(old.pilot) == "table" then
 		if (pl.sorties or 0) < (old.pilot.sorties or 0) or (pl.kills or 0) < (old.pilot.kills or 0) or pl.rank < (old.pilot.rank or 0) then return end
 	end
-	p.warSave = t
+	p.warSave = { war = t.war, pilot = t.pilot }
 end
 
 function Data.saveBest(player: Player, kind: any, time: any, lap: any)
@@ -212,7 +230,9 @@ function Data.start()
 		for _, player in Players:GetPlayers() do
 			if loaded[player] then task.spawn(Data.save, player) end
 		end
-		task.wait(3)
+		local t0 = os.clock()
+		task.wait(0.5)
+		while saving > 0 and os.clock() - t0 < 25 do task.wait(0.25) end      -- (the server may stay up for 30 s)
 	end)
 end
 

@@ -27,13 +27,11 @@ Rooms.init(remotes)
 Daily.init(remotes)
 
 Players.PlayerAdded:Connect(function(player)
-	Data.load(player)
-	Shop.onLoaded(player)
+	if Data.load(player) then Shop.onLoaded(player) end
 end)
 for _, player in Players:GetPlayers() do
 	task.spawn(function()
-		Data.load(player)
-		Shop.onLoaded(player)
+		if Data.load(player) then Shop.onLoaded(player) end
 	end)
 end
 
@@ -44,12 +42,24 @@ remotes.SaveCareer.OnServerEvent:Connect(function(player, t)
 	if p and p.career then Daily.reportScore(player, p.career.bestScore) end
 end)
 remotes.SaveBest.OnServerEvent:Connect(function(player, kind, time, lap) Data.saveBest(player, kind, time, lap) end)
-local warSaved = {}
+-- the war career is saved at most every 0.3 s, but the newest state is never dropped (a later one replaces a waiting one)
+local warSaved, warPending, warWaiting = {}, {}, {}
+local function flushWar(player)
+	local t = warPending[player]
+	warPending[player] = nil
+	warWaiting[player] = nil
+	warSaved[player] = os.clock()
+	if t then Data.saveWar(player, t) end
+end
 remotes.SaveWar.OnServerEvent:Connect(function(player, t)
-	local now = os.clock()
-	if warSaved[player] and now - warSaved[player] < 0.3 then return end
-	warSaved[player] = now
-	Data.saveWar(player, t)
+	warPending[player] = t
+	local wait = 0.3 - (os.clock() - (warSaved[player] or -1))
+	if wait <= 0 then
+		flushWar(player)
+	elseif not warWaiting[player] then
+		warWaiting[player] = true
+		task.delay(wait, function() flushWar(player) end)
+	end
 end)
 
 -- the match of a room: every message of a player goes to the others of the same room (the server only relays; each player is the
@@ -73,7 +83,7 @@ remotes.Net.OnServerEvent:Connect(function(player, batch)
 		if p ~= player then remotes.Net:FireClient(p, player.UserId, batch) end
 	end
 end)
-Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil; warSaved[player] = nil end)
+Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil; warSaved[player] = nil; warPending[player] = nil; warWaiting[player] = nil end)
 
 game:GetService("RunService").Heartbeat:Connect(function(dt) Rooms.step(dt) end)
 

@@ -29,7 +29,7 @@ end
 function Shop.start(remotes)
 	Shop.remotes = remotes
 	remotes.GetProfile.OnServerInvoke = function(player)
-		return Data.view(player)
+		return Data.view(player, true)
 	end
 
 	remotes.BuyAir.OnServerInvoke = function(player, id)

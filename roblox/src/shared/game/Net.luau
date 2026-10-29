@@ -199,8 +199,36 @@ local function applyState(self, g, m)
 end
 
 -- ------------------------------------------------------------------ incoming
+-- what comes from the other machines is not trusted: a malformed or absurd packet is dropped (the server only relays)
+local function isNum(x, lo, hi) return type(x) == "number" and x == x and x >= lo and x <= hi end
+local function isVec(v, n, lim)
+	if type(v) ~= "table" then return false end
+	for i = 1, n do
+		if not isNum(v[i], -lim, lim) then return false end
+	end
+	return true
+end
+local function validSnap(m)
+	return isVec(m.p, 3, 2e5) and isVec(m.v, 3, 3000) and isVec(m.q, 4, 2) and isVec(m.c, 3, 2) and isNum(m.e, 0, 2) and isNum(m.hp, -1e4, 1e4)
+		and isNum(m.fl or 0, 0, 1000) and (m.ld == nil or (type(m.ld) == "string" and #m.ld <= 24))
+end
+local MAX_GUN_DAMAGE = 40                                       -- the most one packet may hurt a jet
+
 function Session:onMessage(from, m)
+	if type(m) ~= "table" or type(m.t) ~= "string" or type(from) ~= "number" then return end
 	local t = m.t
+	if t == "s" and not validSnap(m) then return end
+	if t == "en" then
+		if type(m.list) ~= "table" or #m.list > 40 then return end
+		for _, e in ipairs(m.list) do
+			if type(e) ~= "table" or not validSnap(e) or type(e.id) ~= "string" or type(e.a) ~= "string" then return end
+		end
+	end
+	if t == "launch" and not (type(m.s) == "string" and type(m.k) == "string" and isVec(m.p, 3, 2e5) and isVec(m.v, 3, 3000) and isVec(m.d, 3, 2)) then return end
+	if t == "dmg" and not (type(m.to) == "string" and isNum(m.a, 0, MAX_GUN_DAMAGE) and type(m.w) == "string") then return end
+	if t == "kill" and type(m.v) ~= "string" then return end
+	if t == "hello" and type(m.a) ~= "string" then return end
+	if t == "st" and not (m.wave == nil or isNum(m.wave, 0, 1e4)) then return end
 	local id = "u" .. tostring(from)
 	local w = self:world()
 	if self.wsoOf and id == self.myId then

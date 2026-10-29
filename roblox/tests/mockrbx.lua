@@ -308,6 +308,7 @@ methods.IsKeyDown = function() return false end
 methods.GetMouseLocation = function() return v2(640, 360) end
 methods.SetCoreGuiEnabled = function() end
 methods.Clear = function() end
+methods.GetFocusedTextBox = function() return nil end
 methods.PreloadAsync = function() end
 methods.IsLoaded = function() return true end
 methods.Raycast = function() return { Instance = M.instOf and M.instOf('Part', 'Hit') or {} } end
