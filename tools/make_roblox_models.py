@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "web", "assets")
 OUT = os.path.join(ROOT, "roblox", "models")
 MAXTRI = 15000                    # per mesh (Roblox: 20000)
-TOTAL = 42000                     # per jet (the jets are seen small; eight of them fly at once)
+TOTAL = 40000                     # per jet (the jets are seen small; eight of them fly at once)
 KEYS = ["f16", "fa18", "f15", "f22", "f35", "gripen", "typhoon", "rafale", "su35", "su57", "mig29", "mig31", "j20", "t38", "t45", "t6"]
 
 
@@ -208,51 +208,138 @@ def split(g, parts):
     return out
 
 
+def srgb(c):
+    """linear 0..1 -> sRGB 0..255 (the paint texture is sRGB; the vertex colours and base colour factors of a glTF are linear)"""
+    c = np.clip(c, 0, 1)
+    return np.round(255 * np.where(c <= 0.0031308, 12.92 * c, 1.055 * np.power(c, 1 / 2.4) - 0.055)).astype(int)
+
+
+ATLAS = 1024
+PAINT_H = 960                                   # the paint texture is squeezed into the top 960 rows; the bottom 64 rows hold the palette
+MAX_BODY_TRI = 15000
+
+
+def build_merged(key):
+    """One jet as a handful of meshes (about 7 instead of 80): the whole body (paint texture and the vertex-coloured parts together, one
+    texture atlas: the paint at the top, a palette of flat colours in a strip at the bottom), the landing gear and its doors in one mesh
+    (hidden with the gear up), the canopy and the glass.  Few meshes load fast, are few uploads for Roblox to check, and make few parts."""
+    path = os.path.join(SRC, key + ".glb")
+    scene = trimesh.load(path, force="scene")
+    colours = glb_colors(path)
+    paint = None
+    for g in scene.geometry.values():
+        t = getattr(getattr(g.visual, "material", None), "baseColorTexture", None)
+        if t is not None:
+            paint = t
+            break
+    if paint is None:
+        paint = Image.new("RGB", (ATLAS, ATLAS), (140, 146, 152))
+    if key in LIVERIES:
+        paint = repaint(paint, LIVERIES[key])
+    paint = paint.convert("RGB").resize((ATLAS, PAINT_H), Image.LANCZOS)
+
+    total = sum(len(g.faces) for g in scene.geometry.values())
+    k = min(1.0, TOTAL / total)
+    body = {"pos": [], "uv": [], "nrm": [], "col": []}
+    gear = {"pos": [], "uv": [], "nrm": [], "col": []}
+    glass = []
+    palette = {}                                   # (r, g, b) sRGB -> index
+
+    def pal(rgb):
+        key_ = tuple(int(x) // 6 * 6 for x in rgb)
+        if key_ not in palette:
+            palette[key_] = len(palette)
+        return palette[key_]
+
+    for node in scene.graph.nodes_geometry:
+        T, gname = scene.graph[node]
+        g = scene.geometry[gname]
+        mat = getattr(g.visual, "material", None)
+        alpha = getattr(mat, "alphaMode", None) == "BLEND"
+        target = max(60, min(MAXTRI, int(len(g.faces) * k)))
+        r = reduce(g, target)
+        r.apply_transform(T)
+        nrm = np.asarray(r.vertex_normals)
+        tex = getattr(mat, "baseColorTexture", None) is not None
+        if alpha:
+            glass.append((node, r, mat))
+            continue
+        dst = gear if node.startswith(("gear_", "door_")) else body
+        faces = np.asarray(r.faces)
+        pos = np.asarray(r.vertices)[faces]
+        vn = nrm[faces]
+        if tex:
+            uv = np.asarray(r.visual.uv)[faces].astype(float)
+            uv[:, :, 1] = 1 - (1 - uv[:, :, 1]) * (PAINT_H / ATLAS)          # into the paint region of the atlas
+        else:
+            base = np.asarray(getattr(mat, "baseColorFactor", None) if getattr(mat, "baseColorFactor", None) is not None else [255, 255, 255, 255], dtype=float)[:3] / 255.0
+            col = colours.get(gname)
+            if col is not None and len(col) == len(g.vertices):
+                vc = col[r.metadata["src_index"]][:, :3]
+                fc = vc[faces].mean(axis=1) * base
+            else:
+                fc = np.tile(base, (len(faces), 1))
+            idx = np.array([pal(srgb(c)) for c in fc])
+            uv = np.zeros((len(faces), 3, 2))
+            uv[:, :, 0] = ((idx * 4 + 2) / ATLAS)[:, None]
+            uv[:, :, 1] = 1 - (PAINT_H + 32) / ATLAS
+        dst["pos"].append(pos)
+        dst["uv"].append(uv)
+        dst["nrm"].append(vn)
+    if len(palette) > 256:
+        raise SystemExit("%s: %d palette colours (256 fit)" % (key, len(palette)))
+    # the atlas
+    atlas = Image.new("RGB", (ATLAS, ATLAS), (128, 128, 128))
+    atlas.paste(paint, (0, 0))
+    d = ImageDraw.Draw(atlas)
+    for rgb, i in palette.items():
+        d.rectangle([i * 4, PAINT_H, i * 4 + 3, ATLAS - 1], fill=tuple(int(min(255, c + 3)) for c in rgb))
+    mat = trimesh.visual.material.PBRMaterial(name="%s_atlas" % key, baseColorTexture=atlas, metallicFactor=0.1, roughnessFactor=0.6)
+
+    def mesh_of(parts):
+        pos = np.concatenate(parts["pos"]); uv = np.concatenate(parts["uv"]); nr = np.concatenate(parts["nrm"])
+        return pos, uv, nr
+
+    def make(pos, uv, nr):
+        n = len(pos)
+        m = trimesh.Trimesh(vertices=pos.reshape(-1, 3), faces=np.arange(n * 3).reshape(-1, 3), process=False)
+        m.visual = trimesh.visual.TextureVisuals(uv=uv.reshape(-1, 2), material=mat)
+        m.vertex_normals = nr.reshape(-1, 3)
+        return m
+
+    out = trimesh.Scene()
+    count = 0
+    pos, uv, nr = mesh_of(body)
+    chunks = max(1, int(np.ceil(len(pos) / MAX_BODY_TRI)))
+    axis = int(np.argmax(pos.reshape(-1, 3).max(0) - pos.reshape(-1, 3).min(0)))
+    order = np.argsort(pos[:, :, axis].mean(axis=1))                        # along the longest axis, so that each chunk is one piece of the jet
+    for i in range(chunks):
+        sel = order[i * len(order) // chunks:(i + 1) * len(order) // chunks]
+        m = make(pos[sel], uv[sel], nr[sel])
+        out.add_geometry(m, node_name="body%d" % (i + 1), geom_name="body%d" % (i + 1))
+        count += len(sel)
+    if gear["pos"]:
+        gp, gu, gn = mesh_of(gear)
+        out.add_geometry(make(gp, gu, gn), node_name="gear_all", geom_name="gear_all")
+        count += len(gp)
+    for node, r, gm in glass:
+        r.vertex_normals
+        r.visual = trimesh.visual.TextureVisuals(material=gm)
+        out.add_geometry(r, node_name=node, geom_name=node)
+        count += len(r.faces)
+    data = out.export(file_type="glb")
+    with open(os.path.join(OUT, key + ".glb"), "wb") as f:
+        f.write(data)
+    print("%-8s %6d -> %6d triangles in %d meshes, %d colours, %5d KB" % (key, total, count, len(out.geometry), len(palette), len(data) // 1024))
+
+
 def main(keys):
     os.makedirs(OUT, exist_ok=True)
     for key in keys:
-        path = os.path.join(SRC, key + ".glb")
-        if not os.path.exists(path):
-            print("missing", path)
+        if not os.path.exists(os.path.join(SRC, key + ".glb")):
+            print("missing", key)
             continue
-        scene = trimesh.load(path, force="scene")
-        colours = glb_colors(path)
-        if key in LIVERIES:
-            done = {}
-            for g in scene.geometry.values():
-                m = getattr(g.visual, "material", None)
-                t = getattr(m, "baseColorTexture", None)
-                if t is not None:
-                    if id(t) not in done:
-                        done[id(t)] = repaint(t, LIVERIES[key]).resize((1024, 1024), Image.LANCZOS)
-                    m.baseColorTexture = done[id(t)]
-        total = sum(len(g.faces) for g in scene.geometry.values())
-        k = min(1.0, TOTAL / total)
-        new = trimesh.Scene()
-        count = 0
-        for node in scene.graph.nodes_geometry:
-            T, gname = scene.graph[node]
-            g = scene.geometry[gname]
-            target = max(60, min(MAXTRI, int(len(g.faces) * k)))
-            r = reduce(g, target)
-            mat = getattr(g.visual, "material", None)
-            textured = getattr(mat, "baseColorTexture", None) is not None
-            col = colours.get(gname)
-            if not textured and col is not None and len(col) == len(g.vertices):
-                # the paint of the matte / metal parts (dark intakes, panels, nozzles ...) is in the vertex colours: made a material colour
-                r.visual = trimesh.visual.TextureVisuals(material=mat)
-                for i, (sub, c) in enumerate(split_by_colour(r, col[r.metadata["src_index"]])):
-                    sub.vertex_normals                                      # (computed, so that they are exported)
-                    new.add_geometry(sub, node_name="%s_c%d" % (node, i), geom_name="%s_c%d" % (gname, i), transform=T)
-                    count += len(sub.faces)
-            else:
-                r.vertex_normals
-                new.add_geometry(r, node_name=node, geom_name=gname, transform=T)
-                count += len(r.faces)
-        data = new.export(file_type="glb")
-        with open(os.path.join(OUT, key + ".glb"), "wb") as f:
-            f.write(data)
-        print("%-8s %6d -> %6d triangles, %5d KB" % (key, total, count, len(data) // 1024))
+        build_merged(key)
 
 
 if __name__ == "__main__":
