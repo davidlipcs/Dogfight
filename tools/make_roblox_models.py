@@ -37,6 +37,16 @@ LIVERIES = {
     "su35": dict(tones=[(104, 124, 148), (140, 158, 176), (176, 190, 204)]),
     # Eurofighter Typhoon: grey, in two close tones
     "typhoon": dict(tones=[(128, 136, 144)] * 3, clip=5),
+    # Gripen of the Hungarian Air Force: blue-grey, the red-white-green triangle instead of the Swedish roundel
+    "gripen": dict(tones=[(66, 78, 96), (92, 104, 122), (116, 128, 144)], marks="triangle", markmask="saturated"),
+    # Rafale: dark grey, the French roundels stay
+    "rafale": dict(tones=[(76, 82, 90), (98, 104, 112), (120, 126, 134)]),
+    # F-35A: the light gunmetal grey
+    "f35": dict(tones=[(98, 102, 106), (118, 122, 126), (138, 142, 146)]),
+    # F/A-18E: navy grey, lighter below
+    "fa18": dict(tones=[(112, 122, 134), (150, 158, 168), (176, 184, 192)]),
+    # J-20: grey with a blue tint, the red-yellow marks stay
+    "j20": dict(tones=[(96, 106, 120), (118, 128, 142), (138, 148, 160)]),
 }
 
 
@@ -89,7 +99,10 @@ def repaint(img, spec):
     out = np.clip(out, 0, 255).astype(np.uint8)
     res = Image.fromarray(out)
     if spec.get("marks") == "triangle":
-        red = (a[:, :, 0] > 150) & (a[:, :, 1] < 90) & (a[:, :, 2] < 90)
+        if spec.get("markmask") == "saturated":
+            red = (sat > 60) & (lum > 60)                                  # any coloured roundel
+        else:
+            red = (a[:, :, 0] > 150) & (a[:, :, 1] < 90) & (a[:, :, 2] < 90)
         red = ndimage.binary_dilation(red, iterations=2)
         lab2, n = ndimage.label(red)
         for i, sl in enumerate(ndimage.find_objects(lab2)):
