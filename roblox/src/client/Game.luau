@@ -61,6 +61,7 @@ local radioUi
 local wsoDead = 0
 local loadId = 0
 Game.loading = false
+Game.preloadError = nil
 local seatOpen = false
 
 function Game.init(r)
@@ -78,8 +79,14 @@ end
 function Game.preload()
 	if terrain or terrainReady then return end
 	task.spawn(function()
-		terrain = SimTerrain.new(IslandData.load())
-		terrainReady = true
+		local ok, result = pcall(function() return SimTerrain.new(IslandData.load()) end)
+		if ok then
+			terrain = result
+			terrainReady = true
+		else
+			Game.preloadError = tostring(result)
+			warn("Dogfight Plus: the island data could not be loaded: ", result)
+		end
 	end)
 end
 function Game.ready() return terrainReady end
