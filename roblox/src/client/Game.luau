@@ -442,14 +442,58 @@ local function loadEverything(opts, myId)
 	if myId ~= loadId then return end
 	LoadingUi.set("A sziget és a kifutó betöltése…", 0.2)
 	local f = terrain.airfield
+	local S = Config.Island.StudsPerMeter
 	local top = Coords.pos(SimMath.V(f.x, f.y, f.elevation + 3000))
 	pcall(function() player:RequestStreamAroundAsync(Coords.pos(SimMath.V(f.x, f.y, f.elevation))) end)
+	-- the ground under the base: the runway, on terrain at the height of the airfield (not just the sea)
+	local function ground()
+		local hit = workspace:Raycast(top, Vector3.new(0, -3000 * S - 100, 0))
+		if not hit then return false end
+		return hit.Instance.Name ~= "Sea" and math.abs(hit.Position.Y - f.elevation * S) < 15
+	end
 	waitUntil(function()
 		if myId ~= loadId then return true end
-		local hit = workspace:Raycast(top, Vector3.new(0, -3000 * Config.Island.StudsPerMeter - 100, 0))
-		return hit ~= nil and workspace:FindFirstChild("Runway") ~= nil
+		return ground() and workspace:FindFirstChild("Runway") ~= nil
 	end, 25)
 	if myId ~= loadId then return end
+	if Config.RequireIsland and not (ground() and workspace:FindFirstChild("Runway") ~= nil) then
+		LoadingUi.fail("A sziget nincs felépítve ezen a pályán",
+			"A repülőtér alatt nincs a játék saját szigete (csak tenger), ezért a gép a semmin állna.\n\n<b>Egyszer</b> kell felépíteni: Studióban (Play nélkül) a <b>Window → Command Bar</b>-ba ez:\n<font face=\"RobotoMono\">require(game.ServerScriptService.Server.IslandBuilder).build()</font>\nmajd várd meg az Output „the island is built” sorát, és <b>File → Save</b>.\nA következő frissítéseknél a kódot a DogfightCode.rbxmx-szel cseréld (a README 0. pontja), így a sziget és a gépek megmaradnak.",
+			function() Game.stop() end)
+		return
+	end
+	-- the jets of the match must be imported (the part-built ones are only a stand-in)
+	local needed = { [match.player.spec.model] = true }
+	for _, k in ipairs(opts.enemyTypes or {}) do
+		local sp = Specs.BANDITS[k]
+		if sp then needed[sp.model] = true end
+	end
+	for _, r in ipairs((opts.mission and opts.mission.red) or {}) do
+		local sp = Specs.BANDITS[r.type]
+		if sp then needed[sp.model] = true end
+	end
+	local function missing()
+		local models = ReplicatedStorage:FindFirstChild("JetModels")
+		local out = {}
+		for key in pairs(needed) do
+			local m = models and models:FindFirstChild(key)
+			if not m then table.insert(out, key) end
+		end
+		table.sort(out)
+		return out
+	end
+	if Config.RequireJets then
+		LoadingUi.set("A gépmodellek keresése…", 0.35)
+		waitUntil(function() return myId ~= loadId or #missing() == 0 end, 15)
+		if myId ~= loadId then return end
+		local miss = missing()
+		if #miss > 0 then
+			LoadingUi.fail("Hiányzó gépmodellek",
+				"Ezek a gépek nincsenek a pályán: <b>" .. table.concat(miss, ", ") .. "</b>\n\nImportáld a gépeket (zip kicsomagolva → húzd be a Studio 3D ablakába), majd <b>File → Save</b>; indításkor a játék magától a helyére teszi őket. Az Output ablak („Dogfight Plus: … jet model(s) moved …”) mutatja, hány van meg.",
+				function() Game.stop() end)
+			return
+		end
+	end
 	-- the aircraft of the match get their visuals now (and the carrier is built), then their content is fetched
 	LoadingUi.set("A gépek betöltése…", 0.45)
 	view.world = match.world

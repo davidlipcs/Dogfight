@@ -28,7 +28,7 @@ local visible = false
 local ready = false
 local gear = "single"               -- "single" or "twoseat" (the F/A-18F with a rear seat for a team mate)
 local gearButtons = {}
-local roomLabel = nil
+local roomLabel, statusLabel = nil, nil
 local State = require(script.Parent.State)
 local Menu = require(script.Parent.Menu)
 local DailyUi = require(script.Parent.DailyUi)
@@ -178,6 +178,19 @@ local function render()
 	end
 end
 
+-- what the match needs: the island under the base and the imported jets
+function Lobby.updateStatus()
+	if not statusLabel then return end
+	local models = ReplicatedStorage:FindFirstChild("JetModels")
+	local have = 0
+	for _, j in Config.JetModels do
+		if models and models:FindFirstChild(j.key) then have += 1 end
+	end
+	local island = workspace:GetAttribute("IslandBuilt") == true
+	local function mark(ok, text) return string.format("<font color=\"%s\">%s</font>", ok and "#6bff85" or "#ff7a64", text) end
+	statusLabel.Text = mark(island, island and "Sziget: kész" or "Sziget: NINCS felépítve") .. "  ·  " .. mark(have == #Config.JetModels, string.format("Gépek: %d/%d importálva", have, #Config.JetModels))
+end
+
 function Lobby.say(text, good) if msgLabel then say(text, good) end end
 
 function Lobby.paintGear()
@@ -215,6 +228,13 @@ function Lobby.init(r, h)
 	Ui.label(gui, "DOGFIGHT PLUS", { Position = UDim2.new(0, 28, 0, 22), Size = UDim2.new(0, 500, 0, 54), TextSize = 46, Font = Enum.Font.GothamBlack, TextColor3 = Ui.Green })
 	Ui.label(gui, "Légiharc a barátaiddal – lődd le a hullámokat, gyűjts érméket, öltöztesd a gépedet és a pilótádat.", { Position = UDim2.new(0, 30, 0, 78), Size = UDim2.new(0, 520, 0, 40), TextSize = 16, TextWrapped = true, TextColor3 = Color3.fromRGB(200, 215, 210) })
 	coinsLabel = Ui.label(gui, "", { Position = UDim2.new(0, 30, 0, 126), Size = UDim2.new(0, 300, 0, 30), TextSize = 24, TextColor3 = Ui.Amber, Font = Enum.Font.GothamBold })
+	statusLabel = Ui.label(gui, "", { Position = UDim2.new(0, 30, 0, 134), Size = UDim2.new(0, 700, 0, 20), TextSize = 14, TextColor3 = Color3.fromRGB(190, 210, 205), RichText = true })
+	task.spawn(function()
+		while gui do
+			Lobby.updateStatus()
+			task.wait(2)
+		end
+	end)
 	roomLabel = Ui.label(gui, "", { Position = UDim2.new(0, 30, 0, 156), Size = UDim2.new(0, 520, 0, 20), TextSize = 15, TextColor3 = Color3.fromRGB(190, 210, 205) })
 	Ui.button(gui, "▶ INDULÁS A PÁLYÁRÓL", { Position = UDim2.new(0, 30, 0, 184), Size = UDim2.new(0, 280, 0, 52), TextSize = 21, BackgroundColor3 = Ui.Green }, function() hooks.onPlay(false) end)
 	Ui.button(gui, "✈ INDULÁS A LEVEGŐBEN", { Position = UDim2.new(0, 30, 0, 242), Size = UDim2.new(0, 280, 0, 44), TextSize = 17, BackgroundColor3 = Ui.Amber }, function() hooks.onPlay(true) end)

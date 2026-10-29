@@ -96,6 +96,8 @@ Config.JetModels = {
 	{ key = "t45", name = "T-45 Goshawk", length = 12.0 },
 	{ key = "t6", name = "T-6 Texan II", length = 10.2 },
 }
+-- the match starts only when the island is built under the air base and the jets of the match are imported (the tests switch this off)
+Config.RequireIsland, Config.RequireJets = true, true
 Config.JetModelFlip = {}                -- e.g. { f16 = true } turns an imported jet round if it flies backwards
 Config.EnemyModels = { "su35", "mig29", "typhoon", "su57", "mig31", "rafale", "j20" }   -- the enemies use these when imported
 

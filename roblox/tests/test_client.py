@@ -74,6 +74,7 @@ run('''
     local client = M.service("StarterPlayer").StarterPlayerScripts.Client
     M.runScript(client.Main)
 ''', 'start server and client')
+lua.execute('require(M.service("ReplicatedStorage").Shared.Config).RequireJets = false')
 print('started in', round(time.time() - t0, 1), 's')
 
 HELPERS = r'''
@@ -313,6 +314,29 @@ run(HELPERS + """
     WarUi.show(false)
 """, "war career")
 print("war career ok")
+run(HELPERS + """
+    -- the gate: no jets imported -> the match does not start, a message and a way back
+    local C = M.service("StarterPlayer").StarterPlayerScripts.Client
+    local Game = require(C.Game)
+    local Config = require(M.service("ReplicatedStorage").Shared.Config)
+    Config.RequireJets = true
+    clickText("INDULÁS A LEVEGŐBEN")
+    local t0 = os.clock()
+    local gui = M.localPlayer.PlayerGui.DogfightLoading
+    local shown = false
+    while os.clock() - t0 < 25 do
+        M.pump(0.1)
+        local back = find(gui, function(d) return d.__p.Text == "Vissza a menübe" end)
+        if back and back.__p.Visible then shown = true break end
+    end
+    assert(shown, "no message about the missing jets")
+    assert(Game.loading, "the match started without the jets")
+    clickText("Vissza a menübe")
+    for i = 1, 5 do M.pump(0.1) end
+    assert(not Game.active, "no way back")
+    Config.RequireJets = false
+""", "gate")
+print("gate ok")
 print('seconds', round(time.time() - t0, 1))
 w = dict(M.warnings.items()) if hasattr(M.warnings, 'items') else {}
 if w:

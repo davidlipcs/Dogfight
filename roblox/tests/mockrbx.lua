@@ -311,7 +311,7 @@ methods.Clear = function() end
 methods.GetFocusedTextBox = function() return nil end
 methods.PreloadAsync = function() end
 methods.IsLoaded = function() return true end
-methods.Raycast = function() return { Instance = M.instOf and M.instOf('Part', 'Hit') or {} } end
+methods.Raycast = function(o, origin, dir) return { Instance = M.instOf('Part', 'Runway'), Position = Vector3.new(origin.X, origin.Y - 300, origin.Z) } end
 methods.JSONEncode = function(o, t)
 	local function enc(v, depth)
 		if depth > 12 then error('too deep') end

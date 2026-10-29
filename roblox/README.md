@@ -10,6 +10,15 @@ ha valami elromlik – azt kell elküldeni a javításhoz.
 
 ## Hova mi kerül (lépésről lépésre)
 
+### 0. Frissítés (ha már van felépített szigeted és importált gépeid)
+**Ne a `DogfightPlus.rbxlx`-et nyisd meg újra** – az üres, abban nincs sziget és nincsenek gépek. Helyette a **`DogfightCode.rbxmx`** csak a játék kódját cseréli ki a *te* pályádban:
+1. Nyisd meg a saját, már elmentett pályádat (ahol a sziget és a gépek vannak).
+2. Húzd be a `DogfightCode.rbxmx` fájlt a Studio 3D ablakába (vagy jobb klikk a Workspace-en → *Insert from File…*).
+3. **Window → Command Bar**, ide: `require(workspace.DogfightCodeUpdate.Install)()` → Enter. (Az Output kiírja: „the code is updated”.)
+4. **File → Save**, majd **Play**.
+A lobbi bal felső részén látszik: *Sziget: kész/NINCS* és *Gépek: X/16*. Ha valami hiányzik, a játék nem indul el, hanem megmondja, mit pótolj.
+
+
 ### 1. A sziget (egyszer)
 1. Nyisd meg a `DogfightPlus.rbxlx` fájlt Studióban (ne indíts játékot).
 2. **Window → Command Bar** (régebbi Studióban View → Command Bar), ide másold be és Enter: `require(game.ServerScriptService.Server.IslandBuilder).build()`

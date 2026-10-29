@@ -346,6 +346,10 @@ function JetBuilder.build(airId: string?, pilotId: string?, enemy: boolean?, two
 		if src then
 			local m = fromImported(src, modelKey, applicable(airId and Catalog.AirById[airId], modelKey), enemy)
 			if m then return m end
+			warn("Dogfight Plus: the imported jet '" .. modelKey .. "' has no parts (it is not a mesh model); the part-built stand-in is used")
+		elseif not JetBuilder.warned then
+			JetBuilder.warned = true
+			warn("Dogfight Plus: the jet model '" .. modelKey .. "' is not in ReplicatedStorage.JetModels; part-built stand-ins are used (import the jets: roblox/README.md, step 2)")
 		end
 	end
 	local model = Instance.new("Model")

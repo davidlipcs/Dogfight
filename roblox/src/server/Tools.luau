@@ -39,7 +39,12 @@ function Tools.adoptJets()
 	end
 	local n = 0
 	local found, keys = {}, {}
-	for _, c in workspace:GetDescendants() do
+	local places = { workspace, game:GetService("ServerStorage"), game:GetService("Lighting"), game:GetService("ReplicatedFirst") }
+	local scan = {}
+	for _, root in ipairs(places) do
+		for _, d in root:GetDescendants() do table.insert(scan, d) end
+	end
+	for _, c in scan do
 		if c:IsA("Model") or c:IsA("MeshPart") or c:IsA("Folder") then
 			local key = keyOf(c.Name)
 			if key and containsParts(c) then
