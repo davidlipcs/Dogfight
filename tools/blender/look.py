@@ -32,7 +32,7 @@ cam = bpy.data.cameras.new('cam'); co = bpy.data.objects.new('cam', cam); sc.col
 cam.lens = 60
 # glTF import: +Y up in glTF -> Blender Z up; the nose of our jets points to glTF -Z -> Blender +Y
 ALL = {'34': (1.0, 0.9, 0.45), 'front34': (-0.9, 1.0, 0.35), 'side': (1, 0.0, 0.02), 'top': (0.0, 0.0001, 1),
-       'rear34': (0.9, -1.0, 0.5), 'lowfront': (-0.55, 1.0, -0.05), 'below': (0.3, 0.2, -1.0), 'front': (0.0, 1.0, 0.08), 'photo': (-1.0, 0.42, 0.07), 'rearlow': (-0.55, -1.0, -0.12), 'rear34L': (-0.9, -1.0, 0.45), 'highL': (-0.55, 0.10, 1.0), 'belowR': (0.85, 0.35, -0.75)}
+       'rear34': (0.9, -1.0, 0.5), 'lowfront': (-0.55, 1.0, -0.05), 'below': (0.3, 0.2, -1.0), 'front': (0.0, 1.0, 0.08), 'photo': (-1.0, 0.42, 0.07), 'rearlow': (-0.55, -1.0, -0.12), 'rear34L': (-0.9, -1.0, 0.45), 'highL': (-0.55, 0.10, 1.0), 'belowR': (0.85, 0.35, -0.75), 'highFront': (-0.35, 0.75, 1.0)}
 pick = sys.argv[4].split(',') if len(sys.argv) > 4 else ['34', 'front34', 'side', 'top', 'rear34']
 views = {k: ALL[k] for k in pick}
 for name, d in views.items():
