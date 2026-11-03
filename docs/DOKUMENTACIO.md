@@ -434,6 +434,7 @@ Mindkét gép **Blender-szkriptből** épül, kézi modellezés nélkül; a szkr
 | `jk_paint.py` | festés-segédek: zaj, panelvonal, háromszög-felségjel (magyar), szöveg (oldalszám, HuAF) |
 | `mig29_shape.py`, `mig29_mesh.py`, `mig29_paint.py`, `build_mig29.py` | MiG-29 (9.12, magyar 04): a MiG-29UB tervrajzáról lemért alak, a fotó alapján festve |
 | `su35_shape.py`, `su35_mesh.py`, `su35_paint.py`, `build_su35.py` | Szu-35S: a Szu-35UB sablonrajzról lemérve (hossz 21,9 m), fesztáv, nyilazás, magasság a valódi gépről; kacsaszárny és második kabin nélkül; kétszínű kékesszürke festés a fotó alapján |
+| `su57_shape.py`, `su57_mesh.py`, `su57_paint.py`, `build_su57.py` | Szu-57: a háromnézeti rajzról lemérve (20,1 × 14,1 m; LEVCON, élezett orr, széles középtörzs, 25°-ban döntött vezérsíkok, farokkúp), a vezérsíkok a valódi 4,6 m magassághoz igazítva; digitális (pixeles) kékesszürke terepszín a fotó alapján |
 | `jk_mesh.py` | a hálók egy alakmodulból: törzs, kabintető, szárny és kormányfelületek, vízszintes és függőleges vezérsíkok, hasúszók, szárnyvég-konténerek, gondolák beömlővel, fúvócsövek, farokgerendák |
 | `preview.py`, `look.py` | ellenőrzés: a modell a tervrajzra vetítve; fotószerű Cycles-képek több szögből |
 | `build_missiles.py` | AIM-120C, AIM-9M |
