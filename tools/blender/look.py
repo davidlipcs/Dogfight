@@ -32,7 +32,7 @@ cam = bpy.data.cameras.new('cam'); co = bpy.data.objects.new('cam', cam); sc.col
 cam.lens = 60
 # glTF import: +Y up in glTF -> Blender Z up; the nose of our jets points to glTF -Z -> Blender +Y
 ALL = {'34': (1.0, 0.9, 0.45), 'front34': (-0.9, 1.0, 0.35), 'side': (1, 0.0, 0.02), 'top': (0.0, 0.0001, 1),
-       'rear34': (0.9, -1.0, 0.5), 'lowfront': (-0.55, 1.0, -0.05), 'below': (0.3, 0.2, -1.0), 'front': (0.0, 1.0, 0.08), 'photo': (-1.0, 0.42, 0.07)}
+       'rear34': (0.9, -1.0, 0.5), 'lowfront': (-0.55, 1.0, -0.05), 'below': (0.3, 0.2, -1.0), 'front': (0.0, 1.0, 0.08), 'photo': (-1.0, 0.42, 0.07), 'rearlow': (-0.55, -1.0, -0.12)}
 pick = sys.argv[4].split(',') if len(sys.argv) > 4 else ['34', 'front34', 'side', 'top', 'rear34']
 views = {k: ALL[k] for k in pick}
 for name, d in views.items():
@@ -41,7 +41,7 @@ for name, d in views.items():
     co.location = ctr + v * dist
     look = (ctr - co.location)
     co.rotation_euler = look.to_track_quat('-Z', 'Y').to_euler()
-    fl.hide_render = name in ('top', 'below')
+    fl.hide_render = name in ('top', 'below') or d[2] < 0
     sc.render.filepath = f'{out}_{name}.png'
     bpy.ops.render.render(write_still=True)
 print('done', out)

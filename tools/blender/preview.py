@@ -8,7 +8,9 @@ ref.json (kept with the drawings, outside the repository):
     {"image": "...drawing.jpg",
      "top":  {"box": [x0, y0, x1, y1], "X0": 598, "y0": 0.90, "Yc": 927, "ppm": 55.3},
      "side": {"box": [...], "X0": 604, "y0": 0.90, "Z0": 1405, "ppm": 55.3}}
-(top: y = y0 + (X0 - X) / ppm, x = (Y - Yc) / ppm;  side: y = y0 + (X0 - X) / ppm, z = (Z0 - Y) / ppm)
+(top: y = y0 + (X0 - X) / ppm, x = (Y - Yc) / ppm;  side: y = y0 + (X0 - X) / ppm, z = (Z0 - Y) / ppm;
+"nose_right": true for a drawing with the nose to the right, "right_wing_up": true when the right wing is drawn
+above the centre line in the top view)
 """
 
 import importlib
@@ -68,9 +70,10 @@ def overlay(parts, ref, out, skip=("duct", "nozzle_in")):
         base = img.crop((x0, y0, x1, y1)).convert("RGBA")
         lay = Image.new("RGBA", base.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(lay)
-        X = r["X0"] - (T[..., 1] - r["y0"]) * r["ppm"] - x0
+        sgn = 1.0 if r.get("nose_right") else -1.0         # the drawing's nose to the right: X grows with y
+        X = r["X0"] + sgn * (T[..., 1] - r["y0"]) * r["ppm"] - x0
         if view == "top":
-            Y = r["Yc"] + T[..., 0] * r["ppm"] - y0
+            Y = r["Yc"] + T[..., 0] * r["ppm"] * (-1.0 if r.get("right_wing_up") else 1.0) - y0
         else:
             Y = r["Z0"] - T[..., 2] * r["ppm"] - y0
         for k in range(len(T)):

@@ -311,3 +311,160 @@ def finish(out_dir, web_dir, prefix):
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in L.CTX["collection"].objects if o.type == "MESH")
     print("objects: %d, triangles: %d" % (len(L.CTX["collection"].objects), tris))
     L.export(out_dir, web_dir, {prefix + "_basecolor.png": 2048, prefix + "_normal.png": 256, prefix + "_orm.png": 1024})
+
+
+# ================================================================== a whole jet, from its shape module
+def canopy_z_fn(S):
+    """Height of the glass at (x, y) (the cockpit is kept under it); the top of the skin elsewhere."""
+    def canopy_z(y, x):
+        if S.Y_CAN1 < y < S.Y_WS0:
+            h = S.canopy_half(y)
+            if abs(x) <= h[-1, 0]:
+                return float(np.interp(abs(x), h[::-1, 0], h[::-1, 1]))
+        return float(S.SPINE(y))
+    return canopy_z
+
+
+def canopy_frame(S, arches=None):
+    """The canopy frame: the windscreen arch, the hood's rear bow, the sill rails (painted like the jet)."""
+    p = Part("paint", "auto")
+    for y, r in (arches or ((S.Y_WS1, 0.028), (S.Y_CAN1 + 0.05, 0.035))):
+        h = S.canopy_half(y)
+        pts = [(-hx, y, hz + 0.004) for hx, hz in h[::-1]] + [(hx, y, hz + 0.004) for hx, hz in h[1:]]
+        tube(p, pts, r, 8, caps=True)
+    for s in (-1, 1):
+        ys = np.linspace(S.Y_WS0 - 0.02, S.Y_CAN1 + 0.02, 14)
+        pts = [(s * float(S.CANOPY_SILL_X(y)), y, float(S.CANOPY_SILL_Z(y)) + 0.01) for y in ys]
+        tube(p, pts, 0.022, 6, caps=True)
+    return build_object("canopy_frame", [p])
+
+
+def pitot(part, y0, y1, z, r=0.035, vanes=True):
+    tube(part, [(0, y0, z), (0, y0 + 0.35 * (y1 - y0), z), (0, y1, z)], [r, r * 0.63, r * 0.34], 10)
+    if vanes:
+        for k in range(4):
+            a = math.radians(45 + 90 * k)
+            prism(part, (0, y0 + 0.55 * (y1 - y0), z), (0, 1, 0), (math.cos(a), 0, math.sin(a)),
+                  [(0.0, 0.015), (-0.10, 0.015), (-0.10, 0.07), (-0.04, 0.07)], 0.004)
+
+
+def ball(part, c, r=0.13, n=6, seg=16):
+    """A half sphere (an IRST window) standing on c."""
+    c = np.asarray(c, float)
+    for i in range(n):
+        a0, a1 = 0.5 * math.pi * i / n, 0.5 * math.pi * (i + 1) / n
+        rings = []
+        for a in (a0, a1):
+            rr, zz = r * math.cos(a), r * math.sin(a)
+            rings.append([c + np.array([rr * math.cos(t), rr * math.sin(t), zz]) for t in np.linspace(0, 2 * math.pi, seg, endpoint=False)])
+        part.grid(rings, close=True)
+
+
+def wing_stores(S, stations, fus=None, depth=0.30):
+    """Pylons with launch rails under the wing at the given (station number on the right, x) and a fuselage
+    station (x, y, z of the rail); store_N empties on both sides (left = 9 - N)."""
+    part = Part("paint", "auto")
+    pts = {}
+    for stn, x in stations:
+        le, te = float(S.wing_le(x)), float(S.wing_te(x))
+        c = le - te
+        zl = float(S.wing_z(x)) - float(S.WING.t(x)) * c * 0.55
+        pts[stn] = pylon(part, x, le - 0.35 * c + 0.95, le - 0.35 * c - 1.15, zl, depth)
+    if fus is not None:
+        fx, fy, fz = fus
+        box(part, (fx, fy, fz - 0.04), (0.04, 0.80, 0.04))
+        pts[5] = (fx, fy - 0.05, fz - 0.20)
+    build_object("pylons", [part])
+    for stn, p in pts.items():
+        empty("store_%d" % stn, p)
+        empty("store_%d" % (9 - stn), (-p[0], p[1], p[2]))
+    return pts
+
+
+def landing_gear(S, nose_hinge_dy=0.30, nose_retract=((-1.0, 0.0, 0.0), 95.0), main_hinge=None,
+                 main_retract=((1.0, 0.0, 0.0), 92.0), nose_doors=None, main_doors=None, mudguard=True):
+    """Nose leg (in the bay, folding by nose_retract), two main legs (hinge (x, y, z) on the right side),
+    their doors: [(hinge a, hinge b, far edge, closing degrees)] for the right side (mirrored for the left)."""
+    zg = S.Z_GROUND
+    gn, gm = S.GEAR_NOSE, S.GEAR_MAIN
+    empty("gear", (0.0, 0.0, 0.0))
+    hinge = (0.0, gn["y"] + nose_hinge_dy, float(S.KEEL(gn["y"])) + 0.05)
+    axle = (0.0, gn["y"], zg + gn["r"])
+    gear_leg("gear_nose", hinge, axle, gn["r"], gn["w"], gn.get("twin", True), nose_retract[0], nose_retract[1], zg)
+    if mudguard:
+        guard = Part("matte", None, color=(0.55, 0.58, 0.60))
+        box(guard, (0.0, gn["y"], zg + 2 * gn["r"] + 0.05), (0.26 if gn.get("twin", True) else 0.15, 0.20, 0.015))
+        g = build_object("gear_nose_guard", [guard], frame=(np.array(hinge), unit(nose_retract[0])))
+        g["retract"] = float(nose_retract[1])
+    for k, (a, b, f, deg) in enumerate(nose_doors or []):
+        for s, sfx in ((1, "R"), (-1, "L")):
+            m = np.array([s, 1.0, 1.0])
+            gear_door("door_nose_%s%s" % (sfx, "" if k == 0 else str(k + 1)), np.array(a) * m, np.array(b) * m,
+                      np.array(f) * m, deg * -s)
+    for s, sfx in ((1, "R"), (-1, "L")):
+        m = np.array([s, 1.0, 1.0])
+        h = np.array(main_hinge or (gm["x"] - 0.05, gm["y"] - 0.20, -0.18)) * m
+        axle = (s * gm["x"], gm["y"], zg + gm["r"])
+        gear_leg("gear_main_" + sfx, h, axle, gm["r"], gm["w"], gm.get("twin", False), main_retract[0],
+                 main_retract[1], zg, x_side=s)
+        for k, (a, b, f, deg) in enumerate(main_doors or []):
+            gear_door("door_main_%s%s" % (sfx, "" if k == 0 else str(k + 1)), np.array(a) * m, np.array(b) * m,
+                      np.array(f) * m, deg * -s)
+    empty("ref_gear_nose", (0.0, gn["y"], zg))
+    for s, sfx in ((1, "R"), (-1, "L")):
+        empty("ref_gear_main_" + sfx, (s * gm["x"], gm["y"], zg))
+
+
+def lights_and_refs(S, tail_light, vapor, gun, strobe_y=None, nozzles=None):
+    xt = S.TIP_POD["x"] + S.TIP_POD["r"] if getattr(S, "TIP_POD", None) else S.X_WTIP
+    zt = float(S.wing_z(S.X_WTIP))
+    yl = float(S.wing_le(S.X_WTIP - 0.1)) - 0.45
+    lamp("light_nav_L", (-xt + 0.02, yl, zt), "light_red")
+    lamp("light_nav_R", (xt - 0.02, yl, zt), "light_green")
+    lamp("light_tail", tail_light, "light_white", r=0.03)
+    tipz = S.FIN_Z + S.FIN[-1][0] * math.cos(math.radians(S.FIN_CANT))
+    tipx = S.FIN_X + S.FIN[-1][0] * math.sin(math.radians(S.FIN_CANT))
+    sy = strobe_y if strobe_y is not None else S.FIN[-1][1] - 0.15
+    for s, sfx in ((1, "R"), (-1, "L")):
+        empty("ref_nav_" + sfx, (s * (xt - 0.02), yl, zt))
+        empty("ref_wingtip_" + sfx, (s * xt, float(S.wing_te(S.X_WTIP)) + 0.4, zt))
+        empty("ref_strobe_" + sfx, (s * tipx, sy, tipz + 0.02))
+        empty("ref_vapor_" + sfx, (s * vapor[0], vapor[1], vapor[2]))
+    for s, sfx in ((1, "R"), (-1, "L")):
+        n = S.NOZZLE
+        empty("ref_nozzle_" + sfx, (s * n["x"], n["y1"], n["z"]))
+    empty("ref_tail", tail_light)
+    empty("ref_gun", gun)
+
+
+def build_jet(S, M, painter, name, out_dir, web_dir, details=None, stores=None, gear=None, refs=None, cockpit=None,
+              texture=2048):
+    """The standard twin engine jet: the airframe pieces as the game's objects, then the details, the stores,
+    the gear, the cockpit, the lights and refs (callables), the paint, the export."""
+    root, tex = begin(name, out_dir)
+    parts = M.airframe()
+    painted = [obj("fuselage", [parts["fuselage"]])]
+    for sfx in ("L", "R"):
+        for k in ("wing", "fin", "boom", "nacelle", "ventral", "pod"):
+            if "%s_%s" % (k, sfx) in parts:
+                painted.append(obj("%s_%s" % (k, sfx), [parts["%s_%s" % (k, sfx)]]))
+        for k in ("lef", "flap", "ail", "stab", "rudder"):
+            pc = parts["%s_%s" % (k, sfx)]
+            painted.append(obj("%s_%s" % (k, sfx), [pc], hinge=pc.hinge))
+    obj("canopy", [parts["canopy"]])
+    obj("nozzle", [parts[k] for k in ("nozzle_R", "nozzle_L", "nozzle_in_R", "nozzle_in_L", "duct_R", "duct_L")])
+    canopy_frame(S)
+    for fn in (details, stores, gear):
+        if fn:
+            fn()
+    c = dict(seat_y=S.Y_CAN1 + 0.75, floor_z=float(S.CANOPY_SILL_Z(0.5 * (S.Y_WS1 + S.Y_CAN1))) - 0.62,
+             sill_z=float(S.CANOPY_SILL_Z(0.5 * (S.Y_WS1 + S.Y_CAN1))), panel_y=S.Y_WS1 - 0.10,
+             panel_z=float(S.CANOPY_SILL_Z(S.Y_WS1)) + 0.05, width=0.40, russian=False, canopy_z=canopy_z_fn(S))
+    c.update(cockpit or {})
+    globals()["cockpit"](c)
+    if refs:
+        refs()
+    painted += [o for o in bpy.data.objects if o.type == "MESH" and (o.name.startswith("door_") or o.name in
+                                                                         ("canopy_frame", "pylons"))]
+    paint(painted, painter, tex, name, size=texture)
+    finish(out_dir, web_dir, name)

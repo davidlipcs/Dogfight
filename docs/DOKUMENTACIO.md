@@ -433,6 +433,8 @@ Mindkét gép **Blender-szkriptből** épül, kézi modellezés nélkül; a szkr
 | `jk_blend.py` | Blender-oldal: a játék objektumai és pontjai (`fuselage`, kormányfelületek csuklóval, `gear_*` / `door_*`, `screen_*`, `ref_*`, `store_1..8`), kabin, futómű, lámpák, közös UV-atlasz és 3D-festés (minden texel tudja a helyét a gépen), export |
 | `jk_paint.py` | festés-segédek: zaj, panelvonal, háromszög-felségjel (magyar), szöveg (oldalszám, HuAF) |
 | `mig29_shape.py`, `mig29_mesh.py`, `mig29_paint.py`, `build_mig29.py` | MiG-29 (9.12, magyar 04): a MiG-29UB tervrajzáról lemért alak, a fotó alapján festve |
+| `su35_shape.py`, `su35_mesh.py`, `su35_paint.py`, `build_su35.py` | Szu-35S: a Szu-35UB sablonrajzról lemérve (hossz 21,9 m), fesztáv, nyilazás, magasság a valódi gépről; kacsaszárny és második kabin nélkül; kétszínű kékesszürke festés a fotó alapján |
+| `jk_mesh.py` | a hálók egy alakmodulból: törzs, kabintető, szárny és kormányfelületek, vízszintes és függőleges vezérsíkok, hasúszók, szárnyvég-konténerek, gondolák beömlővel, fúvócsövek, farokgerendák |
 | `preview.py`, `look.py` | ellenőrzés: a modell a tervrajzra vetítve; fotószerű Cycles-képek több szögből |
 | `build_missiles.py` | AIM-120C, AIM-9M |
 
