@@ -436,11 +436,14 @@ def lights_and_refs(S, tail_light, vapor, gun, strobe_y=None, nozzles=None):
     for s, sfx in ((1, "R"), (-1, "L")):
         empty("ref_nav_" + sfx, (s * (xt - 0.02), yl, zt))
         empty("ref_wingtip_" + sfx, (s * xt, float(S.wing_te(S.X_WTIP)) + 0.4, zt))
-        empty("ref_strobe_" + sfx, (s * tipx, sy, tipz + 0.02))
+        empty("ref_strobe_" + sfx, (s * tipx if tipx > 0.01 else s * 0.02, sy, tipz + 0.02))
         empty("ref_vapor_" + sfx, (s * vapor[0], vapor[1], vapor[2]))
-    for s, sfx in ((1, "R"), (-1, "L")):
-        n = S.NOZZLE
-        empty("ref_nozzle_" + sfx, (s * n["x"], n["y1"], n["z"]))
+    n = S.NOZZLE
+    if abs(n["x"]) < 1e-6:
+        empty("ref_nozzle", (0.0, n["y1"], n["z"]))
+    else:
+        for s, sfx in ((1, "R"), (-1, "L")):
+            empty("ref_nozzle_" + sfx, (s * n["x"], n["y1"], n["z"]))
     empty("ref_tail", tail_light)
     empty("ref_gun", gun)
 
@@ -451,16 +454,19 @@ def build_jet(S, M, painter, name, out_dir, web_dir, details=None, stores=None, 
     the gear, the cockpit, the lights and refs (callables), the paint, the export."""
     root, tex = begin(name, out_dir)
     parts = M.airframe()
-    painted = [obj("fuselage", [parts["fuselage"]])]
-    for sfx in ("L", "R"):
-        for k in ("wing", "fin", "boom", "nacelle", "ventral", "pod"):
-            if "%s_%s" % (k, sfx) in parts:
-                painted.append(obj("%s_%s" % (k, sfx), [parts["%s_%s" % (k, sfx)]]))
-        for k in ("lef", "flap", "ail", "stab", "rudder"):
-            pc = parts["%s_%s" % (k, sfx)]
-            painted.append(obj("%s_%s" % (k, sfx), [pc], hinge=pc.hinge))
-    obj("canopy", [parts["canopy"]])
-    obj("nozzle", [parts[k] for k in ("nozzle_R", "nozzle_L", "nozzle_in_R", "nozzle_in_L", "duct_R", "duct_L")])
+    painted = []
+    hot = []
+    for k, pc in parts.items():
+        base = k.split("_")[0]
+        if base in ("nozzle", "duct"):
+            hot.append(pc)
+        elif k == "canopy":
+            obj("canopy", [pc])
+        elif base in ("lef", "flap", "ail", "stab", "rudder"):
+            painted.append(obj(k, [pc], hinge=pc.hinge))
+        else:
+            painted.append(obj(k, [pc]))
+    obj("nozzle", hot)
     canopy_frame(S)
     for fn in (details, stores, gear):
         if fn:

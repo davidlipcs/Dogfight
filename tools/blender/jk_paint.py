@@ -117,3 +117,22 @@ def text_mask(text, u, v, centre, height, font_px=200, spacing=0.0, stretch=1.0)
 def mix(rgb, colour, alpha):
     a = np.asarray(alpha, np.float32)[..., None]
     return rgb * (1.0 - a) + np.asarray(colour, np.float32) * a
+
+
+def chevron_outline(u, v, apex, base_a, base_b, band, line):
+    """The low visibility form of chevron_triangle: only the outlines (the outer border, the base and the borders
+    between the chevrons), ``line`` metres wide."""
+    A, B, C = (np.asarray(p, float) for p in (apex, base_a, base_b))
+    cen = (A + B + C) / 3.0
+
+    def side_dist(P_, Q):
+        d = Q - P_
+        nrm = np.array([-d[1], d[0]]) / np.hypot(*d)
+        if np.dot(cen - P_, nrm) < 0:
+            nrm = -nrm
+        return (np.asarray(u) - P_[0]) * nrm[0] + (np.asarray(v) - P_[1]) * nrm[1]
+    d1, d2, d3 = side_dist(A, B), side_dist(A, C), side_dist(B, C)
+    inside = (d1 >= 0) & (d2 >= 0) & (d3 >= 0)
+    m = np.minimum(d1, d2)
+    edge = (m < line) | (d3 < line) | (np.abs(m - band) < 0.5 * line) | (np.abs(m - 2 * band) < 0.5 * line)
+    return inside & edge

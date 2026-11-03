@@ -27,11 +27,9 @@ KEYS = ["f16", "fa18", "f15", "f22", "f35", "gripen", "typhoon", "rafale", "su35
 #   tones: the colours of the darkest ... lightest camouflage field (more than one only where the real jet has a camouflage);
 #   block: the camouflage is made of squares of that many pixels (a digital pattern); marks: the national marks that replace the red stars
 LIVERIES = {
-    # (jets rebuilt from scratch carry their real paint in their own textures and are not in this table: mig29, su35, su57, mig31)
+    # (jets rebuilt from scratch carry their real paint in their own textures and are not in this table: mig29, su35, su57, mig31, gripen)
     # Eurofighter Typhoon: grey, in two close tones
     "typhoon": dict(tones=[(128, 136, 144)] * 3, clip=5),
-    # Gripen of the Hungarian Air Force: blue-grey, the red-white-green triangle instead of the Swedish roundel
-    "gripen": dict(tones=[(66, 78, 96), (92, 104, 122), (116, 128, 144)], marks="triangle", markmask="saturated"),
     # Rafale: dark grey, the French roundels stay
     "rafale": dict(tones=[(76, 82, 90), (98, 104, 112), (120, 126, 134)]),
     # F-35A: the light gunmetal grey

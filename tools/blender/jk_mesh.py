@@ -154,11 +154,21 @@ def wing():
 
 
 def stab():
-    v, f = S.STAB.patch(S.STAB.span0, S.STAB.span1, 0.0, 1.0, step=0.2)
-    ring = S.STAB.tip_cap(S.STAB.span1)
+    """The all-moving tailplane - or the canard (CANARD, CANARD_PIVOT, CANARD_Z), which the game moves as its
+    "stab" too: its hinge axis is reversed, so the same command lifts its leading edge where a tailplane would lower
+    its own."""
+    canard = getattr(S, "CANARD", None) is not None
+    srf = S.CANARD if canard else S.STAB
+    v, f = srf.patch(srf.span0, srf.span1, 0.0, 1.0, step=0.2)
+    ring = srf.tip_cap(srf.span1)
     p = Piece(v, f) + Piece(ring, [tuple(range(len(ring)))])
-    pivot = np.array([S.STAB.span0, S.STAB_PIVOT, getattr(S, "STAB_Z", -0.12)])
-    return Piece(p.verts, p.faces, hinge=(pivot, np.array([1.0, 0.0, 0.0])))
+    if canard:
+        pivot = np.array([srf.span0, S.CANARD_PIVOT, S.CANARD_Z])
+        axis = np.array([-1.0, 0.0, 0.0])
+    else:
+        pivot = np.array([srf.span0, S.STAB_PIVOT, getattr(S, "STAB_Z", -0.12)])
+        axis = np.array([1.0, 0.0, 0.0])
+    return Piece(p.verts, p.faces, hinge=(pivot, axis))
 
 
 def fin():
@@ -274,19 +284,27 @@ def airframe(shape):
     for k in ("flap", "ail", "lef"):
         out[k + "_R"] = w[k]
         out[k + "_L"] = w[k].mirrored()
-    st = stab()
-    out["stab_R"], out["stab_L"] = st, st.mirrored()
+    if getattr(S, "STAB", None) is not None or getattr(S, "CANARD", None) is not None:
+        st = stab()
+        out["stab_R"], out["stab_L"] = st, st.mirrored()
     f = fin()
-    out["fin_R"], out["fin_L"] = f["fixed"], f["fixed"].mirrored()
-    out["rudder_R"], out["rudder_L"] = f["rudder"], f["rudder"].mirrored(same_sense=True)
+    if abs(S.FIN_X) < 1e-6:                                # one fin on the centre line
+        out["fin"], out["rudder"] = f["fixed"], f["rudder"]
+    else:
+        out["fin_R"], out["fin_L"] = f["fixed"], f["fixed"].mirrored()
+        out["rudder_R"], out["rudder_L"] = f["rudder"], f["rudder"].mirrored(same_sense=True)
     nac = nacelle()
     out["nacelle_R"], out["nacelle_L"] = nac["skin"], nac["skin"].mirrored()
     out["duct_R"], out["duct_L"] = nac["duct"], nac["duct"].mirrored()
     nz, nd = nozzle()
-    out["nozzle_R"], out["nozzle_L"] = nz, nz.mirrored()
-    out["nozzle_in_R"], out["nozzle_in_L"] = nd, nd.mirrored()
-    bm = boom()
-    out["boom_R"], out["boom_L"] = bm, bm.mirrored()
+    if abs(S.NOZZLE["x"]) < 1e-6:                          # one engine
+        out["nozzle_C"], out["nozzle_in_C"] = nz, nd
+    else:
+        out["nozzle_R"], out["nozzle_L"] = nz, nz.mirrored()
+        out["nozzle_in_R"], out["nozzle_in_L"] = nd, nd.mirrored()
+    if getattr(S, "BOOM", None):
+        bm = boom()
+        out["boom_R"], out["boom_L"] = bm, bm.mirrored()
     if getattr(S, "VENTRAL", None):
         vt = ventral()
         out["ventral_R"], out["ventral_L"] = vt, vt.mirrored()
