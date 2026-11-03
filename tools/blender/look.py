@@ -37,7 +37,7 @@ pick = sys.argv[4].split(',') if len(sys.argv) > 4 else ['34', 'front34', 'side'
 views = {k: ALL[k] for k in pick}
 for name, d in views.items():
     v = mathutils.Vector(d).normalized()
-    dist = size * 1.55
+    dist = size * (1.95 if name in ('highFront',) else 1.55)
     co.location = ctr + v * dist
     look = (ctr - co.location)
     co.rotation_euler = look.to_track_quat('-Z', 'Y').to_euler()
