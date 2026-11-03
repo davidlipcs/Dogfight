@@ -27,8 +27,7 @@ KEYS = ["f16", "fa18", "f15", "f22", "f35", "gripen", "typhoon", "rafale", "su35
 #   tones: the colours of the darkest ... lightest camouflage field (more than one only where the real jet has a camouflage);
 #   block: the camouflage is made of squares of that many pixels (a digital pattern); marks: the national marks that replace the red stars
 LIVERIES = {
-    # Hungarian Air Force MiG-29: one light grey all over, the red-white-green triangle
-    "mig29": dict(tones=[(148, 156, 164)] * 3, marks="triangle", clip=4),
+    # (jets rebuilt from scratch carry their real paint in their own textures and are not in this table: mig29)
     # MiG-31: the pale grey of the Russian interceptors, red stars
     "mig31": dict(tones=[(176, 182, 188)] * 3, clip=5),
     # Su-57: blue-grey digital (pixel) camouflage
@@ -193,6 +192,31 @@ def reduce(g, target):
     return out
 
 
+def corner_uvs(src, red):
+    """UVs per triangle corner of the reduced mesh ``red``, each triangle taking them from the one source triangle
+    nearest to its centre (barycentric, extrapolated a little where it reaches past it): a triangle never mixes
+    UVs of two islands of the atlas, so the paint stays put across the seams of a smart-unwrapped atlas."""
+    V, F = np.asarray(src.vertices), np.asarray(src.faces)
+    uv = np.asarray(src.visual.uv)
+    T = V[F]
+    tree = cKDTree(T.mean(axis=1))
+    P = np.asarray(red.vertices)[np.asarray(red.faces)]                       # (n, 3, 3)
+    _, j = tree.query(P.mean(axis=1))
+    A, B, C = T[j, 0], T[j, 1], T[j, 2]
+    e1, e2 = B - A, C - A
+    d00, d01, d11 = (e1 * e1).sum(1), (e1 * e2).sum(1), (e2 * e2).sum(1)
+    den = np.maximum(d00 * d11 - d01 * d01, 1e-18)
+    out = np.zeros((len(P), 3, 2))
+    for k in range(3):
+        w = P[:, k] - A
+        d20, d21 = (w * e1).sum(1), (w * e2).sum(1)
+        b = (d11 * d20 - d01 * d21) / den
+        c = (d00 * d21 - d01 * d20) / den
+        a = 1.0 - b - c
+        out[:, k] = a[:, None] * uv[F[j, 0]] + b[:, None] * uv[F[j, 1]] + c[:, None] * uv[F[j, 2]]
+    return out
+
+
 def split(g, parts):
     """a big mesh in `parts` chunks along its longest axis (each one then below the limit)"""
     if parts <= 1:
@@ -258,6 +282,10 @@ def build_merged(key):
         alpha = getattr(mat, "alphaMode", None) == "BLEND"
         target = max(60, min(MAXTRI, int(len(g.faces) * k)))
         r = reduce(g, target)
+        exact = len(r.faces) == len(g.faces)
+        cuv = None
+        if not exact and hasattr(g.visual, "uv") and g.visual.uv is not None and len(g.visual.uv) == len(g.vertices):
+            cuv = corner_uvs(g, r)
         r.apply_transform(T)
         nrm = np.asarray(r.vertex_normals)
         tex = getattr(mat, "baseColorTexture", None) is not None
@@ -269,7 +297,7 @@ def build_merged(key):
         pos = np.asarray(r.vertices)[faces]
         vn = nrm[faces]
         if tex:
-            uv = np.asarray(r.visual.uv)[faces].astype(float)
+            uv = (cuv if cuv is not None else np.asarray(r.visual.uv)[faces]).astype(float)
             uv[:, :, 1] = 1 - (1 - uv[:, :, 1]) * (PAINT_H / ATLAS)          # into the paint region of the atlas
         else:
             base = np.asarray(getattr(mat, "baseColorFactor", None) if getattr(mat, "baseColorFactor", None) is not None else [255, 255, 255, 255], dtype=float)[:3] / 255.0

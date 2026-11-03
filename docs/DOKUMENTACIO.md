@@ -429,10 +429,12 @@ Mindkét gép **Blender-szkriptből** épül, kézi modellezés nélkül; a szkr
 | Fájl | Tartalom |
 |---|---|
 | `tools/blender/aircraft_lib.py` | közös eszközök: mesh-darabok (`Part`), geometria (cső, doboz, szárnyprofil-felület, kerék, futóakna, futóajtó), anyagok (festés textúrával, matt / fém színnel, üveg, HUD-üveg, kijelző, lámpák), objektum-építés UV-val és csuklóval, renderképek, GLB-export |
-| `build_f16.py`, `f16_shape.py`, `f16_paint.py` | F-16C: alak-táblázatok, építés, festés (USAF háromszínű szürke, panelvonalak) |
-| `build_f15.py`, `f15_shape.py`, `f15_paint.py` | F-15EX: magas szárny, szögletes szívócsatornák, farokgerendák, függőleges kettős vezérsík, csupa-mozgó stabilizátor, F110 fúvócsövek, kétüléses kabin (két ülés, `fit_under_canopy`), nagy kijelző két félben (`screen_lad_l/r`) és UFC (`screen_ufc`), hátsó légfék (`sb_dorsal`), pilonok és konform-tartály indítók (`store_1..12`), „Mod Eagle” festés ET farokkóddal |
-| `build_f22.py`, `f22_shape.py`, `f22_paint.py` | F-22A: gyémánt szárny, chine-orr, ferde szívócsatornák, döntött kettős vezérsík, lapos vektoros fúvócsövek (`vec_L/R`), buborék-kabintető, 6 kijelzős kabin (`screen_pmfd`, `screen_mfd_l/r/c`, `screen_ufd_l/r`), három fegyvertér ajtókkal (`bay_main_L/R`, `bay_side_L/R`) és kilövő karokkal (`rack_1..8`), festés (kétszínű szürke, fűrészfogas ajtóélek, FF farokkód); `OPTS.pose` = előnézeti póz (futó be, ajtók csukva, karok ki) |
-| `build_fa18.py`, `fa18_shape.py`, `fa18_paint.py` | F/A-18E: keresztmetszetek (törzs + gondolák + LEX + szárny sima összeolvasztással), szívócsatornák, kettős döntött vezérsík, kabin, futómű, festés (US Navy kétszínű szürke, NAVY / NG / 200 jelzések, sárga-fekete farokcsík) |
+| `jk.py` | a gépek geometriája (numpy): `Line` (túllövés nélküli görbe a mért pontokon), `Body` (hosszmerevítőkön átmenő keresztmetszetek: a felül- és oldalnézeti körvonal maga a rajz), `Surface` (szárny / vezérsík a felülnézeti élekből, profillal, kormányfelületekre vágva) |
+| `jk_blend.py` | Blender-oldal: a játék objektumai és pontjai (`fuselage`, kormányfelületek csuklóval, `gear_*` / `door_*`, `screen_*`, `ref_*`, `store_1..8`), kabin, futómű, lámpák, közös UV-atlasz és 3D-festés (minden texel tudja a helyét a gépen), export |
+| `jk_paint.py` | festés-segédek: zaj, panelvonal, háromszög-felségjel (magyar), szöveg (oldalszám, HuAF) |
+| `mig29_shape.py`, `mig29_mesh.py`, `mig29_paint.py`, `build_mig29.py` | MiG-29 (9.12, magyar 04): a MiG-29UB tervrajzáról lemért alak, a fotó alapján festve |
+| `preview.py`, `look.py` | ellenőrzés: a modell a tervrajzra vetítve; fotószerű Cycles-képek több szögből |
+| `build_missiles.py` | AIM-120C, AIM-9M |
 
 **Kimenet:** `models/<gép>/<gép>.glb` (teljes felbontású textúrák), `web/assets/<gép>.glb` (kisebb
 textúrák, ezt tölti a játék), `models/<gép>/<gép>.blend`, a festés textúrái `models/<gép>/textures/`
