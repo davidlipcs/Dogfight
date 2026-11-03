@@ -115,7 +115,7 @@ def cockpit(c):
 
 
 # ------------------------------------------------------------------ landing gear
-def gear_leg(name, hinge, axle, r, w, twin, retract_axis, retract_deg, ground_z, x_side=0.0):
+def gear_leg(name, hinge, axle, r, w, twin, retract_axis, retract_deg, ground_z, x_side=0.0, tandem=0.0):
     """A leg from its hinge (in the bay) to the axle; wheels; retracts about ``retract_axis`` by ``retract_deg``."""
     hinge, axle = np.asarray(hinge, float), np.asarray(axle, float)
     strut = Part("metal", None, color=C_STEEL)
@@ -127,6 +127,14 @@ def gear_leg(name, hinge, axle, r, w, twin, retract_axis, retract_deg, ground_z,
         for s in (-1, 1):
             wheel(tire, hub, axle + np.array([s * (0.5 * w + 0.04), 0, 0]), r, w)
         tube(strut, [axle - np.array([0.5 * w + 0.06, 0, 0]), axle + np.array([0.5 * w + 0.06, 0, 0])], 0.035, 8, C_STEEL)
+    elif tandem:
+        # two wheels one behind the other, staggered either side of the leg (MiG-25 / MiG-31)
+        side = 1.0 if x_side >= 0 else -1.0
+        for k, dy in ((1, tandem), (-1, -tandem)):
+            c = axle + np.array([k * side * (0.5 * w + 0.05), dy, 0.0])
+            wheel(tire, hub, c, r, w)
+            tube(strut, [axle + np.array([0, dy, 0]), c + np.array([k * side * (0.5 * w + 0.03), 0, 0])], 0.04, 8, C_STEEL)
+        tube(strut, [axle + np.array([0, tandem, 0]), axle - np.array([0, tandem, 0])], 0.05, 8, C_STEEL)
     else:
         side = 1.0 if x_side >= 0 else -1.0
         wheel(tire, hub, axle + np.array([side * (0.5 * w + 0.05), 0, 0]), r, w)
@@ -328,7 +336,7 @@ def canopy_z_fn(S):
 def canopy_frame(S, arches=None):
     """The canopy frame: the windscreen arch, the hood's rear bow, the sill rails (painted like the jet)."""
     p = Part("paint", "auto")
-    for y, r in (arches or ((S.Y_WS1, 0.028), (S.Y_CAN1 + 0.05, 0.035))):
+    for y, r in (arches or getattr(S, "CANOPY_ARCHES", None) or ((S.Y_WS1, 0.028), (S.Y_CAN1 + 0.05, 0.035))):
         h = S.canopy_half(y)
         pts = [(-hx, y, hz + 0.004) for hx, hz in h[::-1]] + [(hx, y, hz + 0.004) for hx, hz in h[1:]]
         tube(p, pts, r, 8, caps=True)
@@ -406,7 +414,7 @@ def landing_gear(S, nose_hinge_dy=0.30, nose_retract=((-1.0, 0.0, 0.0), 95.0), m
         h = np.array(main_hinge or (gm["x"] - 0.05, gm["y"] - 0.20, -0.18)) * m
         axle = (s * gm["x"], gm["y"], zg + gm["r"])
         gear_leg("gear_main_" + sfx, h, axle, gm["r"], gm["w"], gm.get("twin", False), main_retract[0],
-                 main_retract[1], zg, x_side=s)
+                 main_retract[1], zg, x_side=s, tandem=gm.get("tandem", 0.0))
         for k, (a, b, f, deg) in enumerate(main_doors or []):
             gear_door("door_main_%s%s" % (sfx, "" if k == 0 else str(k + 1)), np.array(a) * m, np.array(b) * m,
                       np.array(f) * m, deg * -s)
