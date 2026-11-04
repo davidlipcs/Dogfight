@@ -27,7 +27,7 @@ KEYS = ["f16", "fa18", "f15", "f22", "f35", "gripen", "typhoon", "rafale", "su35
 #   tones: the colours of the darkest ... lightest camouflage field (more than one only where the real jet has a camouflage);
 #   block: the camouflage is made of squares of that many pixels (a digital pattern); marks: the national marks that replace the red stars
 LIVERIES = {
-    # (jets rebuilt from scratch carry their real paint in their own textures and are not in this table: mig29, su35, su57, mig31, gripen, rafale, typhoon, j20, f35, fa18, f16)
+    # (jets rebuilt from scratch carry their real paint in their own textures and are not in this table: mig29, su35, su57, mig31, gripen, rafale, typhoon, j20, f35, fa18, f16, f15)
 }
 
 

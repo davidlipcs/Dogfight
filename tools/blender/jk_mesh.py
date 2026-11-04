@@ -148,8 +148,9 @@ def _surface_parts(srf, cuts, span_a, span_b, step=0.22):
 
 def wing():
     cuts = [("flap", S.FLAP[0], S.FLAP[1], "te", S.FLAP[2], S.FLAP[3]),
-            ("ail", S.AIL[0], S.AIL[1], "te", S.AIL[2], S.AIL[3]),
-            ("lef", S.LEF[0], S.LEF[1], "le", S.LEF[2], S.LEF[3])]
+            ("ail", S.AIL[0], S.AIL[1], "te", S.AIL[2], S.AIL[3])]
+    if getattr(S, "LEF", None):                          # (the F-15 has no leading edge flaps)
+        cuts.append(("lef", S.LEF[0], S.LEF[1], "le", S.LEF[2], S.LEF[3]))
     return _surface_parts(S.WING, cuts, S.WING.span0, S.WING.span1)
 
 
@@ -284,8 +285,9 @@ def airframe(shape):
     out["wing_R"] = w["fixed"]
     out["wing_L"] = w["fixed"].mirrored()
     for k in ("flap", "ail", "lef"):
-        out[k + "_R"] = w[k]
-        out[k + "_L"] = w[k].mirrored()
+        if k in w:
+            out[k + "_R"] = w[k]
+            out[k + "_L"] = w[k].mirrored()
     if getattr(S, "STAB", None) is not None or getattr(S, "CANARD", None) is not None:
         st = stab()
         out["stab_R"], out["stab_L"] = st, st.mirrored()

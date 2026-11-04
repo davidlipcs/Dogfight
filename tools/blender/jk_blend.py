@@ -63,7 +63,7 @@ def cockpit(c):
     width (half), russian (colour), canopy_z(y, x) -> glass height (everything is kept 6 cm under it)."""
     room = Part("matte", None, color=C_COCKPIT_RU if c.get("russian") else C_COCKPIT)
     dark = Part("matte", None, color=C_DARK)
-    w, y0, y1 = c["width"], c["seat_y"] - 0.55, c["panel_y"] + 0.15
+    w, y0, y1 = c["width"], min([c["seat_y"]] + list(c.get("rear_seats", ()))) - 0.55, c["panel_y"] + 0.15
     fz, sz = c["floor_z"], c["sill_z"]
     # tub: floor, side walls (consoles), rear bulkhead
     box(room, (0, 0.5 * (y0 + y1), fz), (w, 0.5 * (y1 - y0), 0.02))
@@ -89,6 +89,13 @@ def cockpit(c):
     stick = Part("matte", None, color=C_BLACK)
     tube(stick, [(0, sy + 0.55, fz + 0.05), (0, sy + 0.62, fz + 0.50)], [0.02, 0.016], 8, C_BLACK)
     box(stick, (0, sy + 0.63, fz + 0.55), (0.025, 0.03, 0.05))
+    for sy2 in c.get("rear_seats", ()):                  # the back seats of a two seater: seat, its panel, its stick
+        box(seat, (0, sy2 + 0.18, fz + 0.36), (0.24, 0.24, 0.06))
+        box(seat, (0, sy2 - 0.02, fz + 0.76), (0.25, 0.06, 0.40), rot=tilt)
+        box(seat, (0, sy2 - 0.14, fz + 1.19), (0.17, 0.09, 0.15), rot=tilt)
+        box(panel, (0, sy2 + 1.02, fz + 0.62), (w - 0.06, 0.03, 0.17))
+        box(dark, (0, sy2 + 1.02, fz + 0.62), (0.18, 0.035, 0.12))
+        tube(stick, [(0, sy2 + 0.55, fz + 0.05), (0, sy2 + 0.62, fz + 0.50)], [0.02, 0.016], 8, C_BLACK)
     parts = [room, dark, panel, seat, handle, stick]
     # keep it all under the glass
     for p in parts:
