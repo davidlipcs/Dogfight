@@ -166,6 +166,29 @@ def gear_door(name, hinge_a, hinge_b, far, closing_deg, thick=0.02):
     return o
 
 
+def bay_door(name, hinge_a, hinge_b, far, closing_deg, group, thick=0.018):
+    """A weapons bay door, drawn open: it closes by ``closing_deg`` about the hinge a -> b (the game: extras.bay,
+    extras.group)."""
+    o = gear_door(name, hinge_a, hinge_b, far, closing_deg, thick)
+    del o["door"]
+    o["bay"] = float(closing_deg)
+    o["group"] = group
+    return o
+
+
+def bay_well(x0, x1, y0, y1, z_skin, z_roof, mirror=False):
+    """The dark box of a bay behind its cut-out (x0..x1 on the right; ``mirror`` adds the left copy)."""
+    p = Part("matte", None, flip=True, color=(0.16, 0.17, 0.18))
+    for s in ((1.0, -1.0) if mirror else (1.0,)):
+        a, b = sorted((s * x0, s * x1))
+        lo = [(a, y0, z_skin), (b, y0, z_skin), (b, y1, z_skin), (a, y1, z_skin)]
+        hi = [(a, y0, z_roof), (b, y0, z_roof), (b, y1, z_roof), (a, y1, z_roof)]
+        for k in range(4):
+            p.add([lo[k], lo[(k + 1) % 4], hi[(k + 1) % 4], hi[k]], [(0, 1, 2, 3)])
+        p.ngon(hi, (0.10, 0.10, 0.11))
+    return p
+
+
 # ------------------------------------------------------------------ small things
 def lamp(name, centre, mat, r=0.035):
     p = Part(mat, None)
@@ -485,7 +508,7 @@ def build_jet(S, M, painter, name, out_dir, web_dir, details=None, stores=None, 
     globals()["cockpit"](c)
     if refs:
         refs()
-    painted += [o for o in bpy.data.objects if o.type == "MESH" and (o.name.startswith("door_") or o.name in
+    painted += [o for o in bpy.data.objects if o.type == "MESH" and (o.name.startswith(("door_", "bay_main", "bay_side")) or o.name in
                                                                          ("canopy_frame", "pylons"))]
     paint(painted, painter, tex, name, size=texture)
     finish(out_dir, web_dir, name)

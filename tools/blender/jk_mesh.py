@@ -63,6 +63,14 @@ def fan(ring, tip, reverse=False):
 
 
 # ------------------------------------------------------------------ fuselage
+def in_hole(c):
+    """Cut-outs in the skin (weapons bays): HOLES = [(x0, x1, y0, y1, z_max)] on the right side (mirrored)."""
+    for x0, x1, y0, y1, zmax in getattr(S, "HOLES", ()):
+        if x0 <= abs(c[0]) <= x1 and y0 <= c[1] <= y1 and c[2] < zmax:
+            return True
+    return False
+
+
 def fuselage():
     ys = S.fuselage_stations()
     rings = np.array([S.fuselage_ring(y) for y in ys])
@@ -76,6 +84,8 @@ def fuselage():
             if S.Y_CAN1 + 0.05 < c[1] < S.Y_WS0 - 0.05 and abs(c[0]) < float(S.CANOPY_SILL_X(c[1])) - 0.03 \
                     and c[2] > float(S.CANOPY_SILL_Z(c[1])) - 0.02:
                 continue                                    # the cockpit opening under the canopy
+            if in_hole(c):
+                continue
             faces.append((a, b, b + nc, a + nc))
     return Piece(verts, faces)
 
@@ -227,7 +237,9 @@ def nacelle():
         jk.stations([(S.Y_FACE_BOT, 1.0, 0.10), (1.0, -3.9, 0.30), (-3.9, S.Y_NAC1, 0.12)])
     outer = np.array([_nacelle_ring(y, S.Y_FACE_BOT - y) for y in ys])
     nr, nc = outer.shape[:2]
-    skin = Piece(outer.reshape(-1, 3), jk.grid_faces(nr, nc))
+    verts = outer.reshape(-1, 3)
+    faces = [f for f in jk.grid_faces(nr, nc) if not in_hole(verts[list(f)].mean(axis=0))]
+    skin = Piece(verts, faces)
     # the lip and the dark duct inside: the face ring, a little inset, going back 1.6 m to a dark compressor face
     lip = []
     for k, ins in enumerate((0.0, 0.03, 0.05)):
@@ -243,15 +255,17 @@ def nacelle():
 
 
 def nozzle():
+    """Round nozzles - or flat two dimensional ones (NOZZLE with hw / hh / n: half width, half height, squareness)."""
     n = S.NOZZLE
-    rings = []
-    for y, r in ((n["y0"] + 0.02, n["r0"]), (n["y0"] - 0.10, n["r0"] * 0.99), (n["y1"] + 0.05, n["r1"] * 1.01),
-                 (n["y1"], n["r1"])):
-        rings.append(jk.rounded_ring(n["x"], n["z"], r, r, r, 2.0, 2.0, 32, y=y))
-    outer = np.array(rings)
-    inner = np.array([jk.rounded_ring(n["x"], n["z"], n["r1"] - 0.03, n["r1"] - 0.03, n["r1"] - 0.03, 2, 2, 32, y=n["y1"]),
-                      jk.rounded_ring(n["x"], n["z"], n["r1"] - 0.08, n["r1"] - 0.08, n["r1"] - 0.08, 2, 2, 32,
-                                      y=n["y1"] + 0.6)])
+    k = n.get("n", 2.0)
+    hw0, hh0 = n.get("hw", n["r0"]), n.get("hh", n["r0"])
+    sh = n["r1"] / n["r0"]
+
+    def ring(y, s, inset=0.0):
+        return jk.rounded_ring(n["x"], n["z"], hw0 * s - inset, hh0 * s - inset, hh0 * s - inset, k, k, 32, y=y)
+    outer = np.array([ring(n["y0"] + 0.02, 1.0), ring(n["y0"] - 0.10, 0.99), ring(n["y1"] + 0.05, sh * 1.01),
+                      ring(n["y1"], sh)])
+    inner = np.array([ring(n["y1"], sh, 0.03), ring(n["y1"] + 0.6, sh, 0.08)])
     p = Piece(outer.reshape(-1, 3), jk.grid_faces(4, 32), mat="metal")
     lipf = np.array([outer[-1], inner[0]])
     p = p + Piece(lipf.reshape(-1, 3), jk.grid_faces(2, 32), mat="metal")
