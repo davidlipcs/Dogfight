@@ -206,7 +206,7 @@ export class Models {
     const vL = ref.ref_vapor_L, vR = ref.ref_vapor_R;
     const nav = [[ref.ref_nav_L, 0xff2a1a], [ref.ref_nav_R, 0x33ff55], [ref.ref_tail, 0xfffff0]];
     if (ref.ref_intake_light_L) nav.push([ref.ref_intake_light_L, 0xff2a1a], [ref.ref_intake_light_R, 0x33ff55]);
-    const legacy = spec.model === 'f16';
+    const legacy = false;          // (the F-16 used the old model built from code, assets/f16.json, for its cockpit; it has its own now)
     return {
       key: spec.model, spec, modelZ, ref, nozzles, nav, gearHeight: spec.gearHeight,
       flameScale: spec.engines > 1 ? 0.84 : 1,

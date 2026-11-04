@@ -276,6 +276,7 @@ return {
 			name = "F-16C Block 50",
 			short = "F-16C",
 			callsign = "Viper",
+			mfdLayout = "fa18",
 			emptyMass = 8900,
 			internalFuel = 3200,
 			wingArea = 27.87,
@@ -563,6 +564,7 @@ return {
 			name = "F-22A Raptor",
 			short = "F-22A",
 			callsign = "Raptor",
+			mfdLayout = "fa18",
 			emptyMass = 19700,
 			internalFuel = 8200,
 			wingArea = 78.04,
@@ -744,6 +746,7 @@ return {
 			name = "F-15EX Eagle II",
 			short = "F-15EX",
 			callsign = "Eagle",
+			mfdLayout = "fa18",
 			emptyMass = 14500,
 			internalFuel = 10000,
 			wingArea = 56.5,
@@ -890,6 +893,7 @@ return {
 			name = "F-15 ACTIVE (NASA)",
 			short = "F-15 ACTIVE",
 			callsign = "Active",
+			mfdLayout = "fa18",
 			emptyMass = 12900,
 			internalFuel = 6100,
 			wingArea = 56.5,
@@ -1045,6 +1049,7 @@ return {
 			name = "F-35A Lightning II",
 			short = "F-35A",
 			callsign = "Lightning",
+			mfdLayout = "fa18",
 			emptyMass = 13290,
 			internalFuel = 8278,
 			wingArea = 42.7,
@@ -1168,8 +1173,7 @@ return {
 			},
 			firingOrder = { 5, 6, 1, 2, 3, 4 },
 			nation = "us",
-			internal = true,
-			mfdLayout = "fa18"
+			internal = true
 		},
 		su35 = {
 			id = "su35",
@@ -1177,6 +1181,7 @@ return {
 			name = "Su-35S Flanker-E",
 			short = "Su-35",
 			callsign = "Flanker",
+			mfdLayout = "fa18",
 			emptyMass = 18400,
 			internalFuel = 11500,
 			wingArea = 62,
@@ -1305,7 +1310,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			tvc = {
 				vector = 15,
 				alphaNormal = 32,
@@ -1324,6 +1328,7 @@ return {
 			name = "Su-57 Felon",
 			short = "Su-57",
 			callsign = "Felon",
+			mfdLayout = "fa18",
 			emptyMass = 18000,
 			internalFuel = 10300,
 			wingArea = 78.8,
@@ -1447,7 +1452,6 @@ return {
 			},
 			firingOrder = { 5, 6, 1, 2, 3, 4 },
 			proc = true,
-			mfdLayout = "fa18",
 			tvc = {
 				vector = 15,
 				alphaNormal = 32,
@@ -1467,6 +1471,7 @@ return {
 			name = "MiG-29 Fulcrum",
 			short = "MiG-29",
 			callsign = "Fulcrum",
+			mfdLayout = "fa18",
 			emptyMass = 11000,
 			internalFuel = 3400,
 			wingArea = 38,
@@ -1595,7 +1600,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "ru"
 		},
 		mig31 = {
@@ -1604,6 +1608,7 @@ return {
 			name = "MiG-31 Foxhound",
 			short = "MiG-31",
 			callsign = "Foxhound",
+			mfdLayout = "fa18",
 			emptyMass = 21820,
 			internalFuel = 14000,
 			wingArea = 61.6,
@@ -1730,7 +1735,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "ru"
 		},
 		gripen = {
@@ -1739,6 +1743,7 @@ return {
 			name = "JAS 39 Gripen C",
 			short = "Gripen",
 			callsign = "Gripen",
+			mfdLayout = "fa18",
 			emptyMass = 6800,
 			internalFuel = 2400,
 			wingArea = 30,
@@ -1867,7 +1872,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "se"
 		},
 		typhoon = {
@@ -1876,6 +1880,7 @@ return {
 			name = "Eurofighter Typhoon",
 			short = "Typhoon",
 			callsign = "Typhoon",
+			mfdLayout = "fa18",
 			emptyMass = 11000,
 			internalFuel = 5000,
 			wingArea = 51.2,
@@ -2004,7 +2009,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "uk"
 		},
 		rafale = {
@@ -2013,6 +2017,7 @@ return {
 			name = "Dassault Rafale C",
 			short = "Rafale",
 			callsign = "Rafale",
+			mfdLayout = "fa18",
 			emptyMass = 10300,
 			internalFuel = 4700,
 			wingArea = 45.7,
@@ -2141,7 +2146,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "fr"
 		},
 		j20 = {
@@ -2150,6 +2154,7 @@ return {
 			name = "Chengdu J-20",
 			short = "J-20",
 			callsign = "Mighty Dragon",
+			mfdLayout = "fa18",
 			emptyMass = 17000,
 			internalFuel = 10000,
 			wingArea = 73,
@@ -2279,7 +2284,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "cn",
 			internal = true
 		}
@@ -2635,6 +2639,7 @@ return {
 			name = "F-16C (ellenfél)",
 			short = "F-16C",
 			callsign = "Viper",
+			mfdLayout = "fa18",
 			emptyMass = 8900,
 			internalFuel = 3200,
 			wingArea = 27.87,
@@ -2922,6 +2927,7 @@ return {
 			name = "F-22A (ellenfél)",
 			short = "F-22A",
 			callsign = "Raptor",
+			mfdLayout = "fa18",
 			emptyMass = 19700,
 			internalFuel = 8200,
 			wingArea = 78.04,
@@ -3092,6 +3098,7 @@ return {
 			name = "F-15EX (ellenfél)",
 			short = "F-15EX",
 			callsign = "Eagle",
+			mfdLayout = "fa18",
 			emptyMass = 14500,
 			internalFuel = 10000,
 			wingArea = 56.5,
@@ -3238,6 +3245,7 @@ return {
 			name = "Su-35 (ellenség)",
 			short = "Su-35",
 			callsign = "Flanker",
+			mfdLayout = "fa18",
 			emptyMass = 18400,
 			internalFuel = 11500,
 			wingArea = 62,
@@ -3365,8 +3373,7 @@ return {
 				}
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
-			proc = true,
-			mfdLayout = "fa18"
+			proc = true
 		},
 		su57 = {
 			id = "su57",
@@ -3374,6 +3381,7 @@ return {
 			name = "Su-57 (ellenség)",
 			short = "Su-57",
 			callsign = "Felon",
+			mfdLayout = "fa18",
 			emptyMass = 18000,
 			internalFuel = 10300,
 			wingArea = 78.8,
@@ -3497,7 +3505,6 @@ return {
 			},
 			firingOrder = { 5, 6, 1, 2, 3, 4 },
 			proc = true,
-			mfdLayout = "fa18",
 			internal = true
 		},
 		mig29 = {
@@ -3506,6 +3513,7 @@ return {
 			name = "MiG-29 Fulcrum",
 			short = "MiG-29",
 			callsign = "Fulcrum",
+			mfdLayout = "fa18",
 			emptyMass = 11000,
 			internalFuel = 3400,
 			wingArea = 38,
@@ -3634,7 +3642,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "ru"
 		},
 		mig31 = {
@@ -3643,6 +3650,7 @@ return {
 			name = "MiG-31 Foxhound",
 			short = "MiG-31",
 			callsign = "Foxhound",
+			mfdLayout = "fa18",
 			emptyMass = 21820,
 			internalFuel = 14000,
 			wingArea = 61.6,
@@ -3769,7 +3777,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "ru"
 		},
 		gripen = {
@@ -3778,6 +3785,7 @@ return {
 			name = "JAS 39 Gripen C",
 			short = "Gripen",
 			callsign = "Gripen",
+			mfdLayout = "fa18",
 			emptyMass = 6800,
 			internalFuel = 2400,
 			wingArea = 30,
@@ -3906,7 +3914,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "se"
 		},
 		typhoon = {
@@ -3915,6 +3922,7 @@ return {
 			name = "Eurofighter Typhoon",
 			short = "Typhoon",
 			callsign = "Typhoon",
+			mfdLayout = "fa18",
 			emptyMass = 11000,
 			internalFuel = 5000,
 			wingArea = 51.2,
@@ -4043,7 +4051,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "uk"
 		},
 		rafale = {
@@ -4052,6 +4059,7 @@ return {
 			name = "Dassault Rafale C",
 			short = "Rafale",
 			callsign = "Rafale",
+			mfdLayout = "fa18",
 			emptyMass = 10300,
 			internalFuel = 4700,
 			wingArea = 45.7,
@@ -4180,7 +4188,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "fr"
 		},
 		j20 = {
@@ -4189,6 +4196,7 @@ return {
 			name = "Chengdu J-20",
 			short = "J-20",
 			callsign = "Mighty Dragon",
+			mfdLayout = "fa18",
 			emptyMass = 17000,
 			internalFuel = 10000,
 			wingArea = 73,
@@ -4318,7 +4326,6 @@ return {
 			},
 			firingOrder = { 1, 8, 2, 7, 3, 6, 4, 5 },
 			proc = true,
-			mfdLayout = "fa18",
 			nation = "cn",
 			internal = true
 		},
@@ -4328,6 +4335,7 @@ return {
 			name = "F-35A (ellenfél)",
 			short = "F-35A",
 			callsign = "Lightning",
+			mfdLayout = "fa18",
 			emptyMass = 13290,
 			internalFuel = 8278,
 			wingArea = 42.7,
@@ -4451,8 +4459,7 @@ return {
 			},
 			firingOrder = { 5, 6, 1, 2, 3, 4 },
 			nation = "us",
-			internal = true,
-			mfdLayout = "fa18"
+			internal = true
 		},
 		liner = {
 			gun = {

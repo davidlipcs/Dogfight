@@ -91,6 +91,7 @@ export const ALE47 = { flares: 30, chaff: 30, flareIntensity: 3.0, flareLife: 4.
 // `prefer`: the order a weapon fills the stations in (the loadout editor in the menu uses it).
 export const F16C = {
   id: 'f16', model: 'f16', name: 'F-16C Block 50', short: 'F-16C', callsign: 'Viper',
+  mfdLayout: 'fa18',            // the displays of the jet kit's cockpit (tools/blender/jk_blend.py)
   emptyMass: 8900, internalFuel: 3200, wingArea: 27.87, wingSpan: 9.96, length: 15.06,
   // F110-GE-129: 76.3 kN military, 131.6 kN with afterburner; TSFC ~0.76 / ~1.95 lb/lbf/h
   engines: 1, thrustDry: 76300, thrustAb: 131600, fuelFlowDry: 1.64, fuelFlowAb: 7.25,
@@ -161,6 +162,7 @@ export const FA18E = {
 // two dimensional thrust vectoring is always on.  The game caps it at 8 G.
 export const F22A = {
   id: 'f22', model: 'f22', name: 'F-22A Raptor', short: 'F-22A', callsign: 'Raptor',
+  mfdLayout: 'fa18',            // the displays of the jet kit's cockpit (tools/blender/jk_blend.py)
   emptyMass: 19700, internalFuel: 8200, wingArea: 78.04, wingSpan: 13.56, length: 18.92,
   // 2 x F119-PW-100: ~116 kN military, ~156 kN with afterburner each; TSFC ~0.75 / ~1.9 lb/lbf/h
   engines: 2, thrustDry: 232000, thrustAb: 312000, fuelFlowDry: 4.9, fuelFlowAb: 16.8,
@@ -205,6 +207,7 @@ export const F22A = {
 // conformal fuel tanks.
 export const F15EX = {
   id: 'f15', model: 'f15', name: 'F-15EX Eagle II', short: 'F-15EX', callsign: 'Eagle',
+  mfdLayout: 'fa18',            // the displays of the jet kit's cockpit (tools/blender/jk_blend.py)
   emptyMass: 14500, internalFuel: 10000, wingArea: 56.5, wingSpan: 13.05, length: 19.43,
   // 2 x F110-GE-129 (the F-16's engine): 2 x 76.3 / 2 x 131.6 kN
   engines: 2, thrustDry: 152600, thrustAb: 263200, fuelFlowDry: 3.28, fuelFlowAb: 14.5,

@@ -78,7 +78,7 @@ for (const spec of Object.values(specs)) {
   const vL = ref.ref_vapor_L, vR = ref.ref_vapor_R;
   const nav = [[ref.ref_nav_L, 0xff2a1a], [ref.ref_nav_R, 0x33ff55], [ref.ref_tail, 0xfffff0]];
   if (ref.ref_intake_light_L) nav.push([ref.ref_intake_light_L, 0xff2a1a], [ref.ref_intake_light_R, 0x33ff55]);
-  const legacy = spec.model === 'f16';
+  const legacy = false;            // every jet has its own cockpit now (the F-16 used assets/f16.json)
   const tail = nozzles.reduce((a, n) => add(a, V(n.x / nozzles.length, n.y / nozzles.length, n.z / nozzles.length)), V(0, 0, 0));
   const panelByModel = { f22: V(0, 4.98, 0.82 + modelZ), f15: V(0, 5.42, 1.13 + modelZ) };
   out[spec.model] = {
