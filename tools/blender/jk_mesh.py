@@ -311,14 +311,18 @@ def airframe(shape):
     else:
         out["fin_R"], out["fin_L"] = f["fixed"], f["fixed"].mirrored()
         out["rudder_R"], out["rudder_L"] = f["rudder"], f["rudder"].mirrored(same_sense=True)
-    nac = nacelle()
-    if getattr(S, "NACELLE_CENTRE", False):
+    nac = nacelle() if getattr(S, "NACELLE", None) else None
+    if nac is None:
+        pass                                               # (a propeller aircraft: no intakes)
+    elif getattr(S, "NACELLE_CENTRE", False):
         out["nacelle_C"], out["duct_C"] = nac["skin"], nac["duct"]
     else:
         out["nacelle_R"], out["nacelle_L"] = nac["skin"], nac["skin"].mirrored()
         out["duct_R"], out["duct_L"] = nac["duct"], nac["duct"].mirrored()
-    nz, nd = nozzle()
-    if abs(S.NOZZLE["x"]) < 1e-6:                          # one engine
+    nz, nd = nozzle() if getattr(S, "NOZZLE", None) else (None, None)
+    if nz is None:
+        pass
+    elif abs(S.NOZZLE["x"]) < 1e-6:                        # one engine
         out["nozzle_C"], out["nozzle_in_C"] = nz, nd
     else:
         out["nozzle_R"], out["nozzle_L"] = nz, nz.mirrored()

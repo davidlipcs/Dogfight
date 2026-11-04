@@ -469,7 +469,9 @@ def lights_and_refs(S, tail_light, vapor, gun, strobe_y=None, nozzles=None):
         empty("ref_strobe_" + sfx, (s * tipx if tipx > 0.01 else s * 0.02, sy, tipz + 0.02))
         empty("ref_vapor_" + sfx, (s * vapor[0], vapor[1], vapor[2]))
     n = S.NOZZLE
-    if abs(n["x"]) < 1e-6:
+    if n is None:
+        pass                                               # (the caller places the exhaust points)
+    elif abs(n["x"]) < 1e-6:
         empty("ref_nozzle", (0.0, n["y1"], n["z"]))
     else:
         for s, sfx in ((1, "R"), (-1, "L")):
@@ -496,7 +498,8 @@ def build_jet(S, M, painter, name, out_dir, web_dir, details=None, stores=None, 
             painted.append(obj(k, [pc], hinge=pc.hinge))
         else:
             painted.append(obj(k, [pc]))
-    obj("nozzle", hot)
+    if hot:
+        obj("nozzle", hot)
     canopy_frame(S)
     for fn in (details, stores, gear):
         if fn:
