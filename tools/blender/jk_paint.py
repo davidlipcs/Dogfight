@@ -136,3 +136,27 @@ def chevron_outline(u, v, apex, base_a, base_b, band, line):
     m = np.minimum(d1, d2)
     edge = (m < line) | (d3 < line) | (np.abs(m - band) < 0.5 * line) | (np.abs(m - 2 * band) < 0.5 * line)
     return inside & edge
+
+
+def star5(u, v, c, r, inner=0.38, rot=0.0):
+    pts = []
+    for k in range(10):
+        a = np.pi / 2 + rot + k * np.pi / 5
+        rr = r if k % 2 == 0 else r * inner
+        pts.append((c[0] + rr * np.cos(a), c[1] + rr * np.sin(a)))
+    return in_polygon(u, v, pts)
+
+
+def star_and_bar(u, v, c, r, up=(0.0, 1.0)):
+    """The US national insignia: a disc of radius r with the bars either side; -> (disc and bars, the star).  ``up``:
+    the (du, dv) direction the star points to (the bars run across it)."""
+    up = np.asarray(up, float) / np.hypot(*up)
+    across = np.array([up[1], -up[0]])
+    du, dv = np.asarray(u) - c[0], np.asarray(v) - c[1]
+    a = du * across[0] + dv * across[1]
+    b = du * up[0] + dv * up[1]
+    disc = np.hypot(du, dv) < r
+    bars = (np.abs(a) < 2.0 * r) & (b < -0.06 * r) & (b > -0.06 * r - 0.62 * r)
+    rot = np.arctan2(up[1], up[0]) - np.pi / 2
+    st = star5(u, v, c, 0.95 * r, rot=rot)
+    return disc | bars, st

@@ -212,6 +212,8 @@ def tip_pod():
 def _nacelle_ring(y_bot, d, seg=40, inset=0.0):
     xi, xo, zt, zb, n = (float(c(y_bot)) for c in S.NACELLE)
     cx, hw = 0.5 * (xi + xo), 0.5 * (xo - xi) - inset
+    if getattr(S, "NACELLE_CENTRE", False):            # one intake on the centre line (F-16): xo is its half width
+        cx, hw = 0.0, xo - inset
     cz, hh = 0.5 * (zt + zb), 0.5 * (zt - zb) - inset
     r = jk.rounded_ring(cx, cz, hw, hh, hh, n, n, seg)
     rake = S.nacelle_rake(d)
@@ -294,8 +296,11 @@ def airframe(shape):
         out["fin_R"], out["fin_L"] = f["fixed"], f["fixed"].mirrored()
         out["rudder_R"], out["rudder_L"] = f["rudder"], f["rudder"].mirrored(same_sense=True)
     nac = nacelle()
-    out["nacelle_R"], out["nacelle_L"] = nac["skin"], nac["skin"].mirrored()
-    out["duct_R"], out["duct_L"] = nac["duct"], nac["duct"].mirrored()
+    if getattr(S, "NACELLE_CENTRE", False):
+        out["nacelle_C"], out["duct_C"] = nac["skin"], nac["duct"]
+    else:
+        out["nacelle_R"], out["nacelle_L"] = nac["skin"], nac["skin"].mirrored()
+        out["duct_R"], out["duct_L"] = nac["duct"], nac["duct"].mirrored()
     nz, nd = nozzle()
     if abs(S.NOZZLE["x"]) < 1e-6:                          # one engine
         out["nozzle_C"], out["nozzle_in_C"] = nz, nd
