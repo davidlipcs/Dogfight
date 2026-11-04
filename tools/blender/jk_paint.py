@@ -160,3 +160,23 @@ def star_and_bar(u, v, c, r, up=(0.0, 1.0)):
     rot = np.arctan2(up[1], up[0]) - np.pi / 2
     st = star5(u, v, c, 0.95 * r, rot=rot)
     return disc | bars, st
+
+
+def star_and_bar_colour(rgb, sel, u, v, c, r, up=(0.0, 1.0)):
+    """The full colour US insignia (blue disc and bar outline, white star and bars, the red stripe) on rgb[sel]."""
+    idx = np.where(sel)[0]
+    uu, vv = np.asarray(u)[sel], np.asarray(v)[sel]
+    big, _ = star_and_bar(uu, vv, c, r * 1.12, up)          # the blue outline
+    m, st = star_and_bar(uu, vv, c, r, up)
+    up = np.asarray(up, float) / np.hypot(*up)
+    across = np.array([up[1], -up[0]])
+    du, dv = uu - c[0], vv - c[1]
+    a = du * across[0] + dv * across[1]
+    b = du * up[0] + dv * up[1]
+    stripe = (np.abs(a) > 1.05 * r) & (np.abs(a) < 1.95 * r) & (b < -0.25 * r) & (b > -0.45 * r)
+    disc = np.hypot(du, dv) < r
+    rgb[idx[big]] = (0.08, 0.15, 0.40)
+    rgb[idx[m & ~disc]] = (0.94, 0.94, 0.93)
+    rgb[idx[disc]] = (0.08, 0.15, 0.40)
+    rgb[idx[st]] = (0.94, 0.94, 0.93)
+    rgb[idx[stripe]] = (0.75, 0.10, 0.12)
