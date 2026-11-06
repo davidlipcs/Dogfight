@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Builds roblox/build/DogfightPlugin.rbxmx: a Roblox Studio PLUGIN (put it into the Plugins folder, Studio > Plugins > Plugins Folder) that adds
-three buttons to the Plugins tab, so nothing has to be typed into the Command Bar:
+three buttons to the Plugins tab, so nothing has to be typed into the Command Bar - and, when a place is opened in Studio, does by itself
+what is missing (installs the code into an empty place or updates an older copy, builds the island once, moves imported jets where the
+game looks for them) and shows how far it is in a small window:
   - "Kód telepítése"  puts the game's code into the open place (replaces ReplicatedStorage.Shared, ServerScriptService.Server, StarterPlayerScripts.Client)
   - "Sziget építése"  builds the island (IslandBuilder.build(), once; takes a few minutes)
   - "Gépek átemelése" moves the imported jet models into ReplicatedStorage.JetModels (Tools.adoptJets())
@@ -67,38 +69,188 @@ local function cleanup()
 	end
 end
 
-bInstall.Click:Connect(function()
-	bInstall:SetActive(false)
+-- ============ the steps (the buttons and the automatic setup use the same ones)
+local function hasCode()
+	local server = SSS:FindFirstChild("Server")
+	return server ~= nil and server:FindFirstChild("Main") ~= nil and RS:FindFirstChild("Shared") ~= nil and SP:FindFirstChild("Client") ~= nil
+end
+
+local function versionOf(shared)
+	local cfg = shared and shared:FindFirstChild("Config")
+	if not cfg then return nil end
+	local ok, c = pcall(require, cfg)
+	return ok and type(c) == "table" and tostring(c.Version) or nil
+end
+
+local function install()
 	ChangeHistoryService:SetWaypoint("Dogfight Plus: before the code")
 	swap(RS, "Shared")
 	swap(SSS, "Server")
 	swap(SP, "Client")
 	cleanup()
 	game:GetService("Players").CharacterAutoLoads = false
+	workspace:SetAttribute("DogfightServerRunning", nil)
 	ChangeHistoryService:SetWaypoint("Dogfight Plus: the code")
-	print("Dogfight Plus: the code is installed. Now File > Save, then Play.")
+	print("Dogfight Plus: the code (" .. tostring(versionOf(script.Shared)) .. ") is installed.")
+end
+
+local status = { code = "?", island = "?", jets = "?" }
+local widget, label
+local function show()
+	if not label then return end
+	local need = {}
+	if status.code ~= "ok" then table.insert(need, "a kód") end
+	if status.island ~= "ok" then table.insert(need, "a sziget") end
+	local lines = {
+		"<b>DOGFIGHT PLUS – beállítás</b>",
+		"",
+		"Kód: " .. (status.code == "ok" and "✔ telepítve" or status.code),
+		"Sziget: " .. (status.island == "ok" and "✔ kész" or status.island),
+		"Gépek: " .. status.jets,
+		"",
+	}
+	if status.busy then
+		table.insert(lines, "<font color='#ffc840'>Dolgozom… ne nyomd meg a Play-t, amíg ez tart.</font>")
+	elseif #need == 0 then
+		table.insert(lines, "<font color='#6bff85'><b>Minden kész.</b> Mentsd el: File → Save (Ctrl+S), és utána mehet a Play.</font>")
+	else
+		table.insert(lines, "<font color='#ff9a8a'>Hiányzik: " .. table.concat(need, ", ") .. ".</font>")
+	end
+	label.Text = table.concat(lines, "\n")
+end
+
+local function buildIsland()
+	local server = SSS:FindFirstChild("Server")
+	local builder = server and server:FindFirstChild("IslandBuilder")
+	if not builder then warn("Dogfight Plus: install the code first") return end
+	status.busy = true
+	status.island = "épül… 0%"
+	show()
+	print("Dogfight Plus: building the island... (a few minutes; do not press Play)")
+	local ok, err = pcall(function()
+		require(builder).build(function(f) status.island = string.format("épül… %d%%", math.floor(f * 100)); show() end)
+	end)
+	status.busy = false
+	if ok then
+		status.island = "ok"
+		print("Dogfight Plus: the island is built. Now File > Save.")
+	else
+		status.island = "nem sikerült: " .. tostring(err)
+		warn("Dogfight Plus: the island could not be built: ", err)
+	end
+	show()
+end
+
+local function adoptJets(quiet)
+	local server = SSS:FindFirstChild("Server")
+	local tools = server and server:FindFirstChild("Tools")
+	if not tools then return end
+	local ok, have = pcall(function() return require(tools).adoptJets() end)
+	if ok then
+		local total = 16
+		status.jets = (type(have) == "number" and have >= total) and "✔ mind a 16 megvan" or
+			string.format("%s / 16 – a hiányzókat: Import 3D (a gépek zipjéből), ide magától átkerülnek", tostring(have or 0))
+	elseif not quiet then
+		warn("Dogfight Plus: ", have)
+	end
+	show()
+end
+
+bInstall.Click:Connect(function()
+	bInstall:SetActive(false)
+	install()
+	status.code = "ok"
+	show()
+	print("Dogfight Plus: now File > Save, then Play.")
 end)
 
 bIsland.Click:Connect(function()
 	bIsland:SetActive(false)
-	local server = SSS:FindFirstChild("Server")
-	local builder = server and server:FindFirstChild("IslandBuilder")
-	if not builder then warn("Dogfight Plus: install the code first (the button 'Kód telepítése')") return end
-	print("Dogfight Plus: building the island... (a few minutes; do not press Play)")
-	local ok, err = pcall(function() require(builder).build() end)
-	if not ok then warn("Dogfight Plus: the island could not be built: ", err) else print("Dogfight Plus: now File > Save.") end
+	task.spawn(buildIsland)
 end)
 
 bJets.Click:Connect(function()
 	bJets:SetActive(false)
-	local server = SSS:FindFirstChild("Server")
-	local tools = server and server:FindFirstChild("Tools")
-	if not tools then warn("Dogfight Plus: install the code first (the button 'Kód telepítése')") return end
-	local ok, err = pcall(function() require(tools).adoptJets() end)
-	if not ok then warn("Dogfight Plus: ", err) else print("Dogfight Plus: now File > Save.") end
+	adoptJets(false)
 end)
 
-print("Dogfight Plus plugin ready: the Plugins tab has the buttons.")
+-- ============ automatic setup: when a place is opened in Studio (not in a Play test), the plugin does what is missing by itself
+local RunService = game:GetService("RunService")
+if RunService:IsEdit() then
+	local ok = pcall(function()
+		widget = plugin:CreateDockWidgetPluginGui("DogfightSetup", DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, true, false, 420, 230, 320, 180))
+		widget.Title = "Dogfight Plus"
+		label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundColor3 = Color3.fromRGB(18, 24, 28)
+		label.TextColor3 = Color3.fromRGB(225, 232, 228)
+		label.Font = Enum.Font.GothamMedium
+		label.TextSize = 15
+		label.RichText = true
+		label.TextWrapped = true
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextYAlignment = Enum.TextYAlignment.Top
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft, pad.PaddingTop, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 10), UDim.new(0, 12)
+		pad.Parent = label
+		label.Parent = widget
+	end)
+	if not ok then widget, label = nil, nil end
+
+	task.spawn(function()
+		task.wait(1)
+		-- the code: installed into an empty place, updated in a place that has an older version; another game's place is left alone
+		local function otherScripts()
+			local n = 0
+			for _, root in { SSS, SP, workspace, game:GetService("StarterGui"), game:GetService("ReplicatedFirst") } do
+				for _, d in root:GetDescendants() do
+					if d:IsA("LuaSourceContainer") and not KNOWN[d.Name] then
+						local inOurs = false
+						for _, k in { RS:FindFirstChild("Shared"), SSS:FindFirstChild("Server"), SP:FindFirstChild("Client") } do
+							if k and d:IsDescendantOf(k) then inOurs = true end
+						end
+						if not inOurs then n += 1 end
+					end
+				end
+			end
+			return n
+		end
+		local mine, placed = versionOf(script.Shared), versionOf(RS:FindFirstChild("Shared"))
+		if not hasCode() then
+			if otherScripts() == 0 then
+				install()
+				status.code = "ok"
+			else
+				status.code = "nincs telepítve (ebben a pályán más szkriptek is vannak) – Plugins fül → Kód telepítése"
+			end
+		elseif placed ~= mine then
+			print(string.format("Dogfight Plus: the place has the code %s, the plugin %s: updating.", tostring(placed), tostring(mine)))
+			install()
+			status.code = "ok"
+		else
+			status.code = "ok"
+		end
+		show()
+		if status.code ~= "ok" then return end
+		-- the jets: the imported ones are moved where the game looks for them, now and whenever new ones are imported
+		adoptJets(true)
+		local pending = false
+		workspace.ChildAdded:Connect(function(child)
+			if pending or not (child:IsA("Model") or child:IsA("BasePart")) then return end
+			pending = true
+			task.delay(2, function() pending = false; adoptJets(true) end)
+		end)
+		-- the island: built once (the place keeps it after File > Save)
+		if workspace:GetAttribute("IslandBuilt") == true then
+			status.island = "ok"
+			show()
+		else
+			buildIsland()
+		end
+	end)
+end
+
+print("Dogfight Plus plugin ready: it sets the place up by itself (the window 'Dogfight Plus' shows how far); the Plugins tab has the buttons too.")
 '''
 
 

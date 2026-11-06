@@ -69,6 +69,7 @@ def run(chunk, label):
 
 t0 = time.time()
 run('''
+    workspace:SetAttribute("IslandBuilt", true)            -- (the island built in Studio; building it is not part of this test)
     local server = M.service("ServerScriptService").Server
     M.runScript(server.Main)
     local client = M.service("StarterPlayer").StarterPlayerScripts.Client

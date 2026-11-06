@@ -3,11 +3,12 @@
 -- (Game.luau) -> back to the menu.
 -- Only one copy of the game's client may run (two would show two menus on top of each other)
 local LocalPlayer = game:GetService("Players").LocalPlayer
-if LocalPlayer:GetAttribute("DogfightClientRunning") == true then
+-- (the mark lives in _G, as long as this client: an attribute could be left behind by an older version)
+if _G.DogfightClientRunning then
 	warn("Dogfight Plus: a second copy of the client script was not started (" .. script:GetFullName() .. ").")
 	return
 end
-LocalPlayer:SetAttribute("DogfightClientRunning", true)
+_G.DogfightClientRunning = true
 -- screens left behind by an older copy of the client are removed before the new ones are built
 do
 	local gui = LocalPlayer:WaitForChild("PlayerGui")
@@ -22,6 +23,29 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 
+-- the loading screen is up at once: the server builds the remotes (and, in a place saved without it, the island) first; if it cannot start,
+-- its error is shown here instead of an empty world
+local LoadingUi = require(script.Parent.LoadingUi)
+LoadingUi.show("Dogfight Plus indul… a szerverre várunk", 0.02)
+do
+	local t0 = os.clock()
+	while not ReplicatedStorage:FindFirstChild("Remotes") do
+		local err = ReplicatedStorage:GetAttribute("DogfightServerError")
+		if err then
+			LoadingUi.fail("A játék szervere nem tudott elindulni",
+				"Hiba: " .. tostring(err) .. "\n\nTelepítsd újra a kódot (Plugins fül → Kód telepítése), majd File → Save. Ha így is marad, küldd el ezt a szöveget.",
+				function() end)
+			return
+		end
+		if os.clock() - t0 > 45 then
+			LoadingUi.fail("A játék szervere nem válaszol",
+				"A szerver része nem indult el (ServerScriptService → Server → Main hiányzik vagy ki van kapcsolva).\n\nStudióban (Play nélkül): Plugins fül → <b>Kód telepítése</b>, majd File → Save, és újra Play.",
+				function() end)
+			return
+		end
+		task.wait(0.25)
+	end
+end
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
 
@@ -32,7 +56,6 @@ local RoomsUi = require(script.Parent.RoomsUi)
 local State = require(script.Parent.State)
 local Visor = require(script.Parent.Visor)
 local WarUi = require(script.Parent.WarUi)
-local LoadingUi = require(script.Parent.LoadingUi)
 
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)      -- Tab is a flying key
@@ -125,6 +148,7 @@ local function playMission(opts)
 end
 
 Lobby.init(remotes, { onPlay = play, onRooms = function() RoomsUi.toggle() end, onWar = function() WarUi.show(true) end })
+LoadingUi.hide()                            -- the menu is up
 WarUi.init(remotes, { onFly = playMission })
 RoomsUi.init(remotes, { onSeat = function(seat, pilotId)
 	-- the rear seat of a team mate's jet: a match in which only the weapons are yours

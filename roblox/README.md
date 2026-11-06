@@ -10,21 +10,24 @@ ha valami elromlik – azt kell elküldeni a javításhoz.
 
 ## Hova mi kerül (lépésről lépésre)
 
-### 0. A Studio-plugin (a Command Bar nélkül, ez a legegyszerűbb)
-A `DogfightPlugin.rbxmx` egy Studio-plugin: három gombot ad a **Plugins** fülhöz, és benne van a játék teljes kódja. Egyszer kell telepíteni:
+### 0. A Studio-plugin: magától beállít mindent
+A `DogfightPlugin.rbxmx` egy Studio-plugin, benne a játék teljes kódja. Egyszer kell a helyére tenni:
 1. Studio → **Plugins** fül → **Plugins Folder** gomb: megnyílik egy mappa (Windowson `%LOCALAPPDATA%\Roblox\Plugins`).
-2. Másold bele a `DogfightPlugin.rbxmx` fájlt, és indítsd újra a Studiót.
-3. A **Plugins** fülön megjelenik a **Dogfight Plus** csoport három gombbal:
-   * **Kód telepítése** – a játék kódja bekerül a megnyitott pályába (a sziget és a gépek megmaradnak);
-   * **Sziget építése** – egyszer, pár perc (az Output kiírja, ha kész);
-   * **Gépek átemelése** – az importált gépeket a helyükre teszi.
-4. Mindhárom után **File → Save**.
-**Új verzió:** cseréld ki a plugin fájlt a Plugins mappában (a régit felülírva), indítsd újra a Studiót, és nyomd meg a **Kód telepítése** gombot. A sziget és a gépek nem tűnnek el, nem kell újra építeni.
+2. Másold bele a `DogfightPlugin.rbxmx` fájlt (a régit felülírva), és indítsd újra a Studiót.
+
+Ezután **magától** dolgozik, amikor megnyitsz egy pályát (Play nélkül), és egy kis **„Dogfight Plus”** ablakban mutatja, hol tart:
+* **a kód**: egy üres pályába (pl. új Baseplate) magától beteszi, egy régebbi verziót magától frissít (más játék pályájához nem nyúl);
+* **a sziget**: ha még nincs, magától felépíti (pár perc – addig ne nyomj Play-t);
+* **a gépek**: amit beimportálsz (Import 3D), azt magától a helyére teszi.
+
+Ha az ablak azt írja: **„Minden kész”** → **File → Save (Ctrl+S)**, és mehet a **Play**. Mentés után a pálya megtartja mindezt, legközelebb már nem kell várni.
+A **Plugins** fülön a három gomb (**Kód telepítése**, **Sziget építése**, **Gépek átemelése**) továbbra is megvan, ha kézzel akarod.
+
+Ha mégis mentés nélkül indítod: a szerver akkor is felépíti a szigetet (a betöltőképernyő mutatja, hány százaléknál tart), csak minden indításnál újra.
+Ha a játék kódja nem indul el (pl. hiányzik), a betöltőképernyő ezt kiírja – üres világ helyett.
 
 ### 1. A sziget (egyszer)
-1. Nyisd meg a `DogfightPlus.rbxlx` fájlt Studióban (ne indíts játékot).
-2. **Window → Command Bar** (régebbi Studióban View → Command Bar), ide másold be és Enter: `require(game.ServerScriptService.Server.IslandBuilder).build()`
-3. Pár percig dolgozik (a **Window → Output** ablakban a végén: „the island is built”). Utána **File → Save**.
+A plugin magától felépíti (lásd fent). Kézzel: Plugins fül → **Sziget építése**, vagy a Command Bar-ba: `require(game.ServerScriptService.Server.IslandBuilder).build()`, utána **File → Save**.
 
 ### 2. A gépek (egyszer; nélkülük kockákból épített gépek repülnek)
 A `roblox/models` mappában 16 `.glb` fájl van, a böngészős játék gépei Roblox-barát (≤ 15 000 háromszögű darabokra csökkentett) változatban.

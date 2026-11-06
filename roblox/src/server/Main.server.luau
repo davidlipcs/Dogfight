@@ -2,14 +2,23 @@
 -- Dogfight Plus for Roblox: the server's entry point.  The match itself runs on the player's own machine (the same simulation as the
 -- browser game, shared/game/Match.luau); the server keeps what must not be the client's word: the save (coins, skins, career, records),
 -- the shop and the Robux purchases, and the rooms.
--- Only one copy of the game's server may run (an update file left in the Workspace has a copy of this script, too)
-if workspace:GetAttribute("DogfightServerRunning") == true or not script:IsDescendantOf(game:GetService("ServerScriptService")) then
+local Players = game:GetService("Players")
+Players.CharacterAutoLoads = false          -- there is no avatar: the player is the jet (set first, whatever happens below)
+-- Only one copy of the game's server may run (an update file left in the Workspace has a copy of this script, too).  The mark is kept in
+-- _G (it lives as long as this server): an attribute of the Workspace could be saved with the place and stop every later start.
+workspace:SetAttribute("DogfightServerRunning", nil)          -- left in places by older versions
+if _G.DogfightServerRunning or not script:IsDescendantOf(game:GetService("ServerScriptService")) then
 	warn("Dogfight Plus: a second copy of the server script was not started (" .. script:GetFullName() .. "). Delete leftovers such as 'DogfightCodeUpdate' from the Workspace.")
 	return
 end
-workspace:SetAttribute("DogfightServerRunning", true)
+_G.DogfightServerRunning = true
+-- an error while starting is shown on the players' loading screen (and in the Output), instead of leaving them before an empty world
+local function startFailed(err)
+	warn("Dogfight Plus: the server could not start: " .. tostring(err))
+	game:GetService("ReplicatedStorage"):SetAttribute("DogfightServerError", string.sub(tostring(err), 1, 400))
+end
+local okStart, errStart = xpcall(function()
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -23,7 +32,6 @@ local Rooms = require(script.Parent.Rooms)
 local Daily = require(script.Parent.Daily)
 local Tools = require(script.Parent.Tools)
 
-Players.CharacterAutoLoads = false          -- there is no avatar: the player is the jet
 local remotes = Remotes.init()
 
 World.build()
@@ -96,3 +104,6 @@ Players.PlayerRemoving:Connect(function(player) netBudget[player] = nil; warSave
 game:GetService("RunService").Heartbeat:Connect(function(dt) Rooms.step(dt) end)
 
 print("Dogfight Plus server " .. tostring(Config.Version) .. " ready, running from " .. script:GetFullName())
+
+end, debug.traceback)
+if not okStart then startFailed(errStart) end

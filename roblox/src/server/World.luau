@@ -46,18 +46,22 @@ function World.build()
 		-- the game's own island is already in the place (IslandBuilder, built once in Studio)
 		airBase(box, airfield())
 	else
-		warn("Dogfight Plus: the real island is not built yet (see roblox/README.md, 'A sziget'). A simple island is used meanwhile.")
-		terrain:Clear()
-		terrain:FillCylinder(CFrame.new(0, -6, 0), 32, 1500, Enum.Material.Grass)
-		local rng = Random.new(7)
-		local mats = { Enum.Material.Grass, Enum.Material.Grass, Enum.Material.Ground, Enum.Material.Rock }
-		for i = 1, 26 do
-			local a, r = rng:NextNumber(0, math.pi * 2), rng:NextNumber(650, 1300)
-			terrain:FillBall(Vector3.new(math.cos(a) * r, rng:NextNumber(-20, 40), math.sin(a) * r), rng:NextNumber(110, 320), mats[rng:NextInteger(1, #mats)])
-		end
-		terrain:FillCylinder(CFrame.new(0, -14, 0), 16, 1590, Enum.Material.Sand)
-		terrain:FillCylinder(CFrame.new(0, -6, 0), 32, 1470, Enum.Material.Grass)
-		airBase(box, Vector3.new(0, 10, 0))
+		-- not built yet: it is built now, while the players' loading screens show how far it is (in Studio the plugin builds it once and
+		-- the place keeps it after File > Save; a server of a place saved without it builds it at every start)
+		warn("Dogfight Plus: the island is not in the place: building it now (a few minutes). Build it once in Studio and save to skip this.")
+		workspace:SetAttribute("IslandProgress", 0)
+		task.spawn(function()
+			local ok, err = pcall(function()
+				require(script.Parent.IslandBuilder).build(function(f) workspace:SetAttribute("IslandProgress", f) end)
+			end)
+			if ok then
+				airBase(box, airfield())
+			else
+				warn("Dogfight Plus: the island could not be built: " .. tostring(err))
+				workspace:SetAttribute("IslandError", string.sub(tostring(err), 1, 300))
+			end
+			workspace:SetAttribute("IslandProgress", nil)
+		end)
 	end
 
 	-- the sea (a big part: cheaper than terrain water at this size)

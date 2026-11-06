@@ -458,6 +458,13 @@ local function loadEverything(opts, myId)
 		if not hit then return false end
 		return hit.Instance.Name ~= "Sea" and math.abs(hit.Position.Y - f.elevation * S) < 15
 	end
+	-- a place saved without the island: the server is building it now (workspace attribute IslandProgress 0..1)
+	while myId == loadId and workspace:GetAttribute("IslandProgress") ~= nil do
+		local f = workspace:GetAttribute("IslandProgress") or 0
+		LoadingUi.set(string.format("A sziget építése: %d%%  (csak az első indításkor; a Studio-bővítmény elmenti, ha File → Save)", math.floor(f * 100)), 0.2 + 0.1 * f)
+		task.wait(0.5)
+	end
+	if myId ~= loadId then return end
 	waitUntil(function()
 		if myId ~= loadId then return true end
 		return ground() and workspace:FindFirstChild("Runway") ~= nil
